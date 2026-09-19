@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "seed": 3001,
+  "candidateColorCount": 40,
+  "runtimeColorCount": 32,
+  "transparent": "#00000000",
+  "colors": [
+    "#08080b", "#140e0c", "#1c1413", "#251815", "#2d231c", "#351d15", "#392319", "#382924",
+    "#362f2b", "#47291a", "#56311b", "#6b371b", "#4a352b", "#583828", "#673b26", "#75431e",
+    "#43413e", "#564537", "#6f4930", "#655b4f", "#715a4d", "#8d5431", "#a55b2c", "#b45f2e",
+    "#916a4e", "#9f7353", "#e6a02b", "#b18b67", "#d89c67", "#b8a795", "#3f7070", "#72afb3"
+  ],
+  "reserved": {
+    "automationAndLaterDepth": ["#3f7070", "#72afb3"]
+  },
+  "notes": "Opaque candidates were extracted once from the four locked reference sheets. Two blue-green colors are reserved and excluded from Stage 3 generated body/background remapping. Runtime assets use the first 30 colors; existing automation overlays may use the reserved pair."
+}

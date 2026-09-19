@@ -12,16 +12,21 @@ import {
   type InteractionTarget,
   type Point,
 } from './interactionTargets';
+import { AssetStore } from './assets/assetStore';
+import { d001AssetUrls, type D001AssetKey } from './assets/d001Manifest';
 
 export class GameRenderer {
   private readonly base: Phase5Renderer;
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
+  private readonly assets: AssetStore<D001AssetKey>;
   private deliveryNotice: { amount: number; expiresAt: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    this.base = new Phase5Renderer(canvas);
+    this.assets = new AssetStore(d001AssetUrls());
+    this.assets.preload();
+    this.base = new Phase5Renderer(canvas, this.assets);
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D context is required.');
     ctx.imageSmoothingEnabled = false;
@@ -37,7 +42,10 @@ export class GameRenderer {
 
   render(state: GameState, now: number, hoveredKey: string | null = null): void {
     this.base.render(state, now);
-    if (state.run.elevator.travel) return;
+    if (state.run.elevator.travel) {
+      this.base.drawForegroundFx(now);
+      return;
+    }
     const depth = state.run.depth.current;
     this.ctx.save();
     if (depth === 'D-250') drawTheLost(this.ctx, state);
@@ -56,6 +64,7 @@ export class GameRenderer {
       drawDeliveryNotice(this.ctx, this.deliveryNotice.amount);
     } else if (this.deliveryNotice) this.deliveryNotice = null;
     this.ctx.restore();
+    this.base.drawForegroundFx(now);
   }
 
   clientToWorld(clientX: number, clientY: number): Point | null {

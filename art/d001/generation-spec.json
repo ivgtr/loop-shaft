@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "stage": "graphic-usability-stage-3",
+  "logicalCanvas": { "width": 480, "height": 270 },
+  "masterPrompt": "Original LOOP SHAFT production asset for a 480x270 side-view mining game. Strict orthographic side view, low-resolution hand-authored pixel-art appearance, exact logical pixel scale, hard one-pixel edges, no antialiasing. D-001 is a shallow industrial mine built from warm soil, oxidized iron, worn timber and restrained amber work lights. Strong readable silhouette, grounded weight, practical mining construction, controlled contrast. Background is lowest priority; tunnel structure, interactable equipment, character, cargo and guidance increase in visual priority in that order. Preserve clear feet, contact points, equipment attachment points and frame-to-frame proportions. Original LOOP SHAFT design language.",
+  "negativePrompt": "No text, letters, numbers, logos, UI, HUD, watermark, perspective view, isometric view, painterly rendering, smooth vector art, gradient shading, bloom, lens flare, neon-dominant palette, excessive glow, transparent glass cards, random particles, subpixel detail, antialiased edges, semi-transparent outline, inconsistent anatomy, floating feet, changing body proportions, changing equipment proportions, cropped silhouette, baked-in characters, baked-in cargo, baked-in interactable machinery, or imitation of Terraria or any existing game asset.",
+  "generation": {
+    "tool": "Codex built-in image_gen",
+    "modelVersion": "service-managed built-in version on 2026-09-20",
+    "masterPromptHash": "a7a65e60b5cc8f8676f89345d36fa073cb8a303f6e198b4d5d7339cf74b83c12",
+    "referenceHashes": {
+      "character": "e6a2bdcd62760389a074fb24907e2734366c24f7e24c5e595797d0d2313ebed4",
+      "nodes": "5b877c82a0870558e249d1757cc9901610a019637e90dcc76ce18ef58ad9aa1e",
+      "equipment": "d54df2ce80c03c8f6061fa67ed3b865b90912dde860e821ee1de4bde4d4da8a6",
+      "environment": "ea91d3e60a8a7ed3f046f63df4b44a3f6f6541a8c6b77df2d8ed94e26dfb7f3c"
+    }
+  },
+  "variableFields": [
+    "assetId", "subject", "semanticLayer", "logicalSize", "cellSize", "anchor",
+    "visibleBounds", "clip", "frame", "state", "materialNotes", "lightingRole",
+    "continuityReference", "transparentBackground"
+  ],
+  "referenceSheets": [
+    { "id": "character", "file": "sources/reference-character.png", "role": "body proportions, equipment attachment, pose silhouette" },
+    { "id": "nodes", "file": "sources/reference-nodes.png", "role": "three vein identities and damage language" },
+    { "id": "equipment", "file": "sources/reference-equipment.png", "role": "workbench and elevator material language" },
+    { "id": "environment", "file": "sources/reference-environment.png", "role": "D-001 lighting, depth and material hierarchy" }
+  ],
+  "runtimeAssets": [
+    { "file": "background-rock-base.png", "size": [480, 270], "anchor": [0, 0], "group": "background-rock" },
+    { "file": "background-tunnel-back.png", "size": [480, 270], "anchor": [0, 0], "group": "background-tunnel" },
+    { "file": "background-surface-station.png", "size": [480, 270], "anchor": [0, 0], "group": "background-surface" },
+    { "file": "background-shaft-back.png", "size": [480, 270], "anchor": [0, 0], "group": "background-shaft" },
+    { "file": "background-tunnel-structure.png", "size": [480, 270], "anchor": [0, 0], "group": "background-structure" },
+    { "file": "background-floor.png", "size": [480, 270], "anchor": [0, 0], "group": "background-floor" },
+    { "file": "player-body-atlas.png", "size": [320, 320], "cell": [40, 40], "anchor": [20, 38], "group": "player" },
+    { "file": "player-helmet-atlas.png", "size": [320, 320], "cell": [40, 40], "anchor": [20, 38], "group": "player" },
+    { "file": "player-tool-atlas.png", "size": [640, 320], "cell": [40, 40], "anchor": [20, 38], "group": "player" },
+    { "file": "player-pack-atlas.png", "size": [640, 320], "cell": [40, 40], "anchor": [20, 38], "group": "player" },
+    { "file": "player-boots-atlas.png", "size": [640, 320], "cell": [40, 40], "anchor": [20, 38], "group": "player" },
+    { "file": "node-scrap-ledge-atlas.png", "size": [192, 40], "cell": [48, 40], "anchor": [24, 40], "group": "node:scrap-ledge" },
+    { "file": "node-copper-pocket-atlas.png", "size": [192, 40], "cell": [48, 40], "anchor": [24, 40], "group": "node:copper-pocket" },
+    { "file": "node-fossil-crack-atlas.png", "size": [192, 40], "cell": [48, 40], "anchor": [24, 40], "group": "node:fossil-crack" },
+    { "file": "workbench-atlas.png", "size": [224, 32], "cell": [32, 32], "anchor": [16, 32], "group": "workbench" },
+    { "file": "central-elevator-atlas.png", "size": [224, 88], "cell": [56, 44], "anchor": [28, 20], "group": "elevator" }
+  ],
+  "characterClips": [
+    { "id": "idle", "row": 0, "frames": 2 },
+    { "id": "walk", "row": 1, "frames": 4 },
+    { "id": "mine-ready", "row": 2, "frames": 2 },
+    { "id": "mine-swing", "row": 3, "frames": 8, "hitFrame": 3 },
+    { "id": "collect", "row": 4, "frames": 4 },
+    { "id": "carry-walk", "row": 5, "frames": 4 },
+    { "id": "carry-idle", "row": 6, "frames": 2 },
+    { "id": "load", "row": 7, "frames": 4 }
+  ],
+  "nodeStates": ["full", "damaged", "critical", "depleted"],
+  "palette": { "file": "palette.json", "candidateColors": 40, "runtimeColors": 32, "seed": 3001, "dither": false },
+  "postprocess": {
+    "resizeFilter": "point",
+    "alphaValues": [0, 255],
+    "runtimeOutput": "public/assets/d001/runtime",
+    "sourceOutput": "art/d001/sources"
+  }
+}

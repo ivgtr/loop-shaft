@@ -87,6 +87,25 @@ test('uses a pointer cursor only on targets and selects the hovered target', asy
   await expect(canvas).toHaveAttribute('data-interaction-target', 'node:scrap-ledge');
 });
 
+test('keeps D-001 operable when individual image targets fail to load', async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await page.route('**/player-body-atlas.png', (route) => route.abort());
+  await page.route('**/node-scrap-ledge-atlas.png', (route) => route.abort());
+  await page.goto('/');
+  const canvas = page.getByLabel('LOOP SHAFT mining floor');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  const x = box!.x + box!.width * (118 / 480);
+  const y = box!.y + box!.height * (201 / 270);
+  await page.mouse.move(x, y);
+  await expect(canvas).toHaveAttribute('data-interaction-target', 'node:scrap-ledge');
+  await page.mouse.click(x, y);
+  await expect(page.getByRole('heading', { name: 'Scrap Ledge' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'MINE' })).toBeEnabled({ timeout: 10_000 });
+  expect(pageErrors).toEqual([]);
+});
+
 test('keeps Bore hover and selected context aligned in a later-game state', async ({ page }) => {
   const state = createGameState(9101);
   state.run.depth.current = 'D-400';

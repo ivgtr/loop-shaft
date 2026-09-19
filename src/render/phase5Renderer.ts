@@ -4,13 +4,14 @@ import type { CrewMember, EquipmentItem, EquipmentRarity, GameEvent, GameState, 
 import { CanvasRenderer } from './canvasRenderer';
 import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
+import type { D001AssetStore } from './d001ImageRenderer';
 
 export class Phase5Renderer {
   private readonly base: CanvasRenderer;
   private readonly ctx: CanvasRenderingContext2D;
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.base = new CanvasRenderer(canvas);
+  constructor(canvas: HTMLCanvasElement, assets: D001AssetStore) {
+    this.base = new CanvasRenderer(canvas, assets);
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas 2D context is required.');
     context.imageSmoothingEnabled = false;
@@ -19,6 +20,10 @@ export class Phase5Renderer {
 
   handleEvent(event: GameEvent, state: GameState, now: number): void {
     this.base.handleEvent(event, state, now);
+  }
+
+  drawForegroundFx(now: number): void {
+    this.base.drawForegroundFx(now);
   }
 
   render(state: GameState, now: number): void {

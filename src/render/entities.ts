@@ -4,20 +4,45 @@ import type { DepthId, GameState, LootKind, MiningNode, Rarity } from '../game/t
 import { elevatorY } from './environment';
 import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
+import {
+  canDrawD001Player,
+  drawD001Elevator,
+  drawD001Node,
+  drawD001Player,
+  drawD001Workbench,
+  type D001AssetStore,
+} from './d001ImageRenderer';
+import type { SemanticRenderState } from './semanticRenderState';
 
-export function drawEntities(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
-  drawNodes(ctx, state);
-  drawLoot(ctx, state, now);
-  drawWorkbench(ctx, state);
+export function drawEntities(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  now: number,
+  semantic?: SemanticRenderState,
+  assets?: D001AssetStore,
+): void {
+  drawNodes(ctx, state, semantic, assets);
+  drawWorkbench(ctx, state, assets);
   if (state.run.depth.current === 'D-030') drawScanner(ctx, state, now);
   if (state.run.porter.enabled) drawPorter(ctx, state, now);
-  drawCharacter(ctx, state, now);
-  drawElevator(ctx, state, now);
-  drawLiftControl(ctx, state);
+  if (state.run.depth.current === 'D-001' && semantic && assets && canDrawD001Player(assets)) drawD001Player(ctx, semantic, assets);
+  else drawCharacter(ctx, state, now);
+  drawLoot(ctx, state, now);
+  const elevatorImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets && drawD001Elevator(ctx, state, semantic, assets));
+  if (!elevatorImage) drawElevator(ctx, state, now);
+  drawLiftControl(ctx, state, elevatorImage);
 }
 
-function drawNodes(ctx: CanvasRenderingContext2D, state: GameState): void {
-  for (const node of currentFloor(state).nodes) drawNode(ctx, node, state.run.depth.current);
+function drawNodes(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  semantic?: SemanticRenderState,
+  assets?: D001AssetStore,
+): void {
+  for (const node of currentFloor(state).nodes) {
+    if (state.run.depth.current === 'D-001' && semantic && assets && drawD001Node(ctx, node, semantic, assets)) continue;
+    drawNode(ctx, node, state.run.depth.current);
+  }
 }
 
 function drawNode(ctx: CanvasRenderingContext2D, node: MiningNode, depth: DepthId): void {
@@ -63,7 +88,14 @@ function drawLoot(ctx: CanvasRenderingContext2D, state: GameState, now: number):
   }
 }
 
-function drawWorkbench(ctx: CanvasRenderingContext2D, state: GameState): void {
+function drawWorkbench(ctx: CanvasRenderingContext2D, state: GameState, assets?: D001AssetStore): void {
+  if (state.run.depth.current === 'D-001' && assets && drawD001Workbench(ctx, state, assets)) {
+    if (state.run.automation.autoSwing.unlocked) {
+      ctx.fillStyle = state.run.automation.autoSwing.enabled ? PALETTE.cyan : '#3f5355';
+      ctx.fillRect(WORLD.workbenchX + 2, WORLD.floorY - 22, 3, 3);
+    }
+    return;
+  }
   const x = WORLD.workbenchX; const run = state.run;
   ctx.fillStyle = PALETTE.timber; ctx.fillRect(x - 12, WORLD.floorY - 8, 25, 4); ctx.fillRect(x - 9, WORLD.floorY - 4, 3, 8); ctx.fillRect(x + 7, WORLD.floorY - 4, 3, 8);
   ctx.fillStyle = run.tool.level === 1 ? PALETTE.rust : PALETTE.steel; ctx.fillRect(x - 1, WORLD.floorY - 18, 2, 11); ctx.fillRect(x - 5, WORLD.floorY - 19, 9, 2);
@@ -111,11 +143,11 @@ function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: numb
   if (e.state === 'IDLE_BOTTOM' && e.cargo.length > 0 && !state.run.automation.autoDispatch.enabled && Math.floor(now / 500) % 2 === 0) { ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.lamp; ctx.textAlign = 'center'; ctx.fillText('SEND', WORLD.elevatorX, y - 22); ctx.textAlign = 'left'; }
 }
 
-function drawLiftControl(ctx: CanvasRenderingContext2D, state: GameState): void {
+function drawLiftControl(ctx: CanvasRenderingContext2D, state: GameState, housingDrawn = false): void {
   const { x, y } = INTERACTION_LAYOUT.liftControl;
-  ctx.fillStyle = '#24272a'; ctx.fillRect(x, y, 8, 12);
+  if (!housingDrawn) { ctx.fillStyle = '#24272a'; ctx.fillRect(x, y, 8, 12); }
   ctx.fillStyle = state.run.automation.autoDispatch.enabled ? PALETTE.cyan : state.run.automation.autoDispatch.unlocked ? PALETTE.lampDim : '#3c3b3b'; ctx.fillRect(x + 3, y + 2, 2, 2);
-  ctx.fillStyle = PALETTE.metal; ctx.fillRect(x + 2, y + 7, 4, 2);
+  if (!housingDrawn) { ctx.fillStyle = PALETTE.metal; ctx.fillRect(x + 2, y + 7, 4, 2); }
   if (state.meta.protocols.includes('VETERAN_ELEVATOR')) { ctx.fillStyle = PALETTE.d100Lamp; ctx.fillRect(x + 6, y + 1, 1, 5); }
 }
 

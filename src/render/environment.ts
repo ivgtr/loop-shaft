@@ -2,9 +2,14 @@ import { WORLD } from '../game/config';
 import type { DepthId, GameState } from '../game/types';
 import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
+import { drawD001Background, type D001AssetStore } from './d001ImageRenderer';
 
-export function drawEnvironment(ctx: CanvasRenderingContext2D, state: GameState): void {
+export function drawEnvironment(ctx: CanvasRenderingContext2D, state: GameState, assets?: D001AssetStore): void {
   const depth = state.run.depth.current;
+  if (depth === 'D-001' && assets && drawD001Background(ctx, assets)) {
+    drawD001DynamicEnvironment(ctx, state);
+    return;
+  }
   ctx.fillStyle = PALETTE.void;
   ctx.fillRect(0, 0, WORLD.width, WORLD.height);
   drawRock(ctx, depth);
@@ -14,6 +19,21 @@ export function drawEnvironment(ctx: CanvasRenderingContext2D, state: GameState)
   if (depth === 'D-030') drawD030Details(ctx, state);
   if (depth === 'D-060') drawD060Details(ctx, state);
   if (depth === 'D-100') drawD100Details(ctx, state);
+}
+
+function drawD001DynamicEnvironment(ctx: CanvasRenderingContext2D, state: GameState): void {
+  if (state.run.depth.unlocked.includes('D-030')) drawArchive(ctx, state);
+  if (state.run.depth.unlocked.includes('D-060')) drawResearchTerminal(ctx, state);
+  if (state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) drawCoreConsole(ctx, state);
+  ctx.fillStyle = '#715a4d';
+  ctx.fillRect(239, 36, 2, Math.max(2, elevatorY(state) - 16));
+  ctx.font = '4px monospace';
+  for (const [label, y] of [['001', 65], ['030', 103], ['060', 141], ['100', 179]] as const) {
+    const depth = `D-${label}` as DepthId;
+    ctx.fillStyle = state.run.depth.unlocked.includes(depth) ? depthLamp(depth) : '#43413e';
+    ctx.fillRect(258, y - 4, 2, 2);
+    ctx.fillText(label, 267, y);
+  }
 }
 
 function drawRock(ctx: CanvasRenderingContext2D, depth: DepthId): void {

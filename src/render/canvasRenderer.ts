@@ -4,6 +4,8 @@ import type { GameEvent, GameState, Rarity } from '../game/types';
 import { drawEntities } from './entities';
 import { drawEnvironment } from './environment';
 import { PALETTE } from './palette';
+import type { D001AssetStore } from './d001ImageRenderer';
+import { deriveSemanticRenderState } from './semanticRenderState';
 
 type DebrisFx = { x: number; y: number; startedAt: number };
 type BannerFx = { label: string; sub: string; rarity: Rarity; startedAt: number };
@@ -17,7 +19,7 @@ export class CanvasRenderer {
   private banner: BannerFx | null = null;
   private gain: GainFx | null = null;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, private readonly assets: D001AssetStore) {
     this.canvas = canvas;
     canvas.width = WORLD.width;
     canvas.height = WORLD.height;
@@ -51,10 +53,14 @@ export class CanvasRenderer {
     this.ctx.save();
     const shake = now < this.shakeUntil ? (Math.floor(now / 28) % 2 === 0 ? 1 : -1) : 0;
     this.ctx.translate(shake, 0);
-    drawEnvironment(this.ctx, state);
-    drawEntities(this.ctx, state, now);
+    const semantic = deriveSemanticRenderState(state, now);
+    drawEnvironment(this.ctx, state, this.assets);
+    drawEntities(this.ctx, state, now, semantic, this.assets);
     this.ctx.restore();
     if (state.run.elevator.travel) this.drawTravel(state);
+  }
+
+  drawForegroundFx(now: number): void {
     this.drawFx(now);
   }
 

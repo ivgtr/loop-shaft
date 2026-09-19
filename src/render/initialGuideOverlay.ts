@@ -24,7 +24,7 @@ export function drawInitialLogisticsGuide(
 ): void {
   let anchor: Point | undefined;
   if (guide.target.kind === 'character') {
-    anchor = { x: state.run.character.x, y: state.run.character.y - 17 };
+    anchor = { x: Math.round(state.run.character.x), y: Math.round(state.run.character.y) + 8 - 32 };
   } else {
     const ref = guide.target.ref;
     anchor = targets.find((target) => sameInteractionTarget(target.ref, ref))?.labelAnchor;
