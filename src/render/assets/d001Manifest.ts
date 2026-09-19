@@ -25,7 +25,7 @@ export const D001_ASSET_FILES = {
 } as const;
 
 export const D001_BACKGROUND_KEYS = [
-  'backgroundRock', 'backgroundTunnel', 'backgroundSurface', 'backgroundShaft', 'backgroundStructure', 'backgroundFloor',
+  'backgroundRock', 'backgroundTunnel', 'backgroundShaft', 'backgroundSurface', 'backgroundStructure', 'backgroundFloor',
 ] as const satisfies readonly D001AssetKey[];
 
 export const D001_PLAYER_KEYS = [

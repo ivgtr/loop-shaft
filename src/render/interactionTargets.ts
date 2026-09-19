@@ -5,6 +5,11 @@ import { canDispatchElevator, canMine, cargoWeight, currentFloor } from '../game
 import type { GameState, Selection } from '../game/types';
 import { elevatorY } from './environment';
 import { INTERACTION_LAYOUT } from './interactionLayout';
+import {
+  d001ElevatorVisualY,
+  D001_VISUAL_GROUND_OFFSET,
+  D001_WORKBENCH_FALLBACK_OFFSET,
+} from './semanticRenderState';
 
 export { INTERACTION_LAYOUT } from './interactionLayout';
 
@@ -131,16 +136,18 @@ export function deriveInteractionTargets(state: GameState): InteractionTarget[] 
         && ['IDLE', 'MINING', 'MOVING_TO_NODE'].includes(state.run.character.state);
       const available = atTarget ? canMine(state) : canMove;
       const status = remote ? 'NO WALKWAY' : depleted ? 'DEPLETED' : available ? null : 'BUSY';
-      const center = { x: node.x, y: node.y - 9 };
+      const visualOffset = depth === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0;
+      const center = { x: node.x, y: node.y - 9 + visualOffset };
+      const hitCenter = { x: node.x, y: node.y - 9 };
       const tall = node.id === 'core-shell' || node.id === 'sealed-chamber';
       const width = tall ? 46 : 38;
       const height = tall ? 38 : 32;
       add({
         ref: { type: 'node', id: node.id },
         position: center,
-        hitShapes: [{ type: 'circle', center, radius: tall ? 25 : 22 }],
-        emphasisRects: [{ x: node.x - width / 2, y: node.y - height + 3, width, height }],
-        labelAnchor: { x: node.x, y: node.y - height },
+        hitShapes: [{ type: 'circle', center: hitCenter, radius: tall ? 25 : 22 }],
+        emphasisRects: [{ x: node.x - width / 2, y: node.y - height + 3 + visualOffset, width, height }],
+        labelAnchor: { x: node.x, y: node.y - height + visualOffset },
         displayName: node.name,
         shortStatus: status,
         primaryActionAvailable: available,
@@ -150,8 +157,11 @@ export function deriveInteractionTargets(state: GameState): InteractionTarget[] 
     }
   }
 
+  const workbenchRect = depth === 'D-001'
+    ? { ...INTERACTION_LAYOUT.workbench, y: INTERACTION_LAYOUT.workbench.y + D001_WORKBENCH_FALLBACK_OFFSET }
+    : INTERACTION_LAYOUT.workbench;
   add(rectTarget({
-    ref: { type: 'workbench' }, rect: INTERACTION_LAYOUT.workbench, displayName: 'Workshop',
+    ref: { type: 'workbench' }, rect: workbenchRect, hitRect: inflate(INTERACTION_LAYOUT.workbench, 3), displayName: 'Workshop',
     priority: PRIORITY.machine, visualLayer: 10,
   }));
 
@@ -245,7 +255,8 @@ function addElevatorTarget(
   add: (target: Omit<InteractionTarget, 'key' | 'stableOrder' | 'selectable'>) => void,
   state: GameState,
 ): void {
-  const y = elevatorY(state);
+  const logicalY = elevatorY(state);
+  const y = state.run.depth.current === 'D-001' ? d001ElevatorVisualY(state.run.elevator.position) : logicalY;
   const half = state.run.anomaly.selected === 'EMPTY_SHAFT' ? 15 : 20;
   const cageRect = { x: WORLD.elevatorX - half - 3, y: y - 20, width: half * 2 + 7, height: 42 };
   const controlHit = inflate(INTERACTION_LAYOUT.liftControl, 3);
@@ -259,7 +270,7 @@ function addElevatorTarget(
     position: { x: WORLD.elevatorX, y },
     hitShapes: [
       { type: 'rect', rect: controlHit },
-      { type: 'rect', rect: { x: WORLD.elevatorX - 25, y: y - 17, width: 50, height: 36 } },
+      { type: 'rect', rect: { x: WORLD.elevatorX - 25, y: logicalY - 17, width: 50, height: 36 } },
     ],
     emphasisRects: [cageRect, inflate(INTERACTION_LAYOUT.liftControl, 2)],
     labelAnchor: { x: WORLD.elevatorX, y: y - 22 },

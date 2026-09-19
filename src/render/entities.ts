@@ -6,16 +6,25 @@ import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
 import {
   canDrawD001Player,
+  drawD001ActorShadow,
   drawD001Cargo,
+  drawD001CargoShadow,
   drawD001CarriedCargo,
-  drawD001Elevator,
+  drawD001ElevatorBack,
+  drawD001ElevatorFront,
   drawD001Node,
   drawD001Player,
   drawD001Porter,
   drawD001Workbench,
   type D001AssetStore,
 } from './d001ImageRenderer';
-import type { SemanticRenderState } from './semanticRenderState';
+import {
+  d001ElevatorVisualY,
+  D001_VISUAL_GROUND_OFFSET,
+  D001_VISUAL_GROUND_Y,
+  D001_WORKBENCH_FALLBACK_OFFSET,
+  type SemanticRenderState,
+} from './semanticRenderState';
 
 export function drawEntities(
   ctx: CanvasRenderingContext2D,
@@ -27,19 +36,25 @@ export function drawEntities(
   drawNodes(ctx, state, semantic, assets);
   drawWorkbench(ctx, state, assets);
   if (state.run.depth.current === 'D-030') drawScanner(ctx, state, now);
+  const elevatorImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets
+    && drawD001ElevatorBack(ctx, semantic, assets));
   if (state.run.porter.enabled) {
+    if (state.run.depth.current === 'D-001' && semantic?.porter && assets?.ready('npcPorter')) {
+      drawD001ActorShadow(ctx, semantic.porter);
+    }
     const porterImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets && drawD001Porter(ctx, semantic, assets));
-    if (!porterImage) drawPorter(ctx, state, now);
+    if (!porterImage) drawWithD001GroundOffset(ctx, state.run.depth.current, () => drawPorter(ctx, state, now));
     else if (semantic?.porter && assets && !drawD001CarriedCargo(ctx, semantic.porter, assets)) drawFallbackCarriedCargo(ctx, semantic.porter);
   }
   const playerImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets && canDrawD001Player(assets));
   if (playerImage) {
+    drawD001ActorShadow(ctx, semantic!.character);
     drawD001Player(ctx, semantic!, assets!);
     if (!drawD001CarriedCargo(ctx, semantic!.character, assets!)) drawFallbackCarriedCargo(ctx, semantic!.character);
-  } else drawCharacter(ctx, state, now);
+  } else drawWithD001GroundOffset(ctx, state.run.depth.current, () => drawCharacter(ctx, state, now));
   drawLoot(ctx, state, now, assets);
-  const elevatorImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets && drawD001Elevator(ctx, state, semantic, assets));
-  if (!elevatorImage) drawElevator(ctx, state, now);
+  if (elevatorImage) drawD001ElevatorFront(ctx, state, semantic!, assets!);
+  else drawElevator(ctx, state, now);
   drawLiftControl(ctx, state, elevatorImage);
 }
 
@@ -51,8 +66,15 @@ function drawNodes(
 ): void {
   for (const node of currentFloor(state).nodes) {
     if (state.run.depth.current === 'D-001' && semantic && assets && drawD001Node(ctx, node, semantic, assets)) continue;
-    drawNode(ctx, node, state.run.depth.current);
+    drawWithD001GroundOffset(ctx, state.run.depth.current, () => drawNode(ctx, node, state.run.depth.current));
   }
+}
+
+function drawWithD001GroundOffset(ctx: CanvasRenderingContext2D, depth: DepthId, draw: () => void): void {
+  ctx.save();
+  if (depth === 'D-001') ctx.translate(0, D001_VISUAL_GROUND_OFFSET);
+  draw();
+  ctx.restore();
 }
 
 function drawNode(ctx: CanvasRenderingContext2D, node: MiningNode, depth: DepthId): void {
@@ -92,12 +114,16 @@ function drawLoot(ctx: CanvasRenderingContext2D, state: GameState, now: number, 
   for (const item of currentFloor(state).loot) {
     const special = rarityRank(item.rarity) >= 2;
     const bob = special && Math.floor(now / 180) % 2 === 0 ? -1 : 0;
-    const cargoImage = Boolean(state.run.depth.current === 'D-001' && assets && drawD001Cargo(ctx, item, item.x, item.y + 1 + bob, assets));
+    const anchorY = state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_Y : item.y + 1;
+    if (state.run.depth.current === 'D-001' && assets?.ready('cargoItems')) {
+      drawD001CargoShadow(ctx, item.x, anchorY);
+    }
+    const cargoImage = Boolean(state.run.depth.current === 'D-001' && assets && drawD001Cargo(ctx, item, item.x, anchorY + bob, assets));
     if (!cargoImage) {
       ctx.fillStyle = lootColor(item.kind);
-      ctx.fillRect(Math.round(item.x) - 2, Math.round(item.y) - 3 + bob, 5, 4);
+      ctx.fillRect(Math.round(item.x) - 2, Math.round(anchorY) - 4 + bob, 5, 4);
     }
-    if (special) { ctx.fillStyle = rarityColor(item.rarity); ctx.fillRect(Math.round(item.x), Math.round(item.y) - 6 + bob, 1, 1); }
+    if (special) { ctx.fillStyle = rarityColor(item.rarity); ctx.fillRect(Math.round(item.x), Math.round(anchorY) - 7 + bob, 1, 1); }
   }
 }
 
@@ -114,16 +140,17 @@ function drawWorkbench(ctx: CanvasRenderingContext2D, state: GameState, assets?:
   if (state.run.depth.current === 'D-001' && assets && drawD001Workbench(ctx, state, assets)) {
     if (state.run.automation.autoSwing.unlocked) {
       ctx.fillStyle = state.run.automation.autoSwing.enabled ? PALETTE.cyan : '#3f5355';
-      ctx.fillRect(WORLD.workbenchX + 2, WORLD.floorY - 22, 3, 3);
+      ctx.fillRect(WORLD.workbenchX + 2, WORLD.floorY - 22 + D001_VISUAL_GROUND_OFFSET, 3, 3);
     }
     return;
   }
   const x = WORLD.workbenchX; const run = state.run;
-  ctx.fillStyle = PALETTE.timber; ctx.fillRect(x - 12, WORLD.floorY - 8, 25, 4); ctx.fillRect(x - 9, WORLD.floorY - 4, 3, 8); ctx.fillRect(x + 7, WORLD.floorY - 4, 3, 8);
-  ctx.fillStyle = run.tool.level === 1 ? PALETTE.rust : PALETTE.steel; ctx.fillRect(x - 1, WORLD.floorY - 18, 2, 11); ctx.fillRect(x - 5, WORLD.floorY - 19, 9, 2);
-  ctx.fillStyle = run.boots.level === 1 ? '#51463d' : PALETTE.steel; ctx.fillRect(x - 11, WORLD.floorY - 13, 4, 4); ctx.fillRect(x - 6, WORLD.floorY - 13, 4, 4);
-  ctx.fillStyle = run.pack.level === 1 ? '#685642' : '#846c47'; const packW = run.pack.level === 1 ? 5 : 7; const packH = run.pack.level === 1 ? 6 : 8; ctx.fillRect(x + 6, WORLD.floorY - 12 - (packH - 6), packW, packH);
-  if (run.automation.autoSwing.unlocked) { ctx.fillStyle = run.automation.autoSwing.enabled ? PALETTE.cyan : '#3f5355'; ctx.fillRect(x + 2, WORLD.floorY - 22, 3, 3); }
+  const floorY = WORLD.floorY + (state.run.depth.current === 'D-001' ? D001_WORKBENCH_FALLBACK_OFFSET : 0);
+  ctx.fillStyle = PALETTE.timber; ctx.fillRect(x - 12, floorY - 8, 25, 4); ctx.fillRect(x - 9, floorY - 4, 3, 8); ctx.fillRect(x + 7, floorY - 4, 3, 8);
+  ctx.fillStyle = run.tool.level === 1 ? PALETTE.rust : PALETTE.steel; ctx.fillRect(x - 1, floorY - 18, 2, 11); ctx.fillRect(x - 5, floorY - 19, 9, 2);
+  ctx.fillStyle = run.boots.level === 1 ? '#51463d' : PALETTE.steel; ctx.fillRect(x - 11, floorY - 13, 4, 4); ctx.fillRect(x - 6, floorY - 13, 4, 4);
+  ctx.fillStyle = run.pack.level === 1 ? '#685642' : '#846c47'; const packW = run.pack.level === 1 ? 5 : 7; const packH = run.pack.level === 1 ? 6 : 8; ctx.fillRect(x + 6, floorY - 12 - (packH - 6), packW, packH);
+  if (run.automation.autoSwing.unlocked) { ctx.fillStyle = run.automation.autoSwing.enabled ? PALETTE.cyan : '#3f5355'; ctx.fillRect(x + 2, floorY - 22, 3, 3); }
 }
 
 function drawScanner(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
@@ -156,7 +183,9 @@ function drawPickaxe(ctx: CanvasRenderingContext2D, state: GameState, x: number,
 }
 
 function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
-  const e = state.run.elevator; const y = elevatorY(state); const half = state.run.anomaly.selected === 'EMPTY_SHAFT' ? 15 : 20;
+  const e = state.run.elevator;
+  const y = state.run.depth.current === 'D-001' ? d001ElevatorVisualY(e.position) : elevatorY(state);
+  const half = state.run.anomaly.selected === 'EMPTY_SHAFT' ? 15 : 20;
   ctx.fillStyle = '#22262b'; ctx.fillRect(WORLD.elevatorX - half, y - 16, half * 2 + 1, 35); ctx.fillStyle = PALETTE.metal; ctx.fillRect(WORLD.elevatorX - half, y - 16, half * 2 + 1, 3); ctx.fillRect(WORLD.elevatorX - half, y + 16, half * 2 + 1, 3); ctx.fillRect(WORLD.elevatorX - half, y - 16, 3, 35); ctx.fillRect(WORLD.elevatorX + half - 2, y - 16, 3, 35);
   const closed = e.state === 'ASCENDING' || e.state === 'DESCENDING' || e.state === 'TRAVELING';
   if (closed) { ctx.fillStyle = '#3d4448'; ctx.fillRect(WORLD.elevatorX - half + 5, y - 11, half - 5, 25); ctx.fillRect(WORLD.elevatorX + 1, y - 11, half - 5, 25); }

@@ -14,8 +14,8 @@ import {
 } from './interactionTargets';
 import { AssetStore } from './assets/assetStore';
 import { d001AssetUrls, type D001AssetKey } from './assets/d001Manifest';
-import { drawD001Cargo, drawD001Engineer } from './d001ImageRenderer';
-import { deriveSemanticRenderState } from './semanticRenderState';
+import { drawD001ActorShadow, drawD001Cargo, drawD001Engineer } from './d001ImageRenderer';
+import { D001_VISUAL_GROUND_OFFSET, deriveSemanticRenderState } from './semanticRenderState';
 
 export class GameRenderer {
   private readonly base: Phase5Renderer;
@@ -57,8 +57,14 @@ export class GameRenderer {
     drawFreightCage(this.ctx, state, this.assets);
     drawBores(this.ctx, state, now, this.assets);
     const engineer = deriveSemanticRenderState(state, now).engineer;
+    if (engineer?.visible && state.run.depth.current === 'D-001' && this.assets.ready('npcEngineer')) {
+      drawD001ActorShadow(this.ctx, engineer);
+    }
     if (!engineer || state.run.depth.current !== 'D-001' || !drawD001Engineer(this.ctx, engineer, this.assets)) {
+      this.ctx.save();
+      if (state.run.depth.current === 'D-001') this.ctx.translate(0, D001_VISUAL_GROUND_OFFSET);
       drawEngineer(this.ctx, state, now);
+      this.ctx.restore();
     }
     const targets = deriveInteractionTargets(state);
     const guide = deriveInitialLogisticsGuide(state);

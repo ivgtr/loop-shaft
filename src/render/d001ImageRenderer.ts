@@ -10,6 +10,8 @@ import {
 } from './assets/d001Manifest';
 import {
   cargoVisualClass,
+  D001_WORKBENCH_IMAGE_OFFSET,
+  D001_VISUAL_GROUND_OFFSET,
   type ActorRenderState,
   type CrewRenderState,
   type EngineerRenderState,
@@ -39,7 +41,8 @@ export function drawD001Node(
   if (!image) return false;
   const visualState = semantic.nodes.get(node.id) ?? 'full';
   const frame = { full: 0, damaged: 1, critical: 2, depleted: 3 }[visualState];
-  ctx.drawImage(image, frame * 48, 0, 48, 40, Math.round(node.x) - 24, Math.round(node.y) - 40, 48, 40);
+  ctx.drawImage(image, frame * 48, 0, 48, 40,
+    Math.round(node.x) - 24, Math.round(node.y) + D001_VISUAL_GROUND_OFFSET - 40, 48, 40);
   return true;
 }
 
@@ -47,7 +50,7 @@ export function drawD001Workbench(ctx: CanvasRenderingContext2D, state: GameStat
   const image = assets.ready('workbench');
   if (!image) return false;
   const x = WORLD.workbenchX - 16;
-  const y = WORLD.floorY - 28;
+  const y = WORLD.floorY - 28 + D001_WORKBENCH_IMAGE_OFFSET;
   const frames = [0, state.run.tool.level, 2 + state.run.boots.level, 4 + state.run.pack.level] as const;
   for (const frame of frames) ctx.drawImage(image, frame * 32, 0, 32, 32, x, y, 32, 32);
   return true;
@@ -145,6 +148,19 @@ export function drawD001CarriedCargo(
   return true;
 }
 
+export function drawD001ActorShadow(
+  ctx: CanvasRenderingContext2D,
+  actor: Pick<ActorRenderState<string>, 'worldAnchor'>,
+): void {
+  ctx.fillStyle = '#08080b';
+  ctx.fillRect(Math.round(actor.worldAnchor.x) - 7, Math.round(actor.worldAnchor.y) - 1, 14, 2);
+}
+
+export function drawD001CargoShadow(ctx: CanvasRenderingContext2D, anchorX: number, anchorY: number): void {
+  ctx.fillStyle = '#08080b';
+  ctx.fillRect(Math.round(anchorX) - 4, Math.round(anchorY) - 1, 8, 1);
+}
+
 function drawPlayerLayer(
   ctx: CanvasRenderingContext2D,
   assets: D001AssetStore,
@@ -158,7 +174,20 @@ function drawPlayerLayer(
   if (image) ctx.drawImage(image, sx, sy, 40, 40, dx, dy, 40, 40);
 }
 
-export function drawD001Elevator(
+export function drawD001ElevatorBack(
+  ctx: CanvasRenderingContext2D,
+  semantic: SemanticRenderState,
+  assets: D001AssetStore,
+): boolean {
+  const image = assets.ready('elevator');
+  if (!image) return false;
+  const variant = semantic.elevator.width === 'narrow' ? 1 : 0;
+  ctx.drawImage(image, variant * 56, 0, 56, 44,
+    WORLD.elevatorX - 28, Math.round(semantic.elevator.y) - 20, 56, 44);
+  return true;
+}
+
+export function drawD001ElevatorFront(
   ctx: CanvasRenderingContext2D,
   state: GameState,
   semantic: SemanticRenderState,
@@ -170,10 +199,9 @@ export function drawD001Elevator(
   const x = WORLD.elevatorX - 28;
   const y = Math.round(semantic.elevator.y) - 20;
   const variant = narrow ? 1 : 0;
-  ctx.drawImage(image, variant * 56, 0, 56, 44, x, y, 56, 44);
 
   const count = Math.min(9, state.run.elevator.cargo.length);
-  for (let index = 0; index < count; index += 1) {
+  for (let index = count - 1; index >= 0; index -= 1) {
     const row = Math.floor(index / 3);
     const column = index % 3;
     const item = state.run.elevator.cargo[index]!;

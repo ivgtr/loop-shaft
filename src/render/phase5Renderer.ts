@@ -4,8 +4,20 @@ import type { CrewMember, EquipmentItem, EquipmentRarity, GameEvent, GameState, 
 import { CanvasRenderer } from './canvasRenderer';
 import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
-import { drawD001Cargo, drawD001CarriedCargo, drawD001Crew, type D001AssetStore } from './d001ImageRenderer';
-import { deriveSemanticRenderState, type SemanticRenderState } from './semanticRenderState';
+import {
+  drawD001ActorShadow,
+  drawD001Cargo,
+  drawD001CargoShadow,
+  drawD001CarriedCargo,
+  drawD001Crew,
+  type D001AssetStore,
+} from './d001ImageRenderer';
+import {
+  D001_CARGO_PLATFORM_OFFSET,
+  D001_VISUAL_GROUND_OFFSET,
+  deriveSemanticRenderState,
+  type SemanticRenderState,
+} from './semanticRenderState';
 
 export class Phase5Renderer {
   private readonly base: CanvasRenderer;
@@ -72,14 +84,17 @@ function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, asse
   const floor = phase5Floor(state, state.run.depth.current as Phase5DepthId);
   if (!floor) return;
   const x = WORLD.elevatorX + 38;
-  const y = WORLD.floorY - 4;
+  const y = WORLD.floorY - 4 + (state.run.depth.current === 'D-001' ? D001_CARGO_PLATFORM_OFFSET : 0);
   ctx.fillStyle = '#3a3935'; ctx.fillRect(x, y, 38, 4);
   ctx.fillStyle = '#67635c'; ctx.fillRect(x + 2, y - 3, 34, 3);
   ctx.fillStyle = '#272724'; ctx.fillRect(x + 4, y + 4, 3, 5); ctx.fillRect(x + 30, y + 4, 3, 5);
   const count = Math.min(8, floor.cargo.length);
-  for (let index = 0; index < count; index += 1) {
+  for (let index = count - 1; index >= 0; index -= 1) {
     const row = Math.floor(index / 4); const col = index % 4;
     const item = floor.cargo[index]!;
+    if (state.run.depth.current === 'D-001' && assets.ready('cargoItems')) {
+      drawD001CargoShadow(ctx, x + 7 + col * 8, y - 4 - row * 5);
+    }
     const cargoImage = state.run.depth.current === 'D-001' && drawD001Cargo(ctx, item, x + 7 + col * 8, y - 4 - row * 5, assets);
     if (!cargoImage) {
       ctx.fillStyle = item.equipmentSeed !== undefined ? '#8b795f' : item.category === 'CORE' ? '#9e8067' : item.category === 'RESEARCH' ? '#718e96' : '#755f43';
@@ -102,8 +117,14 @@ function drawCrew(
   for (const member of state.run.phase5.crew.members) {
     if (member.assignedDepth !== depth || member.state === 'TRAVELING') continue;
     const actor = semantic.crew.get(member.id);
+    if (state.run.depth.current === 'D-001' && actor?.visible) drawD001ActorShadow(ctx, actor);
     const imageDrawn = Boolean(state.run.depth.current === 'D-001' && actor && drawD001Crew(ctx, actor, assets));
-    if (!imageDrawn) drawCrewMember(ctx, state, member, now);
+    if (!imageDrawn) {
+      ctx.save();
+      if (state.run.depth.current === 'D-001') ctx.translate(0, D001_VISUAL_GROUND_OFFSET);
+      drawCrewMember(ctx, state, member, now);
+      ctx.restore();
+    }
     else if (actor && !drawD001CarriedCargo(ctx, actor, assets) && actor.carried.length > 0) {
       ctx.fillStyle = '#735e43';
       ctx.fillRect(actor.worldAnchor.x + actor.facing * 6 - (actor.facing > 0 ? 0 : 6), actor.worldAnchor.y - 12, 6, 8);

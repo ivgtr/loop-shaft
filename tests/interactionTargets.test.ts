@@ -27,7 +27,7 @@ describe('interaction targets', () => {
   it('tracks the moving elevator cage while retaining the fixed control panel', () => {
     const state = createGameState(8102);
     let elevator = deriveInteractionTargets(state).find((target) => target.key === 'elevator')!;
-    expect(elevator.position.y).toBe(WORLD.elevatorBottomY);
+    expect(elevator.position.y).toBe(WORLD.elevatorBottomY + 10);
     expect(resolveInteractionTarget({ x: WORLD.elevatorX, y: WORLD.elevatorBottomY }, [elevator])?.key).toBe('elevator');
 
     state.run.elevator.position = 1;
@@ -35,6 +35,13 @@ describe('interaction targets', () => {
     expect(elevator.position.y).toBe(WORLD.topY);
     expect(resolveInteractionTarget({ x: WORLD.elevatorX, y: WORLD.topY }, [elevator])?.key).toBe('elevator');
     expect(resolveInteractionTarget({ x: WORLD.elevatorX + 29, y: WORLD.floorY - 12 }, [elevator])?.key).toBe('elevator');
+  });
+
+  it('moves D-001 Workshop emphasis while retaining its original hit region', () => {
+    const state = createGameState(8108);
+    const workshop = deriveInteractionTargets(state).find((target) => target.key === 'workbench')!;
+    expect(workshop.position.y).toBe(210);
+    expect(resolveInteractionTarget({ x: WORLD.workbenchX, y: WORLD.floorY - 20 }, [workshop])?.key).toBe('workbench');
   });
 
   it('excludes hidden, locked, unbuilt, and not-yet-selectable targets', () => {

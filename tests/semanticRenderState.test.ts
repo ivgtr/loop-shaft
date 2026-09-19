@@ -7,9 +7,12 @@ import {
   cargoVisualClass,
   characterClip,
   crewClip,
+  d001ElevatorVisualY,
   deriveSemanticRenderState,
   engineerClip,
   nodeVisualState,
+  playerIdleFrame,
+  playerWalkFrame,
   porterClip,
 } from '../src/render/semanticRenderState';
 
@@ -47,6 +50,51 @@ describe('semantic render state', () => {
     expect('frame' in state.run.character).toBe(false);
   });
 
+  it('derives Player walk and carry-walk frames from distance in both directions', () => {
+    const right = playerWalkFrame(100, 1);
+    expect(playerWalkFrame(104, 1)).toBe((right + 1) % 4);
+    expect(playerWalkFrame(116, 1)).toBe(right);
+
+    const left = playerWalkFrame(100, -1);
+    expect(playerWalkFrame(96, -1)).toBe((left + 1) % 4);
+    expect(playerWalkFrame(84, -1)).toBe(left);
+
+    const state = createGameState(9410);
+    state.run.character.state = 'MOVING_TO_NODE';
+    state.run.character.x = 124;
+    const walkFrame = deriveSemanticRenderState(state, 0).character.frame;
+    expect(deriveSemanticRenderState(state, 9999).character.frame).toBe(walkFrame);
+    state.run.character.state = 'RETURNING';
+    expect(deriveSemanticRenderState(state, 4321).character.frame).toBe(walkFrame);
+    state.run.boots.level = 2;
+    state.run.character.moveSpeed = 66;
+    expect(deriveSemanticRenderState(state, 8888).character.frame).toBe(walkFrame);
+  });
+
+  it('uses the asymmetric idle interval without changing non-idle progress clips', () => {
+    expect(playerIdleFrame(0)).toBe(0);
+    expect(playerIdleFrame(1199)).toBe(0);
+    expect(playerIdleFrame(1200)).toBe(1);
+    expect(playerIdleFrame(1599)).toBe(1);
+    expect(playerIdleFrame(1600)).toBe(0);
+
+    const state = createGameState(9411);
+    expect(deriveSemanticRenderState(state, 1199).character.frame).toBe(0);
+    expect(deriveSemanticRenderState(state, 1200).character.frame).toBe(1);
+    state.run.character.state = 'WAITING_FOR_ELEVATOR';
+    expect(deriveSemanticRenderState(state, 1200).character.frame).toBe(1);
+  });
+
+  it('places D-001 characters on the visual tunnel floor without changing GameState coordinates', () => {
+    const state = createGameState(9412);
+    const originalY = state.run.character.y;
+    expect(deriveSemanticRenderState(state, 0).character.worldAnchor.y).toBe(223);
+    expect(state.run.character.y).toBe(originalY);
+
+    state.run.porter.enabled = true;
+    expect(deriveSemanticRenderState(state, 0).porter?.worldAnchor.y).toBe(223);
+  });
+
   it('keeps exact node HP boundaries and elevator visual state', () => {
     expect(nodeVisualState({ hp: 75, maxHp: 100 })).toBe('full');
     expect(nodeVisualState({ hp: 74, maxHp: 100 })).toBe('damaged');
@@ -59,6 +107,9 @@ describe('semantic render state', () => {
     state.run.elevator.state = 'ASCENDING';
     const semantic = deriveSemanticRenderState(state, 0);
     expect(semantic.elevator).toMatchObject({ width: 'narrow', door: 'closed' });
+    expect(d001ElevatorVisualY(0)).toBe(200);
+    expect(d001ElevatorVisualY(0.5)).toBe(126);
+    expect(d001ElevatorVisualY(1)).toBe(52);
   });
 
   it('maps Porter timers and carried states without saving display frames', () => {

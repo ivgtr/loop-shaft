@@ -71,6 +71,16 @@ const CLIP_FRAMES: Record<CharacterClip, number> = {
   load: 4,
 };
 
+export const PLAYER_WALK_STRIDE_STEP = 4;
+export const PLAYER_IDLE_CYCLE_MS = 1600;
+export const PLAYER_IDLE_ACTIVE_MS = 1200;
+export const D001_VISUAL_GROUND_OFFSET = 13;
+export const D001_VISUAL_GROUND_Y = WORLD.floorY + D001_VISUAL_GROUND_OFFSET;
+export const D001_WORKBENCH_IMAGE_OFFSET = 14;
+export const D001_WORKBENCH_FALLBACK_OFFSET = 9;
+export const D001_CARGO_PLATFORM_OFFSET = 8;
+export const D001_ELEVATOR_BOTTOM_OFFSET = 10;
+
 export interface CharacterRenderState {
   readonly clip: CharacterClip;
   readonly row: number;
@@ -104,7 +114,7 @@ export function deriveSemanticRenderState(state: Readonly<GameState>, animationT
       row: CLIP_ROW[clip],
       frame: characterFrame(state, clip, animationTimeMs),
       facing: state.run.character.facing,
-      worldAnchor: { x: Math.round(state.run.character.x), y: Math.round(state.run.character.y) + 8 },
+      worldAnchor: { x: Math.round(state.run.character.x), y: Math.round(state.run.character.y) + 8 + D001_VISUAL_GROUND_OFFSET },
       toolBank: state.run.tool.level - 1 as 0 | 1,
       packBank: state.run.pack.level - 1 as 0 | 1,
       bootsBank: state.run.boots.level - 1 as 0 | 1,
@@ -117,9 +127,14 @@ export function deriveSemanticRenderState(state: Readonly<GameState>, animationT
     elevator: {
       width: state.run.anomaly.selected === 'EMPTY_SHAFT' ? 'narrow' : 'normal',
       door: ['ASCENDING', 'DESCENDING', 'TRAVELING'].includes(state.run.elevator.state) ? 'closed' : 'open',
-      y: WORLD.elevatorBottomY + (WORLD.topY - WORLD.elevatorBottomY) * state.run.elevator.position,
+      y: d001ElevatorVisualY(state.run.elevator.position),
     },
   };
+}
+
+export function d001ElevatorVisualY(position: number): number {
+  const bottom = WORLD.elevatorBottomY + D001_ELEVATOR_BOTTOM_OFFSET;
+  return bottom + (WORLD.topY - bottom) * position;
 }
 
 const PORTER_ROW: Record<PorterClip, number> = {
@@ -145,7 +160,7 @@ export function derivePorterRenderState(state: Readonly<GameState>, now: number)
       : loopFrame(now, clip === 'walk' || clip === 'carry-walk' ? 135 : 500, clip === 'walk' || clip === 'carry-walk' ? 4 : 2);
   return {
     clip, row: PORTER_ROW[clip], frame, facing: porter.facing,
-    worldAnchor: { x: Math.round(porter.x), y: Math.round(porter.y) + 8 }, carried: porter.carried,
+    worldAnchor: { x: Math.round(porter.x), y: Math.round(porter.y) + 8 + D001_VISUAL_GROUND_OFFSET }, carried: porter.carried,
   };
 }
 
@@ -182,7 +197,7 @@ export function deriveCrewRenderState(state: Readonly<GameState>, member: Readon
     row: CLIP_ROW[clip as CharacterClip],
     frame,
     facing: member.body.facing,
-    worldAnchor: { x: Math.round(member.body.x), y: Math.round(member.body.y) + 8 },
+    worldAnchor: { x: Math.round(member.body.x), y: Math.round(member.body.y) + 8 + D001_VISUAL_GROUND_OFFSET },
     carried: member.body.carried,
     toolBank: equipmentBank(equipped?.rarity),
     visible: member.assignedDepth === state.run.depth.current && member.state !== 'TRAVELING',
@@ -207,7 +222,7 @@ export function deriveEngineerRenderState(state: Readonly<GameState>, now: numbe
     : loopFrame(now, clip === 'walk' ? 150 : 500, clip === 'walk' || clip === 'work' ? 4 : 2);
   return {
     clip, row: ENGINEER_ROW[clip], frame, facing: targetX >= engineer.x ? 1 : -1,
-    worldAnchor: { x: Math.round(engineer.x), y: WORLD.floorY }, carried: [],
+    worldAnchor: { x: Math.round(engineer.x), y: WORLD.floorY + D001_VISUAL_GROUND_OFFSET }, carried: [],
     visible: engineer.assignedDepth === state.run.depth.current && engineer.state !== 'LOCKED',
   };
 }
@@ -275,8 +290,24 @@ function characterFrame(state: Readonly<GameState>, clip: CharacterClip, now: nu
   }
   if (clip === 'collect') return progressFrame(state.run.character.collectTimer, COLLECT_DURATION, 4);
   if (clip === 'load') return progressFrame(state.run.character.loadingTimer, LOAD_DURATION, 4);
-  const duration = clip === 'walk' || clip === 'carry-walk' ? 100 : clip === 'mine-ready' ? 350 : 500;
+  if (clip === 'walk' || clip === 'carry-walk') {
+    return playerWalkFrame(state.run.character.x, state.run.character.facing);
+  }
+  if (clip === 'idle' || clip === 'carry-idle') return playerIdleFrame(now);
+  const duration = clip === 'mine-ready' ? 350 : 500;
   return loopFrame(now, duration, CLIP_FRAMES[clip]);
+}
+
+export function playerWalkFrame(worldX: number, facing: -1 | 1): number {
+  return positiveModulo(Math.floor(facing * worldX / PLAYER_WALK_STRIDE_STEP), 4);
+}
+
+export function playerIdleFrame(now: number): 0 | 1 {
+  return positiveModulo(now, PLAYER_IDLE_CYCLE_MS) < PLAYER_IDLE_ACTIVE_MS ? 0 : 1;
+}
+
+function positiveModulo(value: number, divisor: number): number {
+  return ((value % divisor) + divisor) % divisor;
 }
 
 function swingFrame(swing: Readonly<SwingState> | null): number {

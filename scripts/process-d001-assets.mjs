@@ -7,9 +7,9 @@ const root = resolve(import.meta.dirname, '..');
 const source = join(root, 'art/d001/sources');
 const output = join(root, 'public/assets/d001/runtime');
 const palette = JSON.parse(readFileSync(join(root, 'art/d001/palette.json'), 'utf8'));
+const specification = JSON.parse(readFileSync(join(root, 'art/d001/generation-spec.json'), 'utf8'));
 const work = mkdtempSync(join(tmpdir(), 'loop-shaft-d001-'));
 const playerCompositeReference = join(work, 'player-composite-reference.png');
-const playerFullAtlas = join(work, 'generated-player-animation.png-atlas.png');
 mkdirSync(output, { recursive: true });
 
 function magick(...args) {
@@ -21,23 +21,82 @@ function paletteImage() {
   const all = palette.colors.flatMap((color) => [`xc:${color}`]);
   magick(...common, '+append', join(work, 'palette.png'));
   magick(...all, '+append', join(work, 'palette-all.png'));
+  for (const [role, colors] of Object.entries(specification.paletteRoles)) {
+    magick(...colors.flatMap((color) => [`xc:${color}`]), '+append', join(work, `palette-${role}.png`));
+    if (role === 'character') {
+      magick(...[...colors, ...palette.reserved.automationAndLaterDepth].flatMap((color) => [`xc:${color}`]),
+        '+append', join(work, 'palette-character-reserved.png'));
+    }
+  }
 }
 
-function quantize(input, destination, includeReserved = false) {
+function quantize(input, destination, includeReserved = false, role = null) {
   const alpha = join(work, `alpha-${Math.random().toString(16).slice(2)}.png`);
   const color = join(work, `color-${Math.random().toString(16).slice(2)}.png`);
   magick(input, '-alpha', 'extract', '-threshold', '50%', alpha);
-  magick(input, '-alpha', 'off', '-colorspace', 'sRGB', '+dither', '-remap', join(work, includeReserved ? 'palette-all.png' : 'palette.png'), color);
+  const paletteFile = role
+    ? `palette-${role}${includeReserved && role === 'character' ? '-reserved' : ''}.png`
+    : includeReserved ? 'palette-all.png' : 'palette.png';
+  magick(input, '-alpha', 'off', '-colorspace', 'sRGB', '+dither', '-remap', join(work, paletteFile), color);
   magick(color, alpha, '-alpha', 'off', '-compose', 'CopyOpacity', '-composite',
     '-background', '#000000', '-alpha', 'background', '-strip', destination);
 }
 
-function placeTrimmed(sourceFile, width, height, x, y, destination) {
+function selectLargestComponent(input, destination) {
+  const mask = join(work, `component-${Math.random().toString(16).slice(2)}.png`);
+  magick(input, '-alpha', 'extract', '-threshold', '50%', '-define', 'connected-components:keep-top=1',
+    '-connected-components', '8', '-auto-level', '-threshold', '0', mask);
+  magick(input, mask, '-compose', 'DstIn', '-composite', destination);
+}
+
+function addKeyline(input, destination, clearFootPerimeter = false) {
+  const [width, height] = imageSize(input);
+  const mask = join(work, `keyline-mask-${Math.random().toString(16).slice(2)}.png`);
+  const outline = join(work, `keyline-${Math.random().toString(16).slice(2)}.png`);
+  const merged = join(work, `keyline-merged-${Math.random().toString(16).slice(2)}.png`);
+  magick(input, '-alpha', 'extract', '-morphology', 'Dilate', 'Diamond:1', mask);
+  magick('-size', `${width}x${height}`, 'xc:#140e0c', mask, '-alpha', 'off', '-compose', 'CopyOpacity', '-composite', outline);
+  magick(outline, input, '-compose', 'Over', '-composite', merged);
+  if (clearFootPerimeter) {
+    magick('-size', `${width}x${height}`, 'xc:none',
+      '(', merged, '-crop', `${width - 2}x37+1+1`, '+repage', ')', '-geometry', '+1+1', '-composite', destination);
+  } else magick(merged, destination);
+}
+
+function placeFixedCrops(entries, destination, role, opaqueFill = null) {
+  const canvas = join(work, `fixed-canvas-${destination}`);
+  const baseArgs = ['-size', '480x270', 'xc:none'];
+  if (opaqueFill) {
+    baseArgs.push('-fill', opaqueFill);
+    for (const entry of entries) {
+      const [x, y, width, height] = entry.destination;
+      baseArgs.push('-draw', `rectangle ${x},${y} ${x + width - 1},${y + height - 1}`);
+    }
+  }
+  magick(...baseArgs, canvas);
+  let current = canvas;
+  for (const [index, entry] of entries.entries()) {
+    const [cropX, cropY, cropWidth, cropHeight] = entry.crop;
+    const [x, y, width, height] = entry.destination;
+    const raw = join(work, `fixed-raw-${destination}-${index}.png`);
+    const selected = join(work, `fixed-selected-${destination}-${index}.png`);
+    const resized = join(work, `fixed-resized-${destination}-${index}.png`);
+    const next = join(work, `fixed-next-${destination}-${index}.png`);
+    magick(join(source, entry.source), '-crop', `${cropWidth}x${cropHeight}+${cropX}+${cropY}`, '+repage', raw);
+    selectLargestComponent(raw, selected);
+    magick(selected, '-filter', 'point', '-resize', `${width}x${height}!`, resized);
+    magick(current, resized, '-geometry', `+${x}+${y}`, '-composite', next);
+    current = next;
+  }
+  quantize(current, join(output, destination), false, role);
+}
+
+function placeTrimmed(sourceFile, width, height, x, y, destination, role = null) {
   const object = join(work, `object-${Math.random().toString(16).slice(2)}.png`);
   const canvas = join(work, `canvas-${Math.random().toString(16).slice(2)}.png`);
   magick(join(source, sourceFile), '-trim', '+repage', '-filter', 'point', '-resize', `${width}x${height}!`, object);
   magick('-size', '480x270', 'xc:none', object, '-geometry', `+${x}+${y}`, '-composite', canvas);
-  quantize(canvas, join(output, destination));
+  quantize(canvas, join(output, destination), false, role);
 }
 
 function processBackgrounds() {
@@ -46,12 +105,18 @@ function processBackgrounds() {
   magick(join(source, 'generated-background-rock-base.png'), '-crop', '1672x786+0+155', '+repage',
     '-filter', 'point', '-resize', '480x232!', '-modulate', '68,72,100', underground);
   magick('-size', '480x270', 'xc:#08080b', underground, '-geometry', '+0+38', '-composite', raw);
-  quantize(raw, join(output, 'background-rock-base.png'));
-  placeTrimmed('generated-background-tunnel-back.png', 436, 45, 22, 183, 'background-tunnel-back.png');
-  placeTrimmed('generated-background-surface-station.png', 82, 34, 199, 4, 'background-surface-station.png');
-  placeTrimmed('generated-background-shaft-back.png', 49, 196, 216, 38, 'background-shaft-back.png');
-  placeTrimmed('generated-background-tunnel-structure.png', 436, 38, 22, 180, 'background-tunnel-structure.png');
-  placeTrimmed('generated-background-floor.png', 480, 60, 0, 210, 'background-floor.png');
+  quantize(raw, join(output, 'background-rock-base.png'), false, 'rock');
+  placeFixedCrops([
+    specification.sourceCrops.tunnelBackLeft,
+    specification.sourceCrops.tunnelBackRight,
+  ], 'background-tunnel-back.png', 'tunnelInterior', '#140e0c');
+  placeTrimmed('generated-background-surface-station.png', 82, 34, 199, 4, 'background-surface-station.png', 'structure');
+  placeFixedCrops([specification.sourceCrops.backgroundShaft], 'background-shaft-back.png', 'structure', '#140e0c');
+  placeFixedCrops([
+    specification.sourceCrops.tunnelStructureLeft,
+    specification.sourceCrops.tunnelStructureRight,
+  ], 'background-tunnel-structure.png', 'structure');
+  placeTrimmed('generated-background-floor.png', 480, 60, 0, 210, 'background-floor.png', 'rock');
 }
 
 function cropStrip(sourceFile, count, cellWidth, cellHeight, destination, paddingX = 4, paddingY = 4) {
@@ -61,15 +126,28 @@ function cropStrip(sourceFile, count, cellWidth, cellHeight, destination, paddin
   for (let index = 0; index < count; index += 1) {
     const left = Math.round(width * index / count);
     const right = Math.round(width * (index + 1) / count);
+    const ungrounded = join(work, `ungrounded-${destination}-${index}.png`);
     const cell = join(work, `${destination}-${index}.png`);
     magick(join(source, sourceFile), '-crop', `${right - left}x${height}+${left}+0`, '+repage', '-trim', '+repage',
       '-filter', 'point', '-resize', `${cellWidth - paddingX}x${cellHeight - paddingY}>`, '-gravity', 'south',
-      '-background', 'none', '-extent', `${cellWidth}x${cellHeight}`, cell);
+      '-background', 'none', '-extent', `${cellWidth}x${cellHeight}`, ungrounded);
+    magick(ungrounded, '-trim', '+repage', '-gravity', 'south', '-background', 'none',
+      '-extent', `${cellWidth}x${cellHeight}`, cell);
     cells.push(cell);
   }
   const strip = join(work, `strip-${destination}`);
+  const quantized = join(work, `quantized-${destination}`);
   magick(...cells, '+append', strip);
-  quantize(strip, join(output, destination));
+  quantize(strip, quantized, false, 'interactable');
+  const grounded = [];
+  for (let index = 0; index < count; index += 1) {
+    const cell = join(work, `grounded-${destination}-${index}.png`);
+    magick(quantized, '-crop', `${cellWidth}x${cellHeight}+${index * cellWidth}+0`, '+repage',
+      '-trim', '+repage', '-gravity', 'south', '-background', 'none',
+      '-extent', `${cellWidth}x${cellHeight}`, cell);
+    grounded.push(cell);
+  }
+  magick(...grounded, '+append', '-strip', join(output, destination));
 }
 
 function processNodesAndEquipment() {
@@ -91,14 +169,17 @@ function processNodesAndEquipment() {
   const overlays = [workbenchCells[0]];
   for (let index = 1; index < workbenchCells.length; index += 1) {
     const mask = join(work, `workbench-mask-${index}.png`);
+    const rawOverlay = join(work, `workbench-overlay-raw-${index}.png`);
     const overlay = join(work, `workbench-overlay-${index}.png`);
     magick(workbenchCells[index], workbenchCells[0], '-compose', 'difference', '-composite', '-colorspace', 'gray', '-threshold', '24%', mask);
-    magick(workbenchCells[index], mask, '-alpha', 'off', '-compose', 'CopyOpacity', '-composite', overlay);
+    magick(workbenchCells[index], mask, '-alpha', 'off', '-compose', 'CopyOpacity', '-composite', rawOverlay);
+    magick(rawOverlay, '-trim', '+repage', '-gravity', 'south', '-background', 'none', '-extent', '32x27',
+      '-gravity', 'north', '-extent', '32x32', overlay);
     overlays.push(overlay);
   }
   const workbenchAtlas = join(work, 'workbench-atlas.png');
   magick(...overlays, '+append', workbenchAtlas);
-  quantize(workbenchAtlas, join(output, 'workbench-atlas.png'));
+  quantize(workbenchAtlas, join(output, 'workbench-atlas.png'), false, 'interactable');
 
   const info = execFileSync('identify', ['-format', '%w %h', join(source, 'generated-central-elevator.png')], { encoding: 'utf8' }).trim().split(' ').map(Number);
   const [width, height] = info;
@@ -119,7 +200,7 @@ function processNodesAndEquipment() {
   magick(...cells.slice(0, 4), '+append', row0);
   magick(...cells.slice(4), blank, '+append', row1);
   magick(row0, row1, '-append', atlas);
-  quantize(atlas, join(output, 'central-elevator-atlas.png'));
+  quantize(atlas, join(output, 'central-elevator-atlas.png'), false, 'interactable');
 }
 
 const CHARACTER_FRAMES = [2, 4, 2, 8, 4, 4, 2, 4];
@@ -171,6 +252,12 @@ function assembleCharacterAtlas(sourceFile, sourceFrames, sourceRows, targetRows
       sourceFile, sourceRow, sourceRows, frame, count, options,
     ));
   });
+  if (options.keyline !== false) addCharacterKeylines(rows, sourceFile);
+  const full = assembleCharacterRows(rows, sourceFile, blank);
+  return { full, rows };
+}
+
+function assembleCharacterRows(rows, sourceFile, blank) {
   const rowFiles = rows.map((frames, row) => {
     const file = join(work, `${sourceFile}-row-${row}.png`);
     magick(...frames, ...Array(8 - frames.length).fill(blank), '+append', file);
@@ -178,18 +265,113 @@ function assembleCharacterAtlas(sourceFile, sourceFrames, sourceRows, targetRows
   });
   const full = join(work, `${sourceFile}-atlas.png`);
   magick(...rowFiles, '-append', full);
-  return { full, rows };
+  return full;
+}
+
+function addCharacterKeylines(rows, label) {
+  rows.forEach((frames, row) => frames.forEach((cell, frame) => {
+    const outlined = join(work, `outlined-${label}-${row}-${frame}.png`);
+    addKeyline(cell, outlined, true);
+    frames[frame] = outlined;
+  }));
+}
+
+function restoreRegion(base, transformed, rect, destination) {
+  const [x, y, width, height] = rect;
+  const region = join(work, `restore-${Math.random().toString(16).slice(2)}.png`);
+  magick(base, '-crop', `${width}x${height}+${x}+${y}`, '+repage', region);
+  magick(transformed, region, '-geometry', `+${x}+${y}`, '-composite', destination);
+}
+
+function rebuildIdleFrame(base, label, immutableRegions) {
+  const shifted = join(work, `${label}-idle-shifted.png`);
+  const chest = join(work, `${label}-idle-chest.png`);
+  const cleared = join(work, `${label}-idle-cleared.png`);
+  magick(base, '-crop', '15x15+15+17', '+repage', chest);
+  magick(base, '-region', '15x15+15+17', '-channel', 'A', '-evaluate', 'set', '0', '+channel', '+region', cleared);
+  magick(cleared, chest, '-geometry', '+15+16', '-composite', shifted);
+  let current = shifted;
+  immutableRegions.forEach((region, index) => {
+    const restored = join(work, `${label}-idle-restored-${index}.png`);
+    restoreRegion(base, current, region.rect, restored);
+    current = restored;
+  });
+  return current;
+}
+
+function rebuildWalkFrame(base, supportSource, supportShift, label) {
+  const cleared = join(work, `${label}-walk-cleared.png`);
+  const supportCrop = join(work, `${label}-walk-support.png`);
+  const supportCanvas = join(work, `${label}-walk-support-canvas.png`);
+  const combined = join(work, `${label}-walk-combined.png`);
+  const destinationX = 17 + supportShift;
+  const clearLeft = Math.min(17, destinationX);
+  const clearRight = Math.max(32, destinationX + 15);
+  const offFootEnd = Math.max(0, 16 + supportShift);
+  magick(base, '-region', `${clearRight - clearLeft + 1}x5+${clearLeft}+33`,
+    '-channel', 'A', '-evaluate', 'set', '0', '+channel', '+region', cleared);
+  magick(supportSource, '-crop', '16x5+17+33', '+repage', supportCrop);
+  magick('-size', '40x5', 'xc:none', supportCrop, '-geometry', `+${destinationX}+0`, '-composite', supportCanvas);
+  magick(cleared, supportCanvas, '-geometry', '+0+33', '-composite',
+    '-region', `${offFootEnd + 1}x3+0+35`, '-channel', 'A', '-evaluate', 'set', '0', '+channel', '+region', combined);
+  return combined;
+}
+
+function rebuildPlayerMotion(rows) {
+  const idle = specification.playerMotion.idle;
+  rows[0][1] = rebuildIdleFrame(rows[0][0], 'idle', idle.immutableRegions);
+  rows[6][1] = rebuildIdleFrame(rows[6][0], 'carry-idle', idle.immutableRegions);
+  for (const [row, leadingShift] of [[1, 0], [5, 4]]) {
+    const original = [...rows[row]];
+    rows[row][0] = rebuildWalkFrame(original[0], original[0], leadingShift, `row-${row}-frame-0`);
+    rows[row][1] = rebuildWalkFrame(original[1], original[0], leadingShift - 4, `row-${row}-frame-1`);
+    rows[row][2] = rebuildWalkFrame(original[2], original[2], leadingShift, `row-${row}-frame-2`);
+    rows[row][3] = rebuildWalkFrame(original[3], original[2], leadingShift - 4, `row-${row}-frame-3`);
+  }
+}
+
+function restoreOutlinedIdleInvariants(rows) {
+  for (const row of [0, 6]) {
+    let current = rows[row][1];
+    specification.playerMotion.idle.immutableRegions.forEach((region, index) => {
+      const restored = join(work, `outlined-idle-${row}-${index}.png`);
+      restoreRegion(rows[row][0], current, region.rect, restored);
+      current = restored;
+    });
+    rows[row][1] = current;
+  }
+}
+
+function restoreIdleRegionsInAtlas(atlas) {
+  let current = atlas;
+  for (const row of [0, 6]) {
+    for (const [index, region] of specification.playerMotion.idle.immutableRegions.entries()) {
+      const [x, y, width, height] = region.rect;
+      const pixels = join(work, `atlas-idle-region-${row}-${index}.png`);
+      const next = join(work, `atlas-idle-restored-${row}-${index}.png`);
+      magick(current, '-crop', `${width}x${height}+${x}+${row * 40 + y}`, '+repage', pixels);
+      magick(current, pixels, '-geometry', `+${40 + x}+${row * 40 + y}`, '-composite', next);
+      current = next;
+    }
+  }
+  magick(current, '-strip', atlas);
 }
 
 function processPlayer() {
-  const { full, rows } = assembleCharacterAtlas(
+  const { rows } = assembleCharacterAtlas(
     'generated-player-animation.png', CHARACTER_FRAMES, 8, [0, 1, 2, 3, 4, 5, 6, 7],
     {
       gridColumns: 8, backgroundFuzz: '8%', keepTopByRow: [1, 1, 2, 2, 1, 1, 1, 1],
-      frameOffsets: [[[0, 0], [1, 0]]],
+      keyline: false,
     },
   );
-  quantize(full, playerCompositeReference);
+  rebuildPlayerMotion(rows);
+  addCharacterKeylines(rows, 'player');
+  restoreOutlinedIdleInvariants(rows);
+  const blank = join(work, 'player-blank.png');
+  const full = assembleCharacterRows(rows, 'generated-player-animation.png', blank);
+  quantize(full, playerCompositeReference, false, 'character');
+  restoreIdleRegionsInAtlas(playerCompositeReference);
 
   const activeRects = [];
   rows.forEach((frames, row) => frames.forEach((_, column) => activeRects.push({ x: column * 40, y: row * 40 })));
@@ -202,23 +384,23 @@ function processPlayer() {
   const union = Object.values(masks).join(' ');
 
   const body = join(work, 'player-body.png');
-  magick(full, '-fill', 'none', '-draw', union, body);
-  quantize(body, join(output, 'player-body-atlas.png'));
+  magick(playerCompositeReference, '-fill', 'none', '-draw', union, body);
+  quantize(body, join(output, 'player-body-atlas.png'), false, 'character');
 
   function layer(name, tint, destination, doubleBank = false) {
     const layerFile = join(work, `player-${name}-layer.png`);
     const mask = join(work, `player-${name}-mask.png`);
     magick('-size', '320x320', 'xc:none', '-fill', 'white', '-draw', masks[name], mask);
-    magick(full, mask, '-compose', 'DstIn', '-composite', layerFile);
+    magick(playerCompositeReference, mask, '-compose', 'DstIn', '-composite', layerFile);
     if (!doubleBank) {
-      quantize(layerFile, join(output, destination));
+      quantize(layerFile, join(output, destination), false, 'character');
       return;
     }
     const variant = join(work, `player-${name}-variant.png`);
     magick(layerFile, '-fill', tint, '-colorize', '38%', variant);
     const atlas = join(work, `player-${name}-banks.png`);
     magick(layerFile, variant, '+append', atlas);
-    quantize(atlas, join(output, destination));
+    quantize(atlas, join(output, destination), false, 'character');
   }
   layer('helmet', '#d89c67', 'player-helmet-atlas.png');
   layer('tool', '#b8a795', 'player-tool-atlas.png', true);
@@ -229,7 +411,7 @@ function processPlayer() {
 function processNpcAtlas(sourceFile, sourceFrames, targetRows, destination, options = {}) {
   const { full } = assembleCharacterAtlas(sourceFile, sourceFrames, sourceFrames.length, targetRows, options);
   if (!options.banks) {
-    quantize(full, join(output, destination), options.includeReserved ?? false);
+    quantize(full, join(output, destination), options.includeReserved ?? false, 'character');
     return;
   }
   const banks = [full];
@@ -240,7 +422,7 @@ function processNpcAtlas(sourceFile, sourceFrames, targetRows, destination, opti
   }
   const banked = join(work, `${destination}-banks.png`);
   magick(...banks, '+append', banked);
-  quantize(banked, join(output, destination), options.includeReserved ?? false);
+  quantize(banked, join(output, destination), options.includeReserved ?? false, 'character');
 }
 
 function processNpcs() {
@@ -256,15 +438,15 @@ function processNpcs() {
       [[20, 280], [270, 530], [520, 780], [764, 1024]],
     ],
   });
-  const minerBanks = [playerFullAtlas];
+  const minerBanks = [playerCompositeReference];
   for (const tint of ['#d89c67', '#916a4e', '#e6a02b']) {
     const variant = join(work, `crew-miner-${tint.replace('#', '')}.png`);
-    magick(playerFullAtlas, '-fill', tint, '-colorize', '10%', variant);
+    magick(playerCompositeReference, '-fill', tint, '-colorize', '10%', variant);
     minerBanks.push(variant);
   }
   const minerAtlas = join(work, 'npc-crew-miner-banks.png');
   magick(...minerBanks, '+append', minerAtlas);
-  quantize(minerAtlas, join(output, 'npc-crew-miner-atlas.png'));
+  quantize(minerAtlas, join(output, 'npc-crew-miner-atlas.png'), false, 'character');
   processNpcAtlas('generated-npc-crew-porter.png', [2, 4, 4, 4, 2, 4], [0, 1, 4, 5, 6, 7], 'npc-crew-porter-atlas.png', {
     backgroundFuzz: '0%', includeReserved: true,
     rowRegions: [[0, 200], [205, 400], [415, 605], [615, 805], [815, 995], [1005, 1214]],
@@ -290,6 +472,7 @@ function processNpcs() {
       ],
     },
   )));
+  addCharacterKeylines(engineerRows, 'engineer');
   const blank = join(work, 'engineer-blank.png');
   magick('-size', '40x40', 'xc:none', blank);
   const rowFiles = engineerRows.map((frames, row) => {
@@ -299,24 +482,29 @@ function processNpcs() {
   });
   const atlas = join(work, 'engineer-atlas.png');
   magick(...rowFiles, '-append', atlas);
-  quantize(atlas, join(output, 'npc-engineer-atlas.png'));
+  quantize(atlas, join(output, 'npc-engineer-atlas.png'), false, 'character');
 }
 
 function processCargo() {
-  const [width, height] = imageSize(join(source, 'generated-cargo-items.png'));
   const cells = [];
-  for (let frame = 0; frame < 12; frame += 1) {
-    const left = Math.round(width * frame / 12);
-    const right = Math.round(width * (frame + 1) / 12);
-    const cell = join(work, `cargo-${frame}.png`);
-    magick(join(source, 'generated-cargo-items.png'), '-crop', `${right - left}x${height}+${left}+0`, '+repage',
-      '-alpha', 'on', '-fuzz', '0%', '-fill', 'none', '-draw', 'alpha 0,0 floodfill', '-trim', '+repage',
-      '-filter', 'point', '-resize', '10x8>', '-gravity', 'south', '-background', 'none', '-extent', '12x10', cell);
-    cells.push(cell);
+  for (const [frame, definition] of specification.cargoCells.entries()) {
+    const [x, y, width, height] = definition.crop;
+    const [targetWidth, targetHeight] = definition.targetBounds;
+    const raw = join(work, `cargo-raw-${frame}.png`);
+    const selected = join(work, `cargo-selected-${frame}.png`);
+    const trimmed = join(work, `cargo-trimmed-${frame}.png`);
+    const positioned = join(work, `cargo-positioned-${frame}.png`);
+    const outlined = join(work, `cargo-outlined-${frame}.png`);
+    magick(join(source, 'generated-cargo-items.png'), '-crop', `${width}x${height}+${x}+${y}`, '+repage', raw);
+    selectLargestComponent(raw, selected);
+    magick(selected, '-trim', '+repage', '-filter', 'point', '-resize', `${targetWidth - 2}x${targetHeight - 2}!`, trimmed);
+    magick(trimmed, '-gravity', 'south', '-background', 'none', '-extent', '12x9', '-gravity', 'north', '-extent', '12x10', positioned);
+    addKeyline(positioned, outlined);
+    cells.push(outlined);
   }
   const atlas = join(work, 'cargo-items-atlas.png');
   magick(...cells, '+append', atlas);
-  quantize(atlas, join(output, 'cargo-items-atlas.png'));
+  quantize(atlas, join(output, 'cargo-items-atlas.png'), false, 'cargo');
 }
 
 function validate() {

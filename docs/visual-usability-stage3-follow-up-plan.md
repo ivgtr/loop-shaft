@@ -160,3 +160,7 @@ Rail Cart、Cargo Hub、Freight Cage、BoreなどD-001外の設備本体は画�
 - 初回手動配送、Porter配送、Crew採掘・配送、Engineer作業を実経路で完了できる。
 - Stage 1・2の対象ID、hit領域、hover、selection、案内、入力経路が維持されている。
 - Simulation、イベント、乱数、経済、保存形式を変更していない。
+
+## 第2次追加対応
+
+歩行接地、idleの同一人物性、縦坑・木製補強、Cargo占有率、背景との明度分離に関する第2次追加対応は、`docs/visual-usability-stage3-second-follow-up-plan.md`に実装結果と検証証拠を集約した。基準コミットは`a2094e4`で、既存生成元の固定cropと決定的後処理だけを使い、追加の画像生成は行っていない。

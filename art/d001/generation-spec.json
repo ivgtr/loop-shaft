@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "stage": "graphic-usability-stage-3",
   "logicalCanvas": { "width": 480, "height": 270 },
   "masterPrompt": "Original LOOP SHAFT production asset for a 480x270 side-view mining game. Strict orthographic side view, low-resolution hand-authored pixel-art appearance, exact logical pixel scale, hard one-pixel edges, no antialiasing. D-001 is a shallow industrial mine built from warm soil, oxidized iron, worn timber and restrained amber work lights. Strong readable silhouette, grounded weight, practical mining construction, controlled contrast. Background is lowest priority; tunnel structure, interactable equipment, character, cargo and guidance increase in visual priority in that order. Preserve clear feet, contact points, equipment attachment points and frame-to-frame proportions. Original LOOP SHAFT design language.",
@@ -117,6 +117,90 @@
     "layers": ["pack", "body", "boots", "tool", "helmet"],
     "rule": "Every opaque composite pixel is owned by exactly one layer; equipment alpha is always intersected with composite alpha.",
     "compositeOrder": ["pack", "body", "boots", "tool", "helmet", "cargo"]
+  },
+  "playerMotion": {
+    "walk": {
+      "strideStep": 4,
+      "frameCount": 4,
+      "phase": "positiveModulo(floor(facing * worldX / strideStep), frameCount)",
+      "contactY": 37,
+      "supportPairs": [[0, 1], [2, 3]],
+      "supportFootCellX": [[26, 22], [26, 22]],
+      "maximumVerticalBob": 1,
+      "clips": ["walk", "carry-walk"]
+    },
+    "idle": {
+      "cycleMs": 1600,
+      "frameDurationsMs": [1200, 400],
+      "referenceFrame": 0,
+      "removeWholeFrameOffset": true,
+      "immutableRegions": [
+        { "id": "helmet-face", "rect": [10, 7, 20, 10] },
+        { "id": "boots-contact", "rect": [0, 33, 40, 5] },
+        { "id": "pack-attachment", "rect": [12, 18, 5, 12] }
+      ],
+      "mutableRegions": [
+        { "id": "chest-shoulder-arm", "rect": [15, 17, 15, 15] },
+        { "id": "pack-top", "rect": [9, 17, 8, 6] }
+      ],
+      "minimumSharedOpaqueRatio": 0.9,
+      "clips": ["idle", "carry-idle"]
+    }
+  },
+  "sourceCrops": {
+    "backgroundShaft": { "source": "generated-background-shaft-back.png", "crop": [739, 15, 194, 911], "destination": [216, 38, 49, 196] },
+    "tunnelBackLeft": { "source": "generated-background-tunnel-back.png", "crop": [52, 602, 719, 158], "destination": [22, 183, 194, 45] },
+    "tunnelBackRight": { "source": "generated-background-tunnel-back.png", "crop": [901, 602, 720, 155], "destination": [265, 183, 193, 45] },
+    "tunnelStructureLeft": { "source": "generated-background-tunnel-structure.png", "crop": [43, 365, 740, 243], "destination": [22, 180, 194, 48] },
+    "tunnelStructureRight": { "source": "generated-background-tunnel-structure.png", "crop": [888, 364, 740, 244], "destination": [265, 180, 193, 48] }
+  },
+  "nodeCells": {
+    "size": [48, 40],
+    "anchor": [24, 40],
+    "opaqueBottomY": 39,
+    "groundAfterComponentResize": true,
+    "visualGroundY": 223
+  },
+  "objectGrounding": {
+    "visualGroundY": 223,
+    "characterOffsetY": 13,
+    "groundCargoAnchorY": 223,
+    "workbenchCellOpaqueBottomY": 26,
+    "workbenchDestinationY": 196,
+    "cargoPlatformOffsetY": 8,
+    "elevatorTopCenterY": 52,
+    "elevatorBottomCenterY": 200,
+    "elevatorOffsetRule": "10 * (1 - position)"
+  },
+  "cargoCells": [
+    { "class": "rock", "crop": [25, 288, 163, 170], "targetBounds": [9, 8] },
+    { "class": "metal", "crop": [209, 294, 152, 164], "targetBounds": [10, 7] },
+    { "class": "copper", "crop": [386, 304, 139, 154], "targetBounds": [9, 7] },
+    { "class": "gold", "crop": [555, 304, 144, 154], "targetBounds": [9, 7] },
+    { "class": "gem", "crop": [730, 304, 128, 154], "targetBounds": [8, 8] },
+    { "class": "fossil", "crop": [884, 278, 163, 180], "targetBounds": [8, 8] },
+    { "class": "relic", "crop": [1076, 283, 165, 180], "targetBounds": [9, 8] },
+    { "class": "research", "crop": [1282, 266, 102, 197], "targetBounds": [7, 8] },
+    { "class": "anomaly", "crop": [1425, 284, 133, 174], "targetBounds": [8, 8] },
+    { "class": "core", "crop": [1587, 304, 142, 154], "targetBounds": [8, 8] },
+    { "class": "equipment-crate", "crop": [1758, 288, 169, 175], "targetBounds": [10, 8] },
+    { "class": "industrial-crate", "crop": [1961, 266, 185, 197], "targetBounds": [10, 8] }
+  ],
+  "cargoOccupancy": {
+    "minimumOpaqueBounds": [7, 6],
+    "targetOpaqueBounds": { "width": [8, 10], "height": [7, 8] },
+    "contactY": 9,
+    "componentConnectivity": 8,
+    "alphaThresholdPercent": 50,
+    "uniqueSilhouettes": true
+  },
+  "paletteRoles": {
+    "tunnelInterior": ["#08080b", "#140e0c", "#1c1413", "#251815", "#2d231c"],
+    "rock": ["#08080b", "#140e0c", "#1c1413", "#251815", "#2d231c", "#351d15", "#392319", "#382924", "#362f2b", "#47291a", "#4a352b"],
+    "structure": ["#140e0c", "#1c1413", "#251815", "#2d231c", "#351d15", "#392319", "#47291a", "#56311b", "#6b371b", "#4a352b", "#583828", "#673b26", "#75431e", "#43413e", "#564537", "#6f4930", "#655b4f", "#e6a02b"],
+    "interactable": ["#140e0c", "#1c1413", "#2d231c", "#392319", "#47291a", "#56311b", "#6b371b", "#583828", "#673b26", "#75431e", "#43413e", "#564537", "#6f4930", "#655b4f", "#715a4d", "#8d5431", "#a55b2c", "#b45f2e", "#916a4e", "#9f7353", "#b18b67", "#d89c67", "#b8a795", "#e6a02b"],
+    "character": ["#08080b", "#140e0c", "#1c1413", "#251815", "#2d231c", "#351d15", "#392319", "#382924", "#47291a", "#56311b", "#6b371b", "#4a352b", "#583828", "#673b26", "#75431e", "#43413e", "#564537", "#6f4930", "#655b4f", "#715a4d", "#8d5431", "#a55b2c", "#b45f2e", "#916a4e", "#9f7353", "#e6a02b", "#b18b67", "#d89c67", "#b8a795"],
+    "cargo": ["#08080b", "#140e0c", "#1c1413", "#251815", "#2d231c", "#392319", "#47291a", "#56311b", "#6b371b", "#583828", "#673b26", "#75431e", "#43413e", "#564537", "#6f4930", "#655b4f", "#715a4d", "#8d5431", "#a55b2c", "#b45f2e", "#916a4e", "#9f7353", "#e6a02b", "#b18b67", "#d89c67", "#b8a795"]
   },
   "nodeStates": ["full", "damaged", "critical", "depleted"],
   "palette": { "file": "palette.json", "candidateColors": 40, "runtimeColors": 32, "seed": 3001, "dither": false },

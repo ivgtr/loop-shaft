@@ -438,6 +438,7 @@ LOADING                 → load
 - 追加対応を含む検証はasset再生成、typecheck、production build、Vitest 79件、Playwright 7件に成功した。Playwrightでは初回手動配送を実経路で完走し、Player・Scrapに加えてNPC・Cargo素材を個別に失敗させてもhover、click、`MINE`、Cargoと操作経路が維持されることを確認した。
 - 比較画像の目視では、人物の接地点、鉱脈・設備のanchor、Stage 1枠、Stage 2案内、Cargo、進行後の図形設備との合成を確認した。全失敗は同じ対象単位fallback経路を使うが、ブラウザ自動検証は部分失敗を代表条件とした。
 - Stage 4以降へ、Rail Cart、Cargo Hub、Freight Cage、Boreなど設備本体の画像化、D-002以降への背景展開、状態連動エフェクトの拡張を持ち越す。
+- 2026-09-20のStage 3第2次追加対応で、Player歩行の距離同期、idleの単一基準姿勢化、D-001の縦坑・坑道奥面・木製補強、Cargo 12 classの占有率、用途別palette・keyline・接地影を実装した。詳細、固定crop、検証証拠は`docs/visual-usability-stage3-second-follow-up-plan.md`を正本とする。
 
 ### Stage 4 — 主要対象の画像化とシルエット改善
 

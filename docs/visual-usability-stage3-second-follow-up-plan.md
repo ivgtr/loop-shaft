@@ -2,7 +2,7 @@
 
 ## 状態
 
-計画済み、未実装。基準コミットは`5a7ebfa`。
+2026-09-20実装・検証完了。基準コミットは`a2094e4`。
 
 2026-09-20のStage 3追加対応確認で得た次のフィードバックを対象とする。
 
@@ -223,3 +223,57 @@ manifest、GameState、Simulation、入力、保存形式、対象ID、座標、
 - Stage 1・2の対象、hit領域、案内、入力経路を維持する。
 - Simulation、イベント、乱数、経済、保存形式を変更しない。
 - 今回の視覚修正に直接必要な検証が成功し、過度な性能目標や網羅テストを完了条件にしていない。
+
+## 実装結果（2026-09-20）
+
+- Playerの`walk`と`carry-walk`は、Renderer時刻ではなく未丸めの`worldX`、`facing`、4pxのstrideからframeを純粋導出するよう変更した。右へ4px、左へ4pxで同じ順序に進み、Boots、`LONG_STRIDE`、`HEAVY_WORLD`などの速度差でも距離と足運びの関係を維持する。4姿勢はframe 0→1、2→3で支持Bootをcell内の後方へ4px送り、世界座標上の接地点を固定した。
+- `idle`と`carry-idle`は各frame 0を基準に再構築した。全体offsetを廃止し、Helmet・顔、Boots・接地点、Pack接続部を共有したまま胸・肩・腕だけを1px局所変形する。表示周期はframe 0を1200ms、frame 1を400msとした。
+- 縦坑、左右坑道奥面、左右坑道構造は生成元の固定component cropへ切り替えた。runtime上で縦坑を`49x196+216+38`、坑道奥面を左右合計`436x45+22+183`、木製補強を`436x48+22+180`へ配置し、暗い不透明面、支柱、横桟、梁、筋交い、灯りを復元した。
+- Elevatorは後面と前面・扉の描画を分離し、`縦坑 → rope・深度灯 → Elevator後面 → 人物・Cargo → Elevator前面・扉`の順にした。座標、anchor、速度、状態遷移、操作対象は変更していない。
+- Cargoは生成元12 classの固定cropと最大connected component選択へ変更した。全cellが7x6以上、底辺y=9、固有silhouetteとなり、実測bboxは7～10x7～8になった。地面、所持中、Elevator内、Floor Cargoで同じatlasと既存anchorを使い、重なる配置は奥から手前へ描く。
+- D-001共通32色は変更せず、坑道内部、岩盤、構造、操作対象、character、Cargoの用途別subsetでremapした。Player、NPC、Cargoへ1px keylineを追加し、地面に接する人物とCargoだけへ暗い接地影を先行描画した。青緑はPorterと自動化に限定した。
+- 既存の全生成元を再利用し、画像生成は行っていない。固定仕様と後処理から全21 runtime PNGを再出力し、連続2回の後処理でhash一致を確認した。
+- `tests/semanticRenderState.test.ts`へ距離位相、左右、時刻非依存、Boots、carry-walk、非対称idle周期を追加した。`tests/assets.test.ts`へ接地足、idle固定領域、縦坑・坑道構造、Cargo bbox・接地・silhouette、既存alpha・palette・寸法検査を追加した。
+- `npm run assets:d001`、typecheck、production build、Vitest 84件に成功した。Playwrightは初回手動配送、Player・鉱脈の部分fallback、NPC・Cargo各groupの独立fallbackの代表3件に成功した。
+- 比較画像は`docs/assets/stage3/second-follow-up/`へ保存した。`a2094e4`の新規画面、進行画面、walk、idle、Cargoを変更前証拠とし、変更後のwalk、carry-walk、idle、Cargo、新規開始、Elevator中間位置を通常色とgrayscaleで確認した。
+- Simulation、イベント、乱数、経済、保存形式、Stage 1の対象ID・hit領域・重なり、Stage 2の案内・ContextPanel・click/tap・Space・`MINE`・`SEND`は変更していない。
+
+## 接地位置の再修正（2026-09-20追記）
+
+実装後の実画面確認で、採掘ポイントとキャラクターが坑道床から浮いて見える位置ずれを確認した。背景は正しく、背景床を動かすのではなく対象側の描画位置を下げる。
+
+- 木製坑道構造の床上端はruntime上の`y=223`である。Player、Porter、Crew、EngineerのGameState座標は変更せず、D-001用semantic render anchorだけを従来の`y=210`から`y=223`へ13px下げる。影と所持Cargoも同じrender anchorへ追従させる。
+- 採掘nodeはGameState上の`y=210`、target ID、hit領域を維持する。3 atlasの各frameをcomponent抽出・縮小後に再trimして48x40 cellの下端`y=39`へ揃え、D-001描画時だけcell下端を背景床上端`y=223`へ合わせる。
+- `background-floor.png`を含む背景runtime素材、背景crop、背景描画位置は変更しない。先行して検討した床の固定crop化は採用しない。
+- 修正対象はcharacter semantic anchor、node描画offset、node後処理、3 node runtime atlas、直接条件を検査するunit test、比較画像に限定する。Simulation、保存形式、移動量、採掘距離、target ID、入力経路は変更しない。
+
+追加完了条件は、全node frameの不透明下端がcell内`y=39`となること、Playerと3 nodeの最下部が実背景上で`y=222`、坑道床の直上へ接地して見えること、背景runtime素材が再修正前から変わらないことである。
+
+### 再修正結果
+
+- D-001 characterのsemantic render anchorへ`D001_VISUAL_GROUND_OFFSET = 13`を適用し、Player、Porter、Crew、Engineer、接地影、所持Cargoを背景床上端`y=223`へ揃えた。画像fallbackも同じoffsetで描画する。
+- 3 node atlasは従来の輪郭と大きさを維持したまま、量子化後の各48x40 cellを再trimして不透明下端を`y=39`へ統一した。Rendererで13px下げ、全frameの最下部を`y=222`へ揃えた。
+- nodeのtarget IDとhit circleは従来座標のまま維持し、選択ブラケット、label、guide用の表示位置だけを13px下げて対象画像へ追従させた。
+- `background-floor.png`は従来処理へ戻し、実占有範囲`480x16+0+254`を維持した。その他の背景生成・配置にも変更を加えていない。
+- asset・semantic限定テスト18件、全unit 86件、typecheck、production build、初回手動配送・React UIからの移動／採掘・個別画像fallbackの代表E2E 3件に成功した。
+- `docs/assets/stage3/second-follow-up/grounding-correction-comparison.png`とgrayscale版で、修正前後の新規ゲームを比較した。通常色・grayscaleともPlayer、3 node、選択ブラケットが木製床の直上へ接地し、背景位置が変わっていないことを確認した。
+
+## 地上オブジェクトの接地統一（2026-09-20追記）
+
+人物と採掘nodeの再修正後も、Cargo、Elevator、Workshop、Floor Cargo台は旧接地位置に残っていた。背景やGameState座標を動かさず、runtime素材の実占有bboxを基準にD-001の視覚位置を次のように統一する。
+
+- 地上Cargoは保存済み`item.y`を変更せず、D-001描画時のanchorだけを`y=223`へ置く。接地影、rarity表示、画像fallbackも同じanchorを使う。所持Cargoはcharacter anchor、Elevator内CargoはElevator visual center、Floor Cargoは台のoffsetへ従う。
+- Workshop基本frameのcell内不透明下端は`y=26`であるため、destinationを`y=196`とし、最下部を`y=222`へ置く。差分overlayもcell内`y=26`を超えないよう後処理で揃える。fallbackは実描画下端から9px下げ、選択表示も追従させるがhit rectは維持する。
+- Elevator atlasの底部はcenterから23px下まで占有する。最下位置のvisual centerを`190`から`200`へ補正し、上端center`52`は維持する。移動中は`10 * (1 - position)`で補間し、Simulation上のposition、速度、状態遷移は変えない。Cargo、前後面、扉、状態灯、選択表示は同じvisual centerを使い、hit rectは従来の論理位置を維持する。
+- Floor Cargo台は脚の下端`y=214`を`y=222`へ合わせるためD-001だけ8px下げ、台上のCargo、影、数量表示も一体で移動する。
+
+追加完了条件は、地上Cargo・Workshop・Floor Cargo台の最下部が`y=222`、Elevator最下位置の底部が`y=223`となること、Elevator上端位置が変わらないこと、選択表示とfallbackが通常画像へ追従すること、背景runtime素材とGameState・保存形式が変わらないことである。
+
+### 地上オブジェクト再修正結果
+
+- 地上CargoはD-001 visual anchor `y=223`へ統一した。保存された`item.y`、収集経路、Porter経路は変更せず、画像、影、rarity表示、fallbackだけを同じ接地点へ揃えた。
+- Workshopは基本frameと6 overlayの不透明下端をcell内`y=26`へ統一し、destination `y=196`で最下部を`y=222`へ置いた。画像fallbackと選択表示も追従し、既存hit rectは維持した。
+- Elevatorは上端center `y=52`を維持し、下端centerを`y=200`へ補正した。中間位置は両端から線形導出し、前後面、扉、状態灯、内部Cargo、fallback、選択表示が同じvisual centerを使う。既存hit rectとSimulation上の`position`は変更していない。
+- Floor Cargo台とそのCargo、影、数量表示をD-001だけ8px下げ、台脚の最下部を`y=222`へ揃えた。
+- 限定asset・semantic検査19件、全unit 88件、typecheck、production build、初回手動配送・移動／採掘・対象別fallbackを含む代表E2E 4件に成功した。
+- `docs/assets/stage3/second-follow-up/object-grounding-comparison.png`で新規画面のWorkshopとElevator底部、`after/object-grounding-progressed.png`で地上Cargo、Elevator中間位置・内部Cargo、Floor Cargoを確認した。各画像のgrayscale版でも対象を判別できる。
