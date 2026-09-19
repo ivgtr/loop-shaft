@@ -2,6 +2,39 @@ import { expect, test } from '@playwright/test';
 import { createGameState } from '../../src/game/createGame';
 import { SAVE_KEY, serializeGameState } from '../../src/game/save';
 
+test('guides a new game through the first manual delivery and Scrap gain', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('.context-meta')).toContainText('Scrap Ledge · click or tap');
+
+  const canvas = page.getByLabel('LOOP SHAFT mining floor');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  const point = (x: number, y: number) => ({
+    x: box!.x + box!.width * (x / 480),
+    y: box!.y + box!.height * (y / 270),
+  });
+
+  await page.mouse.click(point(118, 201).x, point(118, 201).y);
+  await expect(page.getByRole('heading', { name: 'Scrap Ledge' })).toBeVisible();
+  const mine = page.getByRole('button', { name: 'MINE' });
+  await expect(mine).toBeEnabled({ timeout: 10_000 });
+  await expect(page.locator('.context-meta')).toContainText('clicking / tapping the vein again, pressing Space, or using MINE');
+
+  for (let swing = 0; swing < 3; swing += 1) {
+    await expect(mine).toBeEnabled({ timeout: 3_000 });
+    await page.keyboard.press('Space');
+  }
+
+  await expect(page.locator('.context-meta')).toContainText('Click or tap the loaded Elevator', { timeout: 15_000 });
+  await page.mouse.click(point(240, 190).x, point(240, 190).y);
+  await expect(page.getByRole('heading', { name: 'Central Elevator' })).toBeVisible();
+  await expect(page.locator('.context-meta')).toContainText('Use SEND to dispatch');
+  await page.getByRole('button', { name: 'SEND', exact: true }).click();
+  await expect(page.locator('.context-meta')).toContainText('carrying cargo to Surface');
+  await expect(page.locator('.hud-left strong').first()).toContainText(/SCRAP [1-9]/, { timeout: 15_000 });
+  await expect(page.locator('.context-meta')).not.toContainText('Use SEND to dispatch');
+});
+
 test('selects, moves to, and mines a visible node through the React UI', async ({ page }) => {
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
@@ -91,6 +124,12 @@ test.describe('touch selection', () => {
     expect(box).not.toBeNull();
     await canvas.tap({ position: { x: box!.width * (118 / 480), y: box!.height * (201 / 270) } });
     await expect(page.getByRole('heading', { name: 'Scrap Ledge' })).toBeVisible();
+    await expect(page.locator('.context-meta')).toContainText(/Moving to Scrap Ledge|Mine by clicking/);
     await expect(canvas).not.toHaveAttribute('data-interaction-target');
+
+    const mine = page.getByRole('button', { name: 'MINE' });
+    await expect(mine).toBeEnabled({ timeout: 10_000 });
+    await canvas.tap({ position: { x: box!.width * (118 / 480), y: box!.height * (201 / 270) } });
+    await expect(page.locator('.context-meta')).not.toContainText('HP 30/30', { timeout: 3_000 });
   });
 });

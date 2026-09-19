@@ -22,7 +22,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
           </div>
           <ContextPanel />
           <div className="help-line">
-            <span>Click a vein or machine to inspect it · press <kbd>Space</kbd> to swing</span>
+            <span>Click / tap selects a vein or machine · <kbd>Space</kbd> mines when ready</span>
             <span>Cargo stays physical: mine → carry → line → vertical transport → Surface.</span>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { useGameState } from '../../app/GameProvider';
 import { D180_EXTENSION_COST } from '../../game/config';
+import { deriveInitialLogisticsGuide } from '../../game/initialLogisticsGuide';
 import { canPushD180 } from '../../game/phase5';
 import { currentFloor } from '../../game/simulation';
 import type { GameState } from '../../game/types';
@@ -13,6 +14,7 @@ import { BoreContext, CargoHubContext, FreightContext, NodeContext, RailContext 
 export function ContextPanel() {
   const state = useGameState();
   const run = state.run;
+  const initialGuide = deriveInitialLogisticsGuide(state);
   if (run.elevator.travel) {
     const travel = run.elevator.travel;
     return <ContextLayout title="Central Elevator" meta={`${travel.from} → ${travel.to} · ${travel.remaining.toFixed(1)}s`} />;
@@ -21,7 +23,7 @@ export function ContextPanel() {
   const selection = state.selection;
   if (selection?.type === 'node') {
     const node = currentFloor(state).nodes.find((candidate) => candidate.id === selection.id);
-    if (node) return <NodeContext state={state} node={node} />;
+    if (node) return <NodeContext state={state} node={node} guide={initialGuide} />;
   }
   if (selection?.type === 'rail-stop') {
     const line = run.logistics.lines.find((candidate) => candidate.id === selection.id);
@@ -36,7 +38,7 @@ export function ContextPanel() {
     const bore = run.deepAutomation.bores.find((candidate) => candidate.id === selection.id);
     if (bore) return <BoreContext state={state} bore={bore} />;
   }
-  if (selection?.type === 'elevator') return <ElevatorContext state={state} />;
+  if (selection?.type === 'elevator') return <ElevatorContext state={state} guide={guideForElevator(initialGuide)} />;
   if (selection?.type === 'workbench') return <WorkbenchContext state={state} objective={nextObjective(state)} />;
   if (selection?.type === 'scanner') return <ScannerContext state={state} />;
   if (selection?.type === 'archive') return <ArchiveContext state={state} />;
@@ -44,7 +46,16 @@ export function ContextPanel() {
   if (selection?.type === 'core-console') return <CoreConsoleContext state={state} />;
   if (selection?.type === 'core-chamber') return <CoreChamberContext state={state} />;
   if (selection?.type === 'crew-board') return <CrewContext state={state} />;
-  return <ContextLayout title={`${run.depth.current} · ${biomeName(run.depth.current)}`} meta={nextObjective(state)}><DeepControls state={state} /></ContextLayout>;
+  return <ContextLayout
+    title={`${run.depth.current} · ${biomeName(run.depth.current)}`}
+    meta={initialGuide?.context ?? nextObjective(state)}
+  >
+    {!initialGuide && <DeepControls state={state} />}
+  </ContextLayout>;
+}
+
+function guideForElevator(guide: ReturnType<typeof deriveInitialLogisticsGuide>) {
+  return guide?.target.kind === 'interaction' && guide.target.ref.type === 'elevator' ? guide : null;
 }
 
 function CoreChamberContext({ state }: { state: GameState }) {

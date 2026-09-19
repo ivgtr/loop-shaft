@@ -1,4 +1,5 @@
 import { BORE_INSTALL_COST, FREIGHT_INSTALL_COST } from '../../game/config';
+import type { InitialLogisticsGuide } from '../../game/initialLogisticsGuide';
 import { canInstallBore, canPlayerAccessNode, canStartFreightConstruction } from '../../game/deepGame';
 import { playerHasEquipmentAffix } from '../../game/phase5';
 import { canMine, cargoWeight, effectiveTreasureChance } from '../../game/simulation';
@@ -7,14 +8,14 @@ import { fmt, formatState, signal } from '../shared/format';
 import { ActionButton, ContextLayout } from './common';
 import { FreightPriorities, RailPriorities } from './DeepControls';
 
-export function NodeContext({ state, node }: { state: GameState; node: MiningNode }) {
+export function NodeContext({ state, node, guide }: { state: GameState; node: MiningNode; guide?: InitialLogisticsGuide | null }) {
   const remote = !canPlayerAccessNode(node);
   const moving = state.run.character.state === 'MOVING_TO_NODE';
   const broken = node.hp <= 0;
   const bore = state.run.deepAutomation.bores.find((candidate) => candidate.siteId === node.id);
   const meta = `${broken ? `DEPLETED · respawn ${Math.ceil(node.respawnTimer)}s` : `HP ${node.hp}/${node.maxHp}`} · ${node.distanceMeters}m${nodeReadout(state, node)}${remote ? ' · NO WALKWAY' : ''}`;
 
-  return <ContextLayout title={node.name} meta={meta}>
+  return <ContextLayout title={node.name} meta={guide ? <>{guide.context} <span className="muted">· {meta}</span></> : meta}>
     <ActionButton command={{ type: 'move' }} disabled={remote || broken}>{moving ? 'MOVING' : 'MOVE'}</ActionButton>
     <ActionButton command={{ type: 'mine' }} className="primary" disabled={remote || !canMine(state)}>MINE</ActionButton>
     {remote && !bore && <ActionButton command={{ type: 'install-bore', siteId: node.id }} className="primary" disabled={!canInstallBore(state, node.id)}>INSTALL REMOTE BORE · {BORE_INSTALL_COST}</ActionButton>}

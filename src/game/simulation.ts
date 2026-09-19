@@ -946,7 +946,7 @@ function depositIntoElevator(state: GameState, carried: readonly LootStack[]): {
   return { deposited, remaining };
 }
 
-function canDispatchElevator(state: GameState): boolean {
+export function canDispatchElevator(state: GameState): boolean {
   const run = state.run;
   return run.elevator.state === 'IDLE_BOTTOM' && !run.elevator.travel && run.elevator.cargo.length > 0
     && run.character.state !== 'LOADING' && run.porter.state !== 'LOADING';

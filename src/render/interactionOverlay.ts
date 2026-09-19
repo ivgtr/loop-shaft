@@ -18,20 +18,22 @@ export function drawInteractionOverlay(
   targets: readonly InteractionTarget[],
   selection: Selection,
   hoveredKey: string | null,
+  guideTargetKey: string | null = null,
 ): void {
   ctx.save();
   ctx.lineWidth = 1;
   for (const target of targets) {
     const hovered = target.key === hoveredKey;
     const selected = sameInteractionTarget(target.ref, selection);
+    const guided = target.key === guideTargetKey;
     for (const rect of target.emphasisRects) {
       if (selected) drawSelectionFrame(ctx, rect, hovered);
-      else drawCornerFrame(ctx, rect, hovered);
+      else drawCornerFrame(ctx, rect, hovered || guided);
       drawAvailabilityMark(ctx, rect, target.primaryActionAvailable);
     }
   }
   const hovered = targets.find((target) => target.key === hoveredKey);
-  if (hovered) drawHoverLabel(ctx, hovered);
+  if (hovered && hovered.key !== guideTargetKey) drawHoverLabel(ctx, hovered);
   ctx.restore();
 }
 

@@ -1,8 +1,10 @@
 import { CARGO_HUB_X, RAIL_STOP_X, WORLD } from '../game/config';
+import { deriveInitialLogisticsGuide, isFirstLiveScrapGain } from '../game/initialLogisticsGuide';
 import { cargoWeight } from '../game/simulation';
 import type { GameEvent, GameState } from '../game/types';
 import { Phase5Renderer } from './phase5Renderer';
 import { drawInteractionOverlay } from './interactionOverlay';
+import { drawDeliveryNotice, drawInitialLogisticsGuide, initialGuideTargetKey } from './initialGuideOverlay';
 import {
   clientToWorldPoint,
   deriveInteractionTargets,
@@ -15,6 +17,7 @@ export class GameRenderer {
   private readonly base: Phase5Renderer;
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
+  private deliveryNotice: { amount: number; expiresAt: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -27,6 +30,9 @@ export class GameRenderer {
 
   handleEvent(event: GameEvent, state: GameState, now: number): void {
     this.base.handleEvent(event, state, now);
+    if (isFirstLiveScrapGain(state, event)) {
+      this.deliveryNotice = { amount: Number(event.data?.amount ?? 0), expiresAt: now + 2500 };
+    }
   }
 
   render(state: GameState, now: number, hoveredKey: string | null = null): void {
@@ -41,7 +47,14 @@ export class GameRenderer {
     drawFreightCage(this.ctx, state);
     drawBores(this.ctx, state, now);
     drawEngineer(this.ctx, state, now);
-    drawInteractionOverlay(this.ctx, deriveInteractionTargets(state), state.selection, hoveredKey);
+    const targets = deriveInteractionTargets(state);
+    const guide = deriveInitialLogisticsGuide(state);
+    const guideTargetKey = initialGuideTargetKey(guide, targets);
+    drawInteractionOverlay(this.ctx, targets, state.selection, hoveredKey, guideTargetKey);
+    if (guide) drawInitialLogisticsGuide(this.ctx, guide, targets, state);
+    if (this.deliveryNotice && now < this.deliveryNotice.expiresAt) {
+      drawDeliveryNotice(this.ctx, this.deliveryNotice.amount);
+    } else if (this.deliveryNotice) this.deliveryNotice = null;
     this.ctx.restore();
   }
 

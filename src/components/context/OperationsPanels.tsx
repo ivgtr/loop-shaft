@@ -4,8 +4,10 @@ import {
   D100_EXTENSION_COST,
   UPGRADE_COSTS,
 } from '../../game/config';
+import type { InitialLogisticsGuide } from '../../game/initialLogisticsGuide';
 import { canTravelPhase5, unlockedPhase5Depths } from '../../game/phase5';
 import {
+  canDispatchElevator,
   canExtendD030,
   canExtendD060,
   canExtendD100,
@@ -20,13 +22,15 @@ import { DeepControls } from './DeepControls';
 
 const CARGO_PRIORITIES: readonly CargoRoutingPriority[] = ['BALANCED', 'CORE', 'RESEARCH', 'ANCIENT'];
 
-export function ElevatorContext({ state }: { state: GameState }) {
+export function ElevatorContext({ state, guide }: { state: GameState; guide?: InitialLogisticsGuide | null }) {
   const run = state.run;
   const weight = cargoWeight(run.elevator.cargo);
-  const canSend = run.elevator.state === 'IDLE_BOTTOM' && weight > 0 && run.character.state !== 'LOADING' && run.porter.state !== 'LOADING';
+  const canSend = canDispatchElevator(state);
   const travelDepths = unlockedPhase5Depths(state).filter((depth) => depth !== run.depth.current);
 
-  return <ContextLayout title="Central Elevator" meta={`Priority transport · ${fmt(weight)}/${fmt(run.elevator.maxLoad)}kg · EST ${cargoValue(run.elevator.cargo)} Scrap · ${formatState(run.elevator.state)}`}>
+  const status = `Priority transport · ${fmt(weight)}/${fmt(run.elevator.maxLoad)}kg · EST ${cargoValue(run.elevator.cargo)} Scrap · ${formatState(run.elevator.state)}`;
+
+  return <ContextLayout title="Central Elevator" meta={guide ? <>{guide.context} <span className="muted">· {status}</span></> : status}>
     <ActionButton command={{ type: 'send' }} className="primary" disabled={!canSend}>SEND</ActionButton>
     {run.porter.enabled && !run.automation.autoDispatch.unlocked && <ActionButton command={{ type: 'unlock-auto-dispatch' }} className="primary" disabled={run.scrap < UPGRADE_COSTS.autoDispatch}>FIT AUTO RELAY · {UPGRADE_COSTS.autoDispatch}</ActionButton>}
     {run.automation.autoDispatch.unlocked && <ActionButton command={{ type: 'toggle-auto-dispatch' }} className={run.automation.autoDispatch.enabled ? 'toggle-on' : ''}>AUTO DISPATCH {run.automation.autoDispatch.enabled ? 'ON' : 'OFF'}</ActionButton>}

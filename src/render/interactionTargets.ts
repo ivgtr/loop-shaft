@@ -1,7 +1,7 @@
 import { CARGO_HUB_X, RAIL_STOP_X, WORLD } from '../game/config';
 import { canPlayerAccessNode } from '../game/deepGame';
 import { canShowCrewBoard } from '../game/phase5';
-import { canMine, cargoWeight, currentFloor } from '../game/simulation';
+import { canDispatchElevator, canMine, cargoWeight, currentFloor } from '../game/simulation';
 import type { GameState, Selection } from '../game/types';
 import { elevatorY } from './environment';
 import { INTERACTION_LAYOUT } from './interactionLayout';
@@ -250,10 +250,7 @@ function addElevatorTarget(
   const cageRect = { x: WORLD.elevatorX - half - 3, y: y - 20, width: half * 2 + 7, height: 42 };
   const controlHit = inflate(INTERACTION_LAYOUT.liftControl, 3);
   const elevator = state.run.elevator;
-  const canSend = elevator.state === 'IDLE_BOTTOM'
-    && elevator.cargo.length > 0
-    && state.run.character.state !== 'LOADING'
-    && state.run.porter.state !== 'LOADING';
+  const canSend = canDispatchElevator(state);
   const status = canSend ? null
     : elevator.state === 'ASCENDING' || elevator.state === 'DESCENDING' ? elevator.state
       : elevator.state === 'LOADING' || elevator.state === 'UNLOADING' ? 'BUSY' : 'EMPTY';
