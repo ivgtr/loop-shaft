@@ -1,18 +1,15 @@
 import { WORLD } from '../game/config';
 import { canShowCrewBoard, phase5Floor } from '../game/phase5';
 import type { CrewMember, EquipmentItem, EquipmentRarity, GameEvent, GameState, Phase5DepthId } from '../game/types';
-import { CanvasRenderer, type InteractiveTarget } from './canvasRenderer';
+import { CanvasRenderer } from './canvasRenderer';
+import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
-
-export type Phase5InteractiveTarget = InteractiveTarget | { type: 'crew-board' };
 
 export class Phase5Renderer {
   private readonly base: CanvasRenderer;
-  private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
 
   constructor(canvas: HTMLCanvasElement) {
-    this.canvas = canvas;
     this.base = new CanvasRenderer(canvas);
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas 2D context is required.');
@@ -39,19 +36,12 @@ export class Phase5Renderer {
     this.ctx.restore();
   }
 
-  pickTarget(clientX: number, clientY: number, state: GameState): Phase5InteractiveTarget {
-    const rect = this.canvas.getBoundingClientRect();
-    const x = ((clientX - rect.left) / rect.width) * WORLD.width;
-    const y = ((clientY - rect.top) / rect.height) * WORLD.height;
-    if (canShowCrewBoard(state) && x >= 10 && x <= 92 && y >= 6 && y <= 35) return { type: 'crew-board' };
-    return this.base.pickTarget(clientX, clientY, state);
-  }
 }
 
 function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
   if (!canShowCrewBoard(state)) return;
   const crew = state.run.phase5.crew;
-  const x = 10; const y = 7;
+  const { x, y } = INTERACTION_LAYOUT.crewBoard;
   ctx.fillStyle = '#24211f'; ctx.fillRect(x, y, 82, 27);
   ctx.fillStyle = '#68605a'; ctx.fillRect(x + 3, y + 3, 76, 2); ctx.fillRect(x + 3, y + 20, 76, 2);
   ctx.fillStyle = '#141311'; ctx.fillRect(x + 5, y + 7, 43, 11);
@@ -69,7 +59,6 @@ function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: num
     ctx.fillStyle = '#5c5447'; ctx.fillRect(x + 46, y + 19, 4, 1);
   }
   ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.white; ctx.fillText(crew.unlocked ? 'SHIFT BOARD' : 'CREW BOARD', x + 5, y + 27);
-  if (state.selection?.type === 'crew-board') { ctx.strokeStyle = '#b29355'; ctx.strokeRect(x - 1.5, y - 1.5, 85, 30); }
 }
 
 function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState): void {

@@ -2,6 +2,7 @@ import { WORLD } from '../game/config';
 import { currentFloor } from '../game/simulation';
 import type { DepthId, GameState, LootKind, MiningNode, Rarity } from '../game/types';
 import { elevatorY } from './environment';
+import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
 
 export function drawEntities(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
@@ -13,17 +14,13 @@ export function drawEntities(ctx: CanvasRenderingContext2D, state: GameState, no
   drawCharacter(ctx, state, now);
   drawElevator(ctx, state, now);
   drawLiftControl(ctx, state);
-  if (state.run.depth.current === 'D-100' && state.selection?.type === 'core-chamber') {
-    ctx.strokeStyle = PALETTE.d100Lamp;
-    ctx.strokeRect(374.5, 151.5, 14, 16);
-  }
 }
 
 function drawNodes(ctx: CanvasRenderingContext2D, state: GameState): void {
-  for (const node of currentFloor(state).nodes) drawNode(ctx, node, state.selection?.type === 'node' && state.selection.id === node.id, state.run.depth.current);
+  for (const node of currentFloor(state).nodes) drawNode(ctx, node, state.run.depth.current);
 }
 
-function drawNode(ctx: CanvasRenderingContext2D, node: MiningNode, selected: boolean, depth: DepthId): void {
+function drawNode(ctx: CanvasRenderingContext2D, node: MiningNode, depth: DepthId): void {
   if (node.hp <= 0) {
     ctx.fillStyle = depth === 'D-060' ? '#344951' : depth === 'D-100' ? '#49433e' : depth === 'D-030' ? '#394244' : '#443840';
     ctx.fillRect(node.x - 10, node.y - 4, 20, 5);
@@ -54,7 +51,6 @@ function drawNode(ctx: CanvasRenderingContext2D, node: MiningNode, selected: boo
   }
   if (ratio < 0.75) { ctx.fillStyle = '#17191a'; ctx.fillRect(node.x, node.y - 17, 1, 8); ctx.fillRect(node.x, node.y - 11, 5, 1); }
   if (ratio < 0.4) { ctx.fillRect(node.x - 7, node.y - 8, 8, 1); ctx.fillRect(node.x - 3, node.y - 13, 1, 6); }
-  if (selected) { ctx.strokeStyle = depth === 'D-060' ? PALETTE.d060Lamp : depth === 'D-100' ? PALETTE.d100Lamp : depth === 'D-030' ? PALETTE.d030Lamp : PALETTE.lamp; ctx.strokeRect(node.x - 16.5, node.y - 25.5, 33, 28); }
 }
 
 function drawLoot(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
@@ -74,14 +70,12 @@ function drawWorkbench(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillStyle = run.boots.level === 1 ? '#51463d' : PALETTE.steel; ctx.fillRect(x - 11, WORLD.floorY - 13, 4, 4); ctx.fillRect(x - 6, WORLD.floorY - 13, 4, 4);
   ctx.fillStyle = run.pack.level === 1 ? '#685642' : '#846c47'; const packW = run.pack.level === 1 ? 5 : 7; const packH = run.pack.level === 1 ? 6 : 8; ctx.fillRect(x + 6, WORLD.floorY - 12 - (packH - 6), packW, packH);
   if (run.automation.autoSwing.unlocked) { ctx.fillStyle = run.automation.autoSwing.enabled ? PALETTE.cyan : '#3f5355'; ctx.fillRect(x + 2, WORLD.floorY - 22, 3, 3); }
-  if (state.selection?.type === 'workbench') { ctx.strokeStyle = PALETTE.lamp; ctx.strokeRect(x - 15.5, WORLD.floorY - 25.5, 31, 31); }
 }
 
 function drawScanner(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
-  const x = 282; const y = WORLD.floorY - 26; ctx.fillStyle = '#2b3032'; ctx.fillRect(x - 9, y, 18, 25); ctx.fillStyle = PALETTE.metal; ctx.fillRect(x - 7, y + 3, 14, 2); ctx.fillRect(x - 5, y + 18, 10, 3);
+  const { x: left, y } = INTERACTION_LAYOUT.scanner; const x = left + INTERACTION_LAYOUT.scanner.width / 2; ctx.fillStyle = '#2b3032'; ctx.fillRect(left, y, 18, 25); ctx.fillStyle = PALETTE.metal; ctx.fillRect(x - 7, y + 3, 14, 2); ctx.fillRect(x - 5, y + 18, 10, 3);
   const pulse = state.run.anomaly.selected ? '#56605e' : Math.floor(now / 360) % 2 === 0 ? PALETTE.d030Lamp : '#71623f';
   ctx.fillStyle = pulse; ctx.fillRect(x - 3, y + 7, 2, 2); ctx.fillRect(x + 1, y + 7, 2, 2); ctx.fillRect(x - 1, y + 11, 2, 2);
-  if (state.selection?.type === 'scanner') { ctx.strokeStyle = PALETTE.d030Lamp; ctx.strokeRect(x - 11.5, y - 2.5, 23, 29); }
 }
 
 function drawCharacter(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
@@ -115,11 +109,10 @@ function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: numb
   else { const count = Math.min(9, e.cargo.length); for (let i = 0; i < count; i += 1) { const row = Math.floor(i / 3); const col = i % 3; ctx.fillStyle = lootColor(e.cargo[i]!.kind); ctx.fillRect(WORLD.elevatorX - 12 + col * 9, y + 8 - row * 6, 7, 5); } }
   ctx.fillStyle = e.state !== 'IDLE_BOTTOM' || e.cargo.length > 0 ? depthAccent(state.run.depth.current) : '#47413a'; ctx.fillRect(WORLD.elevatorX + Math.max(8, half - 7), y - 12, 3, 3);
   if (e.state === 'IDLE_BOTTOM' && e.cargo.length > 0 && !state.run.automation.autoDispatch.enabled && Math.floor(now / 500) % 2 === 0) { ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.lamp; ctx.textAlign = 'center'; ctx.fillText('SEND', WORLD.elevatorX, y - 22); ctx.textAlign = 'left'; }
-  if (state.selection?.type === 'elevator') { ctx.strokeStyle = depthAccent(state.run.depth.current); ctx.strokeRect(WORLD.elevatorX - half - 3.5, y - 19.5, half * 2 + 12, 42); }
 }
 
 function drawLiftControl(ctx: CanvasRenderingContext2D, state: GameState): void {
-  const x = WORLD.elevatorX + 25; const y = WORLD.floorY - 18;
+  const { x, y } = INTERACTION_LAYOUT.liftControl;
   ctx.fillStyle = '#24272a'; ctx.fillRect(x, y, 8, 12);
   ctx.fillStyle = state.run.automation.autoDispatch.enabled ? PALETTE.cyan : state.run.automation.autoDispatch.unlocked ? PALETTE.lampDim : '#3c3b3b'; ctx.fillRect(x + 3, y + 2, 2, 2);
   ctx.fillStyle = PALETTE.metal; ctx.fillRect(x + 2, y + 7, 4, 2);

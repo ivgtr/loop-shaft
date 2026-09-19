@@ -66,6 +66,7 @@ import {
 } from '../game/simulation';
 import type { GameState, MinerPriority, PorterPriority } from '../game/types';
 import { GameRenderer } from '../render/gameRenderer';
+import type { InteractionTarget, Point } from '../render/interactionTargets';
 import type { GameCommand } from './commands';
 
 const FIXED_STEP = 1 / 60;
@@ -92,6 +93,9 @@ export class GameRuntime {
   private lastUiUpdate = 0;
   private revision = 0;
   private snapshot: GameSnapshot;
+  private pointerClient: Point | null = null;
+  private pointerWorld: Point | null = null;
+  private hoveredKey: string | null = null;
 
   constructor(private readonly state: GameState) {
     this.snapshot = this.createSnapshot();
@@ -118,6 +122,7 @@ export class GameRuntime {
 
   detachCanvas(canvas: HTMLCanvasElement): void {
     if (this.canvas !== canvas) return;
+    this.clearPointer();
     this.canvas = null;
     this.renderer = null;
   }
@@ -144,27 +149,48 @@ export class GameRuntime {
     this.audio.unlock();
   }
 
+  updateCanvasPointer(clientX: number, clientY: number): void {
+    this.pointerClient = { x: clientX, y: clientY };
+    this.refreshPointerTarget();
+  }
+
+  clearCanvasPointer(): void {
+    this.pointerClient = null;
+    this.pointerWorld = null;
+    this.setHoveredTarget(null);
+  }
+
+  getHoveredTargetKey(): string | null {
+    return this.hoveredKey;
+  }
+
   selectCanvasTarget(clientX: number, clientY: number): void {
-    const target = this.renderer?.pickTarget(clientX, clientY, this.state);
+    const point = this.renderer?.clientToWorld(clientX, clientY);
+    const target = point ? this.renderer?.resolveTarget(point, this.state) : null;
     if (!target) return;
-    if (target.type === 'node') {
-      const node = currentFloor(this.state).nodes.find((candidate) => candidate.id === target.id);
-      if (node && !canPlayerAccessNode(node)) this.state.selection = { type: 'node', id: target.id };
-      else if (this.state.run.character.targetNodeId === target.id && canMine(this.state)) requestMine(this.state);
-      else selectNode(this.state, target.id);
-    } else if (target.type === 'rail-stop') this.state.selection = { type: 'rail-stop', id: target.id };
-    else if (target.type === 'cargo-hub') this.state.selection = { type: 'cargo-hub', id: target.id };
-    else if (target.type === 'freight-control') this.state.selection = { type: 'freight-control' };
-    else if (target.type === 'bore-console') this.state.selection = { type: 'bore-console', id: target.id };
-    else if (target.type === 'crew-board') selectCrewBoard(this.state);
-    else if (target.type === 'elevator') selectElevator(this.state);
-    else if (target.type === 'workbench') selectWorkbench(this.state);
-    else if (target.type === 'scanner') selectScanner(this.state);
-    else if (target.type === 'archive') selectArchive(this.state);
-    else if (target.type === 'research') selectResearchTerminal(this.state);
-    else if (target.type === 'core-console') selectCoreConsole(this.state);
-    else selectCoreChamber(this.state);
+    this.applyCanvasTarget(target);
     this.publish();
+  }
+
+  private applyCanvasTarget(target: InteractionTarget): void {
+    const ref = target.ref;
+    if (ref.type === 'node') {
+      const node = currentFloor(this.state).nodes.find((candidate) => candidate.id === ref.id);
+      if (node && !canPlayerAccessNode(node)) this.state.selection = { type: 'node', id: ref.id };
+      else if (this.state.run.character.targetNodeId === ref.id && canMine(this.state)) requestMine(this.state);
+      else selectNode(this.state, ref.id);
+    } else if (ref.type === 'rail-stop') this.state.selection = { type: 'rail-stop', id: ref.id };
+    else if (ref.type === 'cargo-hub') this.state.selection = { type: 'cargo-hub', id: ref.id };
+    else if (ref.type === 'freight-control') this.state.selection = { type: 'freight-control' };
+    else if (ref.type === 'bore-console') this.state.selection = { type: 'bore-console', id: ref.id };
+    else if (ref.type === 'crew-board') selectCrewBoard(this.state);
+    else if (ref.type === 'elevator') selectElevator(this.state);
+    else if (ref.type === 'workbench') selectWorkbench(this.state);
+    else if (ref.type === 'scanner') selectScanner(this.state);
+    else if (ref.type === 'archive') selectArchive(this.state);
+    else if (ref.type === 'research') selectResearchTerminal(this.state);
+    else if (ref.type === 'core-console') selectCoreConsole(this.state);
+    else selectCoreChamber(this.state);
   }
 
   dispatch(command: GameCommand): void {
@@ -234,7 +260,8 @@ export class GameRuntime {
       saveToStorage(this.state);
       this.saveTimer = 0;
     }
-    this.renderer?.render(this.state, now);
+    this.refreshPointerTarget();
+    this.renderer?.render(this.state, now, this.hoveredKey);
     if (now - this.lastUiUpdate >= UI_UPDATE_INTERVAL) {
       this.lastUiUpdate = now;
       this.publish();
@@ -271,6 +298,32 @@ export class GameRuntime {
     if (!member) return;
     const next = PORTER_PRIORITIES[(PORTER_PRIORITIES.indexOf(member.porterPriority) + 1) % PORTER_PRIORITIES.length]!;
     setPorterPriority(this.state, crewId, next);
+  }
+
+  private refreshPointerTarget(): void {
+    if (!this.renderer || !this.pointerClient) {
+      this.pointerWorld = null;
+      this.setHoveredTarget(null);
+      return;
+    }
+    this.pointerWorld = this.renderer.clientToWorld(this.pointerClient.x, this.pointerClient.y);
+    const target = this.pointerWorld ? this.renderer.resolveTarget(this.pointerWorld, this.state) : null;
+    this.setHoveredTarget(target?.key ?? null);
+  }
+
+  private setHoveredTarget(key: string | null): void {
+    if (this.hoveredKey === key) return;
+    this.hoveredKey = key;
+    if (!this.canvas) return;
+    this.canvas.style.cursor = key ? 'pointer' : 'default';
+    if (key) this.canvas.dataset.interactionTarget = key;
+    else delete this.canvas.dataset.interactionTarget;
+  }
+
+  private clearPointer(): void {
+    this.pointerClient = null;
+    this.pointerWorld = null;
+    this.setHoveredTarget(null);
   }
 
   private publish(): void {

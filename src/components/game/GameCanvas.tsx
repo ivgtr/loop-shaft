@@ -19,6 +19,11 @@ export function GameCanvas() {
       aria-label="LOOP SHAFT mining floor"
       tabIndex={0}
       onPointerDown={() => runtime.unlockAudio()}
+      onPointerMove={(event) => {
+        if (event.pointerType === 'touch') runtime.clearCanvasPointer();
+        else runtime.updateCanvasPointer(event.clientX, event.clientY);
+      }}
+      onPointerLeave={() => runtime.clearCanvasPointer()}
       onClick={(event) => {
         runtime.selectCanvasTarget(event.clientX, event.clientY);
         event.currentTarget.focus({ preventScroll: true });

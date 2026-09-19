@@ -1,5 +1,6 @@
 import { WORLD } from '../game/config';
 import type { DepthId, GameState } from '../game/types';
+import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
 
 export function drawEnvironment(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -60,7 +61,7 @@ function drawSurfaceStation(ctx: CanvasRenderingContext2D, state: GameState): vo
 }
 
 function drawArchive(ctx: CanvasRenderingContext2D, state: GameState): void {
-  const x = 315; const y = 7;
+  const { x, y } = INTERACTION_LAYOUT.archive;
   ctx.fillStyle = '#22252a'; ctx.fillRect(x, y, 54, 27);
   ctx.fillStyle = PALETTE.metal; ctx.fillRect(x + 3, y + 3, 48, 2); ctx.fillRect(x + 3, y + 20, 48, 2);
   ctx.fillStyle = '#0d1012'; ctx.fillRect(x + 5, y + 7, 25, 11);
@@ -73,7 +74,7 @@ function drawArchive(ctx: CanvasRenderingContext2D, state: GameState): void {
 }
 
 function drawResearchTerminal(ctx: CanvasRenderingContext2D, state: GameState): void {
-  const x = 102; const y = 7;
+  const { x, y } = INTERACTION_LAYOUT.research;
   ctx.fillStyle = '#20272b'; ctx.fillRect(x, y, 58, 27);
   ctx.fillStyle = PALETTE.metal; ctx.fillRect(x + 4, y + 4, 50, 2);
   ctx.fillStyle = '#091217'; ctx.fillRect(x + 6, y + 9, 30, 10);
@@ -84,7 +85,7 @@ function drawResearchTerminal(ctx: CanvasRenderingContext2D, state: GameState): 
 }
 
 function drawCoreConsole(ctx: CanvasRenderingContext2D, state: GameState): void {
-  const x = 382; const y = 7;
+  const { x, y } = INTERACTION_LAYOUT.coreConsole;
   ctx.fillStyle = '#242321'; ctx.fillRect(x, y, 76, 27);
   ctx.fillStyle = PALETTE.metal; ctx.fillRect(x + 4, y + 4, 68, 2);
   ctx.fillStyle = '#100f0e'; ctx.fillRect(x + 6, y + 9, 34, 10);

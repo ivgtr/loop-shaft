@@ -1,13 +1,15 @@
 import { CARGO_HUB_X, RAIL_STOP_X, WORLD } from '../game/config';
 import { cargoWeight } from '../game/simulation';
 import type { GameEvent, GameState } from '../game/types';
-import { Phase5Renderer, type Phase5InteractiveTarget } from './phase5Renderer';
-
-export type GameInteractiveTarget = Phase5InteractiveTarget
-  | { type: 'rail-stop'; id: string }
-  | { type: 'cargo-hub'; id: string }
-  | { type: 'freight-control' }
-  | { type: 'bore-console'; id: string };
+import { Phase5Renderer } from './phase5Renderer';
+import { drawInteractionOverlay } from './interactionOverlay';
+import {
+  clientToWorldPoint,
+  deriveInteractionTargets,
+  resolveInteractionTarget,
+  type InteractionTarget,
+  type Point,
+} from './interactionTargets';
 
 export class GameRenderer {
   private readonly base: Phase5Renderer;
@@ -27,7 +29,7 @@ export class GameRenderer {
     this.base.handleEvent(event, state, now);
   }
 
-  render(state: GameState, now: number): void {
+  render(state: GameState, now: number, hoveredKey: string | null = null): void {
     this.base.render(state, now);
     if (state.run.elevator.travel) return;
     const depth = state.run.depth.current;
@@ -39,25 +41,17 @@ export class GameRenderer {
     drawFreightCage(this.ctx, state);
     drawBores(this.ctx, state, now);
     drawEngineer(this.ctx, state, now);
+    drawInteractionOverlay(this.ctx, deriveInteractionTargets(state), state.selection, hoveredKey);
     this.ctx.restore();
   }
 
-  pickTarget(clientX: number, clientY: number, state: GameState): GameInteractiveTarget {
+  clientToWorld(clientX: number, clientY: number): Point | null {
     const rect = this.canvas.getBoundingClientRect();
-    const x = ((clientX - rect.left) / rect.width) * WORLD.width;
-    const y = ((clientY - rect.top) / rect.height) * WORLD.height;
-    const depth = state.run.depth.current;
-    const line = state.run.logistics.lines.find((candidate) => candidate.depth === depth);
-    if (line && x >= RAIL_STOP_X - 18 && x <= RAIL_STOP_X + 18 && y >= WORLD.floorY - 40 && y <= WORLD.floorY + 4) return { type: 'rail-stop', id: line.id };
-    const hub = state.run.logistics.cargoHubs.find((candidate) => candidate.depth === depth);
-    if (hub && x >= CARGO_HUB_X - 20 && x <= CARGO_HUB_X + 20 && y >= WORLD.floorY - 42 && y <= WORLD.floorY + 5) return { type: 'cargo-hub', id: hub.id };
-    if (state.run.logistics.freightCage.state !== 'UNBUILT' && x >= WORLD.elevatorX + 14 && x <= WORLD.elevatorX + 39 && y >= 69 && y <= WORLD.floorY + 4) return { type: 'freight-control' };
-    for (const bore of state.run.deepAutomation.bores) {
-      if (bore.depth !== depth) continue;
-      const node = state.run.floors[depth].nodes.find((candidate) => candidate.id === bore.siteId);
-      if (node && x >= node.x - 21 && x <= node.x + 21 && y >= WORLD.floorY - 43 && y <= WORLD.floorY + 4) return { type: 'bore-console', id: bore.id };
-    }
-    return this.base.pickTarget(clientX, clientY, state);
+    return clientToWorldPoint(clientX, clientY, rect);
+  }
+
+  resolveTarget(point: Point, state: GameState): InteractionTarget | null {
+    return resolveInteractionTarget(point, deriveInteractionTargets(state));
   }
 }
 

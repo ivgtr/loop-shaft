@@ -2,19 +2,8 @@ import { WORLD } from '../game/config';
 import { currentFloor } from '../game/simulation';
 import type { GameEvent, GameState, Rarity } from '../game/types';
 import { drawEntities } from './entities';
-import { drawEnvironment, elevatorY } from './environment';
+import { drawEnvironment } from './environment';
 import { PALETTE } from './palette';
-
-export type InteractiveTarget =
-  | { type: 'node'; id: string }
-  | { type: 'elevator' }
-  | { type: 'workbench' }
-  | { type: 'scanner' }
-  | { type: 'archive' }
-  | { type: 'research' }
-  | { type: 'core-console' }
-  | { type: 'core-chamber' }
-  | null;
 
 type DebrisFx = { x: number; y: number; startedAt: number };
 type BannerFx = { label: string; sub: string; rarity: Rarity; startedAt: number };
@@ -67,26 +56,6 @@ export class CanvasRenderer {
     this.ctx.restore();
     if (state.run.elevator.travel) this.drawTravel(state);
     this.drawFx(now);
-  }
-
-  pickTarget(clientX: number, clientY: number, state: GameState): InteractiveTarget {
-    const rect = this.canvas.getBoundingClientRect();
-    const x = ((clientX - rect.left) / rect.width) * WORLD.width;
-    const y = ((clientY - rect.top) / rect.height) * WORLD.height;
-    if (state.run.depth.unlocked.includes('D-060') && x >= 102 && x <= 160 && y >= 7 && y <= 34) return { type: 'research' };
-    if (state.run.depth.unlocked.includes('D-030') && x >= 315 && x <= 369 && y >= 7 && y <= 34) return { type: 'archive' };
-    if ((state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) && x >= 382 && x <= 458 && y >= 7 && y <= 34) return { type: 'core-console' };
-    if (state.run.depth.current === 'D-030' && x >= 270 && x <= 294 && y >= 180 && y <= 212) return { type: 'scanner' };
-    if (state.run.depth.current === 'D-100' && x >= 372 && x <= 390 && y >= 148 && y <= 171) return { type: 'core-chamber' };
-    for (const node of currentFloor(state).nodes) {
-      if (Math.hypot(x - node.x, y - (node.y - 9)) <= 22) return { type: 'node', id: node.id };
-    }
-    const overLiftControl = x >= WORLD.elevatorX + 24 && x <= WORLD.elevatorX + 34 && y >= WORLD.floorY - 21 && y <= WORLD.floorY - 4;
-    if (overLiftControl) return { type: 'elevator' };
-    const cageY = elevatorY(state);
-    if (x >= WORLD.elevatorX - 25 && x <= WORLD.elevatorX + 25 && y >= cageY - 17 && y <= cageY + 19) return { type: 'elevator' };
-    if (x >= WORLD.workbenchX - 15 && x <= WORLD.workbenchX + 14 && y >= WORLD.floorY - 25 && y <= WORLD.floorY + 2) return { type: 'workbench' };
-    return null;
   }
 
   private drawTravel(state: GameState): void {

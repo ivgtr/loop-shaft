@@ -1,4 +1,6 @@
 import { expect, test } from '@playwright/test';
+import { createGameState } from '../../src/game/createGame';
+import { SAVE_KEY, serializeGameState } from '../../src/game/save';
 
 test('selects, moves to, and mines a visible node through the React UI', async ({ page }) => {
   const pageErrors: Error[] = [];
@@ -25,4 +27,70 @@ test('selects, moves to, and mines a visible node through the React UI', async (
   await expect(page.getByRole('heading', { name: 'Scrap Ledge' })).toBeVisible();
   await expect(page.locator('.context-meta')).not.toContainText('HP 118/118');
   expect(pageErrors).toEqual([]);
+});
+
+test('uses a pointer cursor only on targets and selects the hovered target', async ({ page }) => {
+  await page.goto('/');
+  const canvas = page.getByLabel('LOOP SHAFT mining floor');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+
+  await page.mouse.move(box!.x + box!.width * (20 / 480), box!.y + box!.height * (100 / 270));
+  await expect(canvas).toHaveCSS('cursor', 'default');
+  await expect(canvas).not.toHaveAttribute('data-interaction-target');
+
+  const x = box!.x + box!.width * (118 / 480);
+  const y = box!.y + box!.height * (201 / 270);
+  await page.mouse.move(x, y);
+  await expect(canvas).toHaveCSS('cursor', 'pointer');
+  await expect(canvas).toHaveAttribute('data-interaction-target', 'node:scrap-ledge');
+  await page.mouse.click(x, y);
+  await expect(page.getByRole('heading', { name: 'Scrap Ledge' })).toBeVisible();
+  await expect(canvas).toHaveAttribute('data-interaction-target', 'node:scrap-ledge');
+
+  await page.mouse.move(box!.x - 2, box!.y - 2);
+  await expect(canvas).not.toHaveAttribute('data-interaction-target');
+  await canvas.dispatchEvent('pointermove', { pointerType: 'pen', clientX: x, clientY: y, bubbles: true });
+  await expect(canvas).toHaveAttribute('data-interaction-target', 'node:scrap-ledge');
+});
+
+test('keeps Bore hover and selected context aligned in a later-game state', async ({ page }) => {
+  const state = createGameState(9101);
+  state.run.depth.current = 'D-400';
+  state.run.depth.unlocked.push('D-400');
+  state.run.deepAutomation.bores.push({
+    id: 'bore-echo-pocket', depth: 'D-400', siteId: 'echo-pocket', targetNodeId: 'echo-pocket',
+    state: 'JAMMED', cycleProgress: 0, cycleDuration: 1.35, hitAt: 0.72, damage: 18,
+    outputBuffer: [], maxOutputWeight: 26, connectedLineId: null, installProgress: 10, requiredInstallProgress: 10,
+  });
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+    key: SAVE_KEY,
+    value: serializeGameState(state),
+  });
+  await page.goto('/');
+  const canvas = page.getByLabel('LOOP SHAFT mining floor');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  const x = box!.x + box!.width * (364 / 480);
+  const y = box!.y + box!.height * (190 / 270);
+
+  await page.mouse.move(x, y);
+  await expect(canvas).toHaveAttribute('data-interaction-target', 'bore-console:bore-echo-pocket');
+  await page.mouse.click(x, y);
+  await expect(page.getByRole('heading', { name: 'Remote Bore Console' })).toBeVisible();
+  await expect(page.locator('.context-meta')).toContainText('JAMMED');
+});
+
+test.describe('touch selection', () => {
+  test.use({ hasTouch: true });
+
+  test('reaches the same node context without hover', async ({ page }) => {
+    await page.goto('/');
+    const canvas = page.getByLabel('LOOP SHAFT mining floor');
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    await canvas.tap({ position: { x: box!.width * (118 / 480), y: box!.height * (201 / 270) } });
+    await expect(page.getByRole('heading', { name: 'Scrap Ledge' })).toBeVisible();
+    await expect(canvas).not.toHaveAttribute('data-interaction-target');
+  });
 });
