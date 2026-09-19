@@ -277,3 +277,156 @@ manifest、GameState、Simulation、入力、保存形式、対象ID、座標、
 - Floor Cargo台とそのCargo、影、数量表示をD-001だけ8px下げ、台脚の最下部を`y=222`へ揃えた。
 - 限定asset・semantic検査19件、全unit 88件、typecheck、production build、初回手動配送・移動／採掘・対象別fallbackを含む代表E2E 4件に成功した。
 - `docs/assets/stage3/second-follow-up/object-grounding-comparison.png`で新規画面のWorkshopとElevator底部、`after/object-grounding-progressed.png`で地上Cargo、Elevator中間位置・内部Cargo、Floor Cargoを確認した。各画像のgrayscale版でも対象を判別できる。
+
+## 縄・Elevator・縦坑接続・つるはし追加対応（2026-09-20計画、未実装）
+
+基準コミットは`01c7717`。実画面確認で得た次のフィードバックを対象とする。
+
+- 縄が単色の直線であり、他の画像素材と質感が合っていない。
+- Elevatorの開閉画像が木製縦坑と画風・密度・材質の面で合っていない。
+- 地上設備と縦坑上端の接続が不自然である。
+- 開始時から縦坑が地下へ貫通して見え、`EXTEND D-030`による掘削結果が背景へ反映されない。
+- Playerのつるはし周辺だけ色相と材質表現が不自然である。
+
+480×270の論理解像度、GameStateからRendererへの一方向、Simulation・イベント・乱数・経済・保存形式、既存の座標・anchor・hit領域、Stage 1・2の操作契約、対象別fallbackを維持する。D-030以深の設備画像化やStage 4以降へは広げない。
+
+### 現行原因
+
+- 縄は`environment.ts`で`fillRect`する2px幅の単色線で、画像素材ではない。
+- Elevator生成元は装飾密度の高い金属主体の意匠である。後処理も7画像を等幅分割して56x44へ一律trim・縮小しており、開閉状態の共通外枠を保証していない。
+- 地上設備は生成元の実占有範囲`1512x353`全体を82x34へ縮小している。中央の巻上機、坑口、縦坑との接続部が潰れている。
+- D-001背景は`run.depth.unlocked`を参照せず、D-030解放前後で同じ縦坑下端を表示する。
+- Playerのtool layerは採掘行の矩形範囲から抽出され、手・腕・身体pixelも含む。基本bankへcharacter用のほぼ全色が混入し、強化bankはhandle・金属head・混入した身体pixelをまとめて着色している。
+
+### Rope tile
+
+`elevator-rope-tile.png`を4x8px程度の継ぎ目のないruntime tileとして追加する。暗い外周、麻色の芯、交互の1pxハイライトで撚りを表し、D-001共通palette内へremapする。
+
+- 地上巻上機の接続点からElevator屋根まで整数座標で反復する。
+- 最後のtileはsource cropして屋根位置で切り、ケージ内部へ貫通させない。
+- tile位相は地上側へ固定し、Elevatorのvisual位置から表示長だけを純粋導出する。
+- 時間だけで動く縄animationは追加しない。
+- 読み込み失敗時は現在の単色線へ個別fallbackする。
+
+既存の地上設備・環境生成元にある縄またはchainから固定cropして作り、Rope単体の画像生成は行わない。
+
+### Elevator再生成
+
+既存Elevator生成元は画風基準として再利用せず、`reference-environment.png`と`generated-background-shaft-back.png`を主基準、`reference-equipment.png`を機能構成の副基準として再生成する。
+
+同一sheet・同一外枠で次の7 layerを用意する。
+
+1. 通常幅の後面。
+2. 狭幅の後面。
+3. 通常幅の開扉前枠。
+4. 狭幅の開扉前枠。
+5. 通常幅の閉扉overlay。
+6. 狭幅の閉扉overlay。
+7. 固定制御盤。
+
+開扉時は暗い内部と低い前縁を持ち、Cargo・人物を後面と前枠の間へ描く。閉扉は同じ外枠へ二枚扉だけを重ねる。通常幅、`EMPTY_SHAFT`の狭幅、開閉の全状態でanchorと外形上端・下端を共有する。
+
+固定プロンプトは次の意味を維持する。
+
+```text
+Original LOOP SHAFT D-001 elevator layer sheet. Orthographic 56x44 logical-pixel cage, simple timber and oxidized-iron construction matching the reinforced mine shaft, chunky one-pixel shapes, restrained contrast, charcoal mesh, one small amber status lamp. Matching normal and narrow variants. Separate rear cage, open foreground frame, and closed two-panel door overlays with identical outer proportions and anchor. Transparent background. No text, ornate Victorian decoration, polished brass, gradients, glow, perspective, characters, cargo, or baked rope.
+```
+
+生成後は共通外枠を後処理で固定し、開閉時にケージ全体が別画像へ切り替わって見えない条件を設ける。
+
+### 地上と縦坑上端の接続
+
+`generated-background-surface-station.png`全体の縮小をやめ、中央の巻上機、坑口、受け梁だけを固定cropした`shaft-surface-junction.png`を作る。
+
+- 配置範囲は原則`x=199..280, y=0..37`とする。
+- 開口を縦坑と同じ`x=216..264`へ一致させる。
+- 左右支柱、地表を横切る梁、巻上輪、縄の開始点、縦坑内部の暗部を残す。
+- 既存生成元の再cropを優先し、実背景上で不足する場合だけ接続部を再生成する。
+
+### EXTEND前後の縦坑下端
+
+49x47pxを2frame持つ`shaft-bottom-junction-atlas.png`を追加する。
+
+- `sealed`: D-030未解放時。岩盤、太い横梁、木製蓋でElevator床下を閉じ、レールと暗部をそこで終端する。
+- `open`: D-030解放後。暗い縦穴、左右支柱、レールを画面下へ連続させ、D-001床との切断面に坑口枠と崩した岩盤を置く。
+
+表示状態は`run.depth.unlocked.includes('D-030')`から純粋導出する。`EXTEND D-030`成功時の既存`DEPTH_UNLOCKED`と同じstate更新を利用し、新しい保存fieldやイベントは追加しない。背景床より後、縄・Elevator・人物より前に描画する。
+
+### つるはしの材質と色
+
+既存Player姿勢を維持し、再生成ではなくlayer所有とpalette remapを修正する。
+
+- mine-ready 2frame、mine-swing 8frameごとの固定tool maskを生成仕様へ記録する。
+- 手・前腕・身体pixelをbody layerへ戻し、tool layerを木製handleと金属headだけに限定する。
+- handleは低彩度の構造用brown、headはneutralな暗色・中間色・明色metalへremapする。
+- Helmet・lamp用amberを金属headへ使用しない。
+- Tool Level 2は金属headだけを明るくし、handle、手、腕はLevel 1と共有する。
+
+### 描画順
+
+```text
+岩盤
+→ 坑道・縦坑後面
+→ 地上接続
+→ 坑底sealed/open junction
+→ 木製構造・床
+→ Rope tile
+→ Elevator後面
+→ Elevator内Cargo・人物
+→ Elevator前枠・閉扉
+→ 選択表示・案内
+```
+
+### 変更責務
+
+- `art/d001/generation-spec.json`: Rope、Elevator 7 layer、上下接続、EXTEND状態、tool mask・palette条件。
+- `art/d001/sources/`: 再生成したElevator sheet。その他は既存生成元の再cropを優先する。
+- `scripts/process-d001-assets.mjs`: 固定cell抽出、Rope tile、上下junction、つるはしmaterial分離。
+- `src/render/assets/d001Manifest.ts`: Rope、地上接続、坑底atlasを独立fallback単位で追加する。
+- `src/render/environment.ts`、`src/render/d001ImageRenderer.ts`: Rope反復、上下接続、Elevator新layerの描画。
+- `src/render/semanticRenderState.ts`: door、normal/narrow、sealed/openの純粋導出。
+- `public/assets/d001/runtime/`: 新規3素材と再生成Elevator、更新したPlayer tool atlas。
+- `tests/assets.test.ts`、`tests/semanticRenderState.test.ts`、既存代表E2E、`docs/assets/stage3/second-follow-up/`: 限定検査と比較証拠。
+
+### 検証規模の制約
+
+本追加対応は視覚的不具合の修正であり、性能改善やテスト基盤の拡張を目的にしない。
+
+- FPS、描画時間、メモリ量、bundle sizeへ新しい数値目標を設けない。
+- profiling、benchmark、長時間負荷試験を完了条件にしない。
+- 全pixelのgolden snapshotや全GameState組み合わせの画像比較を追加しない。
+- Ropeの反復は短いtileの整数描画に限定し、明白な問題がない限り描画最適化を追加しない。
+- unit testは状態の純粋導出、tile seam、layer外形、alpha・palette、tool所有pixelの代表条件に限定する。
+- E2Eは既存のEXTEND、SEND、採掘、保存復元と、代表的なD-001状態に限定する。
+- 既に同じ条件で成功した全件検証は、新しい変更や失敗がない限り繰り返さない。
+
+### 自動検査
+
+- Rope tileの上下端が反復可能で、表示終端がElevator屋根を越えない。
+- Elevatorの開閉で外枠、anchor、占有幅が変化しない。
+- 通常幅・狭幅の双方で人物とCargoが内部に収まる。
+- D-030未解放は`sealed`、`EXTEND`直後は`open`となる。
+- 地上接続の開口、Rope、縦坑中心が同じx座標にある。
+- tool layerへ手・腕・Helmet色が混入しない。
+- Tool Level 1・2でhandleと手が共有され、金属headだけが変化する。
+- alpha 0/255、整数座標、共通palette、対象別fallbackを維持する。
+
+### 目視確認
+
+- 初期D-001の閉じた坑底と`EXTEND D-030`直後の開いた坑底。
+- Elevator上端・中間・下端の開扉／閉扉、通常幅／狭幅、空荷／Cargo搭載／人物搭乗。
+- Ropeの短・中・長状態と地上巻上機・Elevator屋根への接続。
+- mine-readyとmine-swing全8frame、Tool Level 1・2。
+- 通常色とgrayscale。
+
+### 実装順序と完了条件
+
+1. `01c7717`の地上接続、坑底、Elevator開閉、Rope長、つるはしframeを変更前証拠として固定する。
+2. 地上接続と坑底2状態を既存生成元の固定cropから作る。
+3. Rope tileと反復描画を追加する。
+4. 固定プロンプトと基準画像でElevatorを再生成し、7 layerへ後処理する。
+5. つるはしのtool maskと用途別remapを修正する。
+6. 限定したunit、typecheck、build、代表E2E、通常色・grayscale目視を行う。
+7. 実装結果を本正本へ追記する。
+
+完了条件は、Ropeが継ぎ目のない素材として縦坑とElevatorへ接続すること、Elevatorの開閉両状態が木製縦坑の画風へ一致すること、地上接続が一体に見えること、EXTEND前後で坑底が閉鎖状態から地下へ連続する開口へ変化すること、つるはしの手・handle・金属headが材質ごとに正しい色となること、既存の操作・Simulation・保存形式を維持することである。
