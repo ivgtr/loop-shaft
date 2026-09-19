@@ -1,5 +1,5 @@
 import { WORLD } from '../game/config';
-import type { GameState, LootKind, MiningNode } from '../game/types';
+import type { GameState, LootKind, LootStack, MiningNode } from '../game/types';
 import type { AssetStore } from './assets/assetStore';
 import {
   D001_ASSET_FILES,
@@ -8,7 +8,13 @@ import {
   D001_PLAYER_KEYS,
   type D001AssetKey,
 } from './assets/d001Manifest';
-import type { SemanticRenderState } from './semanticRenderState';
+import {
+  cargoVisualClass,
+  type ActorRenderState,
+  type CrewRenderState,
+  type EngineerRenderState,
+  type SemanticRenderState,
+} from './semanticRenderState';
 
 export type D001AssetStore = AssetStore<D001AssetKey>;
 
@@ -62,12 +68,81 @@ export function drawD001Player(
   ctx.save();
   ctx.translate(character.worldAnchor.x, 0);
   if (character.facing < 0) ctx.scale(-1, 1);
-  drawPlayerLayer(ctx, assets, 'playerBody', character.frame * 40, character.row * 40, destinationX, destinationY);
-  drawPlayerLayer(ctx, assets, 'playerHelmet', character.frame * 40, character.row * 40, destinationX, destinationY);
-  drawPlayerLayer(ctx, assets, 'playerTool', character.toolBank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
   drawPlayerLayer(ctx, assets, 'playerPack', character.packBank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
+  drawPlayerLayer(ctx, assets, 'playerBody', character.frame * 40, character.row * 40, destinationX, destinationY);
   drawPlayerLayer(ctx, assets, 'playerBoots', character.bootsBank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
+  drawPlayerLayer(ctx, assets, 'playerTool', character.toolBank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
+  drawPlayerLayer(ctx, assets, 'playerHelmet', character.frame * 40, character.row * 40, destinationX, destinationY);
   ctx.restore();
+}
+
+export function drawD001Porter(ctx: CanvasRenderingContext2D, semantic: SemanticRenderState, assets: D001AssetStore): boolean {
+  const porter = semantic.porter;
+  if (!porter || !assets.ready('npcPorter')) return false;
+  drawActor(ctx, assets, 'npcPorter', porter);
+  return true;
+}
+
+export function drawD001Crew(ctx: CanvasRenderingContext2D, actor: CrewRenderState, assets: D001AssetStore): boolean {
+  const key = actor.role === 'MINER' ? 'npcCrewMiner' : 'npcCrewPorter';
+  if (!actor.visible || !assets.ready(key)) return false;
+  drawActor(ctx, assets, key, actor, actor.role === 'MINER' ? actor.toolBank * 320 : 0);
+  return true;
+}
+
+export function drawD001Engineer(ctx: CanvasRenderingContext2D, actor: EngineerRenderState, assets: D001AssetStore): boolean {
+  if (!actor.visible || !assets.ready('npcEngineer')) return false;
+  drawActor(ctx, assets, 'npcEngineer', actor);
+  return true;
+}
+
+function drawActor(
+  ctx: CanvasRenderingContext2D,
+  assets: D001AssetStore,
+  key: D001AssetKey,
+  actor: ActorRenderState<string>,
+  bankOffset = 0,
+): void {
+  const image = assets.ready(key);
+  if (!image) return;
+  ctx.save();
+  ctx.translate(actor.worldAnchor.x, 0);
+  if (actor.facing < 0) ctx.scale(-1, 1);
+  ctx.drawImage(image, bankOffset + actor.frame * 40, actor.row * 40, 40, 40, -20, actor.worldAnchor.y - 38, 40, 40);
+  ctx.restore();
+}
+
+const CARGO_FRAME = {
+  rock: 0, metal: 1, copper: 2, gold: 3, gem: 4, fossil: 5,
+  relic: 6, research: 7, anomaly: 8, core: 9, 'equipment-crate': 10, 'industrial-crate': 11,
+} as const;
+
+export function drawD001Cargo(
+  ctx: CanvasRenderingContext2D,
+  item: Pick<LootStack, 'kind' | 'category' | 'equipmentSeed'>,
+  anchorX: number,
+  anchorY: number,
+  assets: D001AssetStore,
+): boolean {
+  const image = assets.ready('cargoItems');
+  if (!image) return false;
+  const frame = CARGO_FRAME[cargoVisualClass(item)];
+  ctx.drawImage(image, frame * 12, 0, 12, 10, Math.round(anchorX) - 6, Math.round(anchorY) - 10, 12, 10);
+  return true;
+}
+
+export function drawD001CarriedCargo(
+  ctx: CanvasRenderingContext2D,
+  actor: ActorRenderState<string>,
+  assets: D001AssetStore,
+): boolean {
+  if (actor.carried.length === 0 || !assets.ready('cargoItems')) return false;
+  const visible = actor.carried.slice(0, 3);
+  visible.forEach((item, index) => {
+    const forward = actor.worldAnchor.x + actor.facing * (8 + index * 2);
+    drawD001Cargo(ctx, item, forward, actor.worldAnchor.y - 7 - index * 3, assets);
+  });
+  return true;
 }
 
 function drawPlayerLayer(
@@ -101,8 +176,11 @@ export function drawD001Elevator(
   for (let index = 0; index < count; index += 1) {
     const row = Math.floor(index / 3);
     const column = index % 3;
-    ctx.fillStyle = lootColor(state.run.elevator.cargo[index]!.kind);
-    ctx.fillRect(WORLD.elevatorX - 12 + column * 9, Math.round(semantic.elevator.y) + 8 - row * 6, 7, 5);
+    const item = state.run.elevator.cargo[index]!;
+    if (!drawD001Cargo(ctx, item, WORLD.elevatorX - 8 + column * 9, Math.round(semantic.elevator.y) + 13 - row * 6, assets)) {
+      ctx.fillStyle = lootColor(item.kind);
+      ctx.fillRect(WORLD.elevatorX - 12 + column * 9, Math.round(semantic.elevator.y) + 8 - row * 6, 7, 5);
+    }
   }
 
   ctx.drawImage(image, (2 + variant) * 56, 0, 56, 44, x, y, 56, 44);

@@ -427,17 +427,17 @@ LOADING                 → load
 
 #### 実装結果（2026-09-20）
 
-プレイヤー透過、固有歩行フレーム、D-001のNPC・Cargo画像化に関する確認後の追加対応は、`docs/visual-usability-stage3-follow-up-plan.md`を実装前の計画として扱う。
+プレイヤー透過、全30固有姿勢、D-001のNPC・Cargo画像化に関する確認後の追加対応は、`docs/visual-usability-stage3-follow-up-plan.md`に実装結果と検証証拠を集約した。
 
-- `art/d001/generation-spec.json`を生成仕様の正本とし、固定プロンプト、ネガティブ条件、基準画像のhash、全16 runtime素材の寸法、cell、anchor、clipを確定した。人物、鉱脈、設備、環境の基準画像から素材を生成し、`art/d001/palette.json`のD-001共通32色パレットで再現可能に後処理する。末尾2色の青緑は後続深度用に予約し、D-001素材の量子化対象から除外した。
+- `art/d001/generation-spec.json`を生成仕様の正本とし、固定プロンプト、ネガティブ条件、基準・生成画像のhash、全21 runtime素材の寸法、cell、anchor、clipを確定した。`art/d001/palette.json`の共通32色を使い、末尾2色の青緑はPorterと自動化の識別部位に限定した。
 - `npm run assets:d001`でnearest-neighbor縮小、固定パレット量子化、透過値の0/255化、atlas構築、全出力の寸法と透過値を検査する。runtime素材は`public/assets/d001/runtime/`へ出力する。
-- Renderer外のAsset storeがURLごとの`loading / ready / error`、preload、cache、同一エラーの一度だけの記録を担当する。背景6層、プレイヤー5層、3鉱脈、作業台、Elevatorをmanifestで管理し、背景群と各操作対象を独立して既存図形へfallbackする。
-- `semanticRenderState`がCharacterState、Swing、回収・積載時間、鉱脈HP、Elevator状態からclipとframeを純粋導出する。採掘hitは`Swing.hitAt`を含む最初のframe 3へ割り当て、表示frameは保存形式へ追加していない。
+- Renderer外のAsset storeがURLごとの`loading / ready / error`、preload、cache、同一エラーの一度だけの記録を担当する。Player、Porter、Crew Miner、Crew Porter、Engineer、Cargoを独立fallback groupとしてmanifestで管理する。
+- `semanticRenderState`がCharacter、Porter、Crew、Engineer、Swing、回収・積載時間、job進捗からclipとframeを純粋導出する。採掘hitはPlayerとCrew Minerのframe 3へ割り当て、表示frameは保存形式へ追加していない。
 - 描画は背景、静的対象、人物、Cargo、Elevator前面、動的表示、Stage 1、Stage 2、最前面通知の順へ分離した。Stage 1の対象ID・論理hit領域・優先順位とStage 2の案内・入力経路は変更していない。
 - 変更前後の新規開始、Porter解放時、進行後D-001を`docs/assets/stage3/before/`と`docs/assets/stage3/after/`へ固定し、通常色とgrayscale、side-by-side比較を`docs/assets/stage3/`へ保存した。進行仕様上PorterとCrewは同時に存在しないため、Porter状態とCrew・Engineer・床Cargo・後半設備状態を別々に確認した。
-- 検証はasset再生成、typecheck、production build、Vitest 74件、Playwright 6件に成功した。Playwrightでは初回手動配送を実経路で完走し、playerとScrap素材を個別に失敗させてもhover、click、`MINE`、Cargoと操作経路が維持されることを確認した。
+- 追加対応を含む検証はasset再生成、typecheck、production build、Vitest 79件、Playwright 7件に成功した。Playwrightでは初回手動配送を実経路で完走し、Player・Scrapに加えてNPC・Cargo素材を個別に失敗させてもhover、click、`MINE`、Cargoと操作経路が維持されることを確認した。
 - 比較画像の目視では、人物の接地点、鉱脈・設備のanchor、Stage 1枠、Stage 2案内、Cargo、進行後の図形設備との合成を確認した。全失敗は同じ対象単位fallback経路を使うが、ブラウザ自動検証は部分失敗を代表条件とした。
-- Stage 4以降へ、Porter、Crew、Engineer、Rail、Freight、Bore、Cargoの画像化、D-002以降への背景展開、状態連動エフェクトの拡張を持ち越す。
+- Stage 4以降へ、Rail Cart、Cargo Hub、Freight Cage、Boreなど設備本体の画像化、D-002以降への背景展開、状態連動エフェクトの拡張を持ち越す。
 
 ### Stage 4 — 主要対象の画像化とシルエット改善
 

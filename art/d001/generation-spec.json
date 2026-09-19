@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "stage": "graphic-usability-stage-3",
   "logicalCanvas": { "width": 480, "height": 270 },
   "masterPrompt": "Original LOOP SHAFT production asset for a 480x270 side-view mining game. Strict orthographic side view, low-resolution hand-authored pixel-art appearance, exact logical pixel scale, hard one-pixel edges, no antialiasing. D-001 is a shallow industrial mine built from warm soil, oxidized iron, worn timber and restrained amber work lights. Strong readable silhouette, grounded weight, practical mining construction, controlled contrast. Background is lowest priority; tunnel structure, interactable equipment, character, cargo and guidance increase in visual priority in that order. Preserve clear feet, contact points, equipment attachment points and frame-to-frame proportions. Original LOOP SHAFT design language.",
@@ -13,6 +13,14 @@
       "nodes": "5b877c82a0870558e249d1757cc9901610a019637e90dcc76ce18ef58ad9aa1e",
       "equipment": "d54df2ce80c03c8f6061fa67ed3b865b90912dde860e821ee1de4bde4d4da8a6",
       "environment": "ea91d3e60a8a7ed3f046f63df4b44a3f6f6541a8c6b77df2d8ed94e26dfb7f3c"
+    },
+    "generatedSourceHashes": {
+      "playerAnimation": "b7c94bc68581d243b7487765f49d2b359e668fb36d2ecffef9e05c6758bad571",
+      "porter": "ce4cb793e5926e42124845fee42ecdf5e31ebd833baee89c71fdac5c47d5d165",
+      "crewMiner": "8e9182239d4287c290b551ab55d30f9c2697bcf683745c79387a7d998422d912",
+      "crewPorter": "04e641bb56fb7e7a70849099edfbd236cc8aaa3f3b4c07940a330d8a54f7545e",
+      "engineer": "4ce2e5fa54d5384f42138ed0e8a15d463e33b74df8accb3f554b418c156a0939",
+      "cargo": "8571ef82831f940fc04e7a4f7fede6eda86067ab9b5d06ac65ea6d5d792d91ad"
     }
   },
   "variableFields": [
@@ -38,6 +46,11 @@
     { "file": "player-tool-atlas.png", "size": [640, 320], "cell": [40, 40], "anchor": [20, 38], "group": "player" },
     { "file": "player-pack-atlas.png", "size": [640, 320], "cell": [40, 40], "anchor": [20, 38], "group": "player" },
     { "file": "player-boots-atlas.png", "size": [640, 320], "cell": [40, 40], "anchor": [20, 38], "group": "player" },
+    { "file": "npc-porter-atlas.png", "size": [320, 320], "cell": [40, 40], "anchor": [20, 38], "group": "porter" },
+    { "file": "npc-crew-miner-atlas.png", "size": [1280, 320], "cell": [40, 40], "anchor": [20, 38], "group": "crew-miner", "banks": ["COMMON", "RARE", "EPIC", "ANCIENT"] },
+    { "file": "npc-crew-porter-atlas.png", "size": [320, 320], "cell": [40, 40], "anchor": [20, 38], "group": "crew-porter" },
+    { "file": "npc-engineer-atlas.png", "size": [160, 160], "cell": [40, 40], "anchor": [20, 38], "group": "engineer" },
+    { "file": "cargo-items-atlas.png", "size": [144, 10], "cell": [12, 10], "anchor": [6, 10], "group": "cargo" },
     { "file": "node-scrap-ledge-atlas.png", "size": [192, 40], "cell": [48, 40], "anchor": [24, 40], "group": "node:scrap-ledge" },
     { "file": "node-copper-pocket-atlas.png", "size": [192, 40], "cell": [48, 40], "anchor": [24, 40], "group": "node:copper-pocket" },
     { "file": "node-fossil-crack-atlas.png", "size": [192, 40], "cell": [48, 40], "anchor": [24, 40], "group": "node:fossil-crack" },
@@ -54,11 +67,73 @@
     { "id": "carry-idle", "row": 6, "frames": 2 },
     { "id": "load", "row": 7, "frames": 4 }
   ],
+  "npcClips": {
+    "porter": ["idle", "walk", "collect", "carry-walk", "carry-idle", "load"],
+    "crewMiner": ["idle", "walk", "mine-ready", "mine-swing"],
+    "crewPorter": ["idle", "walk", "collect", "carry-walk", "carry-idle", "load"],
+    "engineer": ["idle", "walk", "work", "complete"]
+  },
+  "cargoVisualClasses": [
+    "rock", "metal", "copper", "gold", "gem", "fossil", "relic", "research", "anomaly", "core", "equipment-crate", "industrial-crate"
+  ],
+  "cargoMapping": {
+    "STONE": "rock",
+    "IRON": "metal",
+    "COPPER": "copper",
+    "GOLD_NUGGET": "gold",
+    "NATURAL_GOLD": "gold",
+    "GEM": "gem",
+    "OLD_COIN": "gold",
+    "POCKET_WATCH": "gold",
+    "TRILOBITE": "fossil",
+    "AMMONITE": "fossil",
+    "ANCIENT_FISH": "fossil",
+    "REPTILE_TOOTH": "fossil",
+    "STRANGE_VERTEBRA": "fossil",
+    "PROSPECTOR_LENS": "relic",
+    "RHYTHM_RELAY": "relic",
+    "HUNTER_COMPASS": "relic",
+    "STRIDE_MODULE": "relic",
+    "FRACTURE_CORE": "relic",
+    "BLACK_GLASS_HEART": "anomaly",
+    "CRYSTAL_MEMORY": "research",
+    "SURVEY_CARTRIDGE": "research",
+    "DAMAGED_RESEARCH_LOG": "research",
+    "RESONANCE_SHARD": "research",
+    "UNKNOWN_INSTRUMENT": "research",
+    "CORE_FRAGMENT": "core",
+    "CORE_MATRIX": "core",
+    "ANCIENT_TOOL_CRATE": "equipment-crate",
+    "ANCIENT_PACK_CRATE": "equipment-crate",
+    "ANCIENT_LAMP_CRATE": "equipment-crate",
+    "ARCHIVE_DEVICE": "research",
+    "LOST_SIGNAL_SAMPLE": "research",
+    "ANCIENT_ALLOY": "metal",
+    "RAIL_PARTS": "industrial-crate",
+    "NULL_SAMPLE": "research",
+    "DEEP_COMPONENT": "industrial-crate"
+  },
+  "playerOwnership": {
+    "layers": ["pack", "body", "boots", "tool", "helmet"],
+    "rule": "Every opaque composite pixel is owned by exactly one layer; equipment alpha is always intersected with composite alpha.",
+    "compositeOrder": ["pack", "body", "boots", "tool", "helmet", "cargo"]
+  },
   "nodeStates": ["full", "damaged", "critical", "depleted"],
   "palette": { "file": "palette.json", "candidateColors": 40, "runtimeColors": 32, "seed": 3001, "dither": false },
   "postprocess": {
     "resizeFilter": "point",
     "alphaValues": [0, 255],
+    "transparentRgb": "#000000",
+    "frameDifferenceMinimum": {
+      "idle": 4,
+      "walk": 24,
+      "mine-ready": 6,
+      "mine-swing": 18,
+      "collect": 20,
+      "carry-walk": 20,
+      "carry-idle": 4,
+      "load": 18
+    },
     "runtimeOutput": "public/assets/d001/runtime",
     "sourceOutput": "art/d001/sources"
   }

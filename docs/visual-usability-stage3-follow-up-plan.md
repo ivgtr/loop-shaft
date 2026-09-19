@@ -2,7 +2,7 @@
 
 ## 状態
 
-計画済み、未実装。2026-09-20のStage 3確認で得た次のフィードバックを対象とする。
+2026-09-20実装・検証完了。Stage 3確認で得た次のフィードバックを対象とした。
 
 - プレイヤーが正しく透過されていない。
 - 歩行アニメーションの差分が少なく、図形版より動きが弱く見える。
@@ -48,7 +48,7 @@ Porterは`src/render/entities.ts`、Crewは`src/render/phase5Renderer.ts`、Engi
 | ファイル | cell / atlas | clip |
 | --- | --- | --- |
 | `npc-porter-atlas.png` | 40×40 / 320×320 | idle、walk、collect、carry-walk、carry-idle、load |
-| `npc-crew-miner-atlas.png` | 40×40 / 320×320 | idle、walk、mine-ready、mine-swing、collect、carry-walk、load |
+| `npc-crew-miner-atlas.png` | 40×40 / 1280×320 | idle、walk、mine-ready、mine-swing。COMMON、RARE、EPIC、ANCIENTの4 bank |
 | `npc-crew-porter-atlas.png` | 40×40 / 320×320 | idle、walk、collect、carry-walk、carry-idle、load |
 | `npc-engineer-atlas.png` | 40×40 / 160×160 | idle、walk、work、complete |
 
@@ -136,6 +136,18 @@ Rail Cart、Cargo Hub、Freight Cage、BoreなどD-001外の設備本体は画�
 7. Stage 1・2、Elevator、Floor Cargo、進行後設備との合成を調整する。
 8. 自動テスト、比較画像、実プレイ経路、目視確認を実施する。
 9. 結果を既存の正本へ反映する。
+
+## 実装結果（2026-09-20）
+
+- 固定マスタープロンプトと既存4基準画像を継続利用し、Player 30姿勢、Porter、Crew Miner、Crew Porter、Engineer、Cargoの生成元を`art/d001/sources/`へ追加した。生成元のhash、全21 runtime素材、NPC clip、Cargo 12 classと全`LootKind`対応は`art/d001/generation-spec.json`へ固定した。
+- Playerは30 frameを別姿勢から構築した。alphaを二値化した人物silhouetteからconnected componentを選別し、その内側をpixel単位でbody、helmet、tool、pack、bootsへ一意所有させた。合成順を`pack → body → boots → tool → helmet → Cargo`へ修正し、矩形mask由来の不透明背景を除去した。
+- NPCは40×40 cell、原則anchor `(20, 38)`で接続した。Crew MinerはPlayerと同じ比率・30姿勢を基礎に、装備rarity用4 bankを持つ。NPCのAI、座標、速度、状態遷移は変えず、`semanticRenderState`が既存state、timer、Swing、job進捗からclipとframeを導出する。
+- Cargoは12×10 cellの12 class atlasとし、全`LootKind`を網羅する対応表と`equipmentSeed`優先規則を追加した。地面、Player・Porter・Crew所持中、Elevator内部、Floor Cargo、D-001の容量表示で共用する。Elevator内部は後面の後、前面・扉の前へ描画する。
+- Player、Porter、Crew Miner、Crew Porter、Engineer、Cargoを独立fallback groupにした。各groupが`loading`または`error`の間だけ該当する既存図形を描き、他groupと操作経路は維持する。
+- 後処理はD-001共通パレット、nearest-neighbor、alpha 0/255、metadata除去を固定し、連続2回の実行で全runtime PNGのhash一致を確認した。寸法、alpha、パレット、cell外周、30 frameの重複、clip内の最小差分、所有レイヤー再合成一致を自動検査する。
+- 比較資料は`docs/assets/stage3/follow-up/`へ保存した。白・黒・市松背景、walk、mine-swing、Cargo、Porter配送状態、Crew・Engineer作業状態、grayscaleで透過、姿勢差、接地点、装備接続、実背景との合成を確認した。
+- `npm run assets:d001`、typecheck、production build、Vitest 79件、Playwright 7件に成功した。初回手動配送、Porter、Crew採掘・配送、Engineerの既存遷移はsimulation testと代表画面で確認し、NPC・Cargo素材を個別に失敗させたE2Eでもclick、`MINE`、対象とCargoが消えないことを確認した。
+- Simulation、イベント、乱数、経済、保存形式、Stage 1の対象・hit領域・重なり、Stage 2の案内と入力経路は変更していない。Rail Cart、Cargo Hub、Freight Cage、Bore本体とD-002以降はStage 4以降へ残す。
 
 ## 完了条件
 

@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { COLLECT_DURATION, LOAD_DURATION, SWING } from '../src/game/config';
+import { COLLECT_DURATION, LOAD_DURATION, LOOT, PORTER_COLLECT_DURATION, PORTER_LOAD_DURATION, SWING } from '../src/game/config';
 import { createGameState } from '../src/game/createGame';
-import { characterClip, deriveSemanticRenderState, nodeVisualState } from '../src/render/semanticRenderState';
+import { unlockCrewOperations } from '../src/game/phase5';
+import type { LootKind, LootStack } from '../src/game/types';
+import {
+  cargoVisualClass,
+  characterClip,
+  crewClip,
+  deriveSemanticRenderState,
+  engineerClip,
+  nodeVisualState,
+  porterClip,
+} from '../src/render/semanticRenderState';
 
 describe('semantic render state', () => {
   it('maps every CharacterState to the fixed Stage 3 clip', () => {
@@ -49,5 +59,60 @@ describe('semantic render state', () => {
     state.run.elevator.state = 'ASCENDING';
     const semantic = deriveSemanticRenderState(state, 0);
     expect(semantic.elevator).toMatchObject({ width: 'narrow', door: 'closed' });
+  });
+
+  it('maps Porter timers and carried states without saving display frames', () => {
+    const state = createGameState(9404);
+    state.run.porter.enabled = true;
+    state.run.porter.state = 'COLLECTING';
+    state.run.porter.collectTimer = PORTER_COLLECT_DURATION * 0.75;
+    expect(deriveSemanticRenderState(state, 0).porter).toMatchObject({ clip: 'collect', row: 4, frame: 3 });
+    state.run.porter.state = 'LOADING';
+    state.run.porter.loadingTimer = PORTER_LOAD_DURATION * 0.5;
+    expect(deriveSemanticRenderState(state, 0).porter).toMatchObject({ clip: 'load', row: 7, frame: 2 });
+    expect(porterClip('WAITING_FOR_ELEVATOR', true)).toBe('carry-idle');
+  });
+
+  it('maps Crew role states and shares the mining hit frame', () => {
+    const state = createGameState(9405);
+    state.meta.runIndex = 2;
+    state.run.scrap = 50_000;
+    state.run.depth.unlocked = ['D-001', 'D-030', 'D-060', 'D-100'];
+    state.run.research.completed = ['DEEP_SURVEY', 'CORE_RESONANCE', 'CREW_ROUTING', 'CARGO_SCHEDULER'];
+    state.run.porter.enabled = true;
+    state.run.porter.state = 'FIND_LOOT';
+    expect(unlockCrewOperations(state)).toBe(true);
+    const miner = state.run.phase5.crew.members.find((member) => member.role === 'MINER')!;
+    miner.state = 'MINING';
+    miner.swing = { elapsed: SWING.hitAt, hitApplied: true };
+    expect(crewClip(miner)).toBe('mine-swing');
+    expect(deriveSemanticRenderState(state, 0).crew.get(miner.id)).toMatchObject({ clip: 'mine-swing', row: 3, frame: 3 });
+    const porter = state.run.phase5.crew.members.find((member) => member.role === 'PORTER')!;
+    porter.state = 'DEPOSITING';
+    porter.loadingTimer = COLLECT_DURATION * 0.75;
+    expect(deriveSemanticRenderState(state, 0).crew.get(porter.id)).toMatchObject({ clip: 'load', row: 7, frame: 3 });
+  });
+
+  it('derives Engineer work frames and direction from job progress', () => {
+    const state = createGameState(9406);
+    state.run.engineer.unlocked = true;
+    state.run.engineer.state = 'INSTALLING';
+    state.run.engineer.x = 300;
+    state.run.engineer.job = { id: 'job', kind: 'RAIL_INSTALL', targetId: 'rail', depth: 'D-001', progress: 5, requiredProgress: 10 };
+    expect(engineerClip(state.run.engineer.state)).toBe('work');
+    expect(deriveSemanticRenderState(state, 0).engineer).toMatchObject({ clip: 'work', row: 2, frame: 2, facing: 1 });
+  });
+
+  it('maps every LootKind to a Cargo visual class and prioritizes equipmentSeed', () => {
+    const mapped = (Object.keys(LOOT) as LootKind[]).map((kind) => cargoVisualClass({ kind, category: LOOT[kind].category }));
+    expect(mapped).toHaveLength(35);
+    expect(new Set(mapped)).toEqual(new Set([
+      'rock', 'metal', 'copper', 'gold', 'gem', 'fossil', 'relic', 'research', 'anomaly', 'core',
+      'equipment-crate', 'industrial-crate',
+    ]));
+    expect(cargoVisualClass({ kind: 'STONE', category: 'CORE' })).toBe('core');
+    expect(cargoVisualClass({ kind: 'STONE', category: 'RESEARCH' })).toBe('research');
+    expect(cargoVisualClass({ kind: 'STONE', category: 'ORE', equipmentSeed: 1 } as Pick<LootStack, 'kind' | 'category' | 'equipmentSeed'>))
+      .toBe('equipment-crate');
   });
 });

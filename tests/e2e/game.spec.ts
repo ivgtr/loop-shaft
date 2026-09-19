@@ -106,6 +106,38 @@ test('keeps D-001 operable when individual image targets fail to load', async ({
   expect(pageErrors).toEqual([]);
 });
 
+test('keeps NPC and Cargo paths visible and operable when their image groups fail independently', async ({ page }) => {
+  const state = createGameState(9100);
+  state.run.porter.enabled = true;
+  state.run.porter.state = 'FIND_LOOT';
+  state.run.floors['D-001'].loot.push({
+    id: 'fallback-cargo', kind: 'COPPER', name: 'Copper', rarity: 'UNCOMMON', category: 'ORE',
+    weight: 1.7, value: 18, dataValue: 0, coreValue: 0, x: 300, y: 206, originDepth: 'D-001',
+  });
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+    key: SAVE_KEY,
+    value: serializeGameState(state),
+  });
+  const failed = [
+    'npc-porter-atlas.png', 'npc-crew-miner-atlas.png', 'npc-crew-porter-atlas.png',
+    'npc-engineer-atlas.png', 'cargo-items-atlas.png',
+  ];
+  for (const file of failed) await page.route(`**/${file}`, (route) => route.abort());
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await page.goto('/');
+
+  const canvas = page.getByLabel('LOOP SHAFT mining floor');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  const x = box!.x + box!.width * (118 / 480);
+  const y = box!.y + box!.height * (201 / 270);
+  await page.mouse.click(x, y);
+  await expect(page.getByRole('heading', { name: 'Scrap Ledge' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'MINE' })).toBeEnabled({ timeout: 10_000 });
+  expect(pageErrors).toEqual([]);
+});
+
 test('keeps Bore hover and selected context aligned in a later-game state', async ({ page }) => {
   const state = createGameState(9101);
   state.run.depth.current = 'D-400';

@@ -1,8 +1,53 @@
-import { COLLECT_DURATION, LOAD_DURATION, SWING, WORLD } from '../game/config';
-import type { CharacterState, GameState, MiningNode } from '../game/types';
+import {
+  COLLECT_DURATION,
+  LOAD_DURATION,
+  PORTER_COLLECT_DURATION,
+  PORTER_LOAD_DURATION,
+  RAIL_STOP_X,
+  SWING,
+  WORLD,
+} from '../game/config';
+import type {
+  CharacterState,
+  CrewMember,
+  EngineerJob,
+  EngineerState,
+  EquipmentRarity,
+  GameState,
+  LootKind,
+  LootStack,
+  MiningNode,
+  PorterState,
+  SwingState,
+} from '../game/types';
 
 export type CharacterClip = 'idle' | 'walk' | 'mine-ready' | 'mine-swing' | 'collect' | 'carry-walk' | 'carry-idle' | 'load';
 export type NodeVisualState = 'full' | 'damaged' | 'critical' | 'depleted';
+export type PorterClip = 'idle' | 'walk' | 'collect' | 'carry-walk' | 'carry-idle' | 'load';
+export type CrewMinerClip = 'idle' | 'walk' | 'mine-ready' | 'mine-swing';
+export type EngineerClip = 'idle' | 'walk' | 'work' | 'complete';
+export type CargoVisualClass =
+  | 'rock' | 'metal' | 'copper' | 'gold' | 'gem' | 'fossil'
+  | 'relic' | 'research' | 'anomaly' | 'core' | 'equipment-crate' | 'industrial-crate';
+
+export interface ActorRenderState<Clip extends string> {
+  readonly clip: Clip;
+  readonly row: number;
+  readonly frame: number;
+  readonly facing: -1 | 1;
+  readonly worldAnchor: { readonly x: number; readonly y: number };
+  readonly carried: readonly LootStack[];
+}
+
+export type PorterRenderState = ActorRenderState<PorterClip>;
+export interface CrewRenderState extends ActorRenderState<PorterClip | CrewMinerClip> {
+  readonly role: CrewMember['role'];
+  readonly toolBank: 0 | 1 | 2 | 3;
+  readonly visible: boolean;
+}
+export interface EngineerRenderState extends ActorRenderState<EngineerClip> {
+  readonly visible: boolean;
+}
 
 const CLIP_ROW: Record<CharacterClip, number> = {
   idle: 0,
@@ -35,10 +80,14 @@ export interface CharacterRenderState {
   readonly toolBank: 0 | 1;
   readonly packBank: 0 | 1;
   readonly bootsBank: 0 | 1;
+  readonly carried: readonly LootStack[];
 }
 
 export interface SemanticRenderState {
   readonly character: CharacterRenderState;
+  readonly porter: PorterRenderState | null;
+  readonly crew: ReadonlyMap<string, CrewRenderState>;
+  readonly engineer: EngineerRenderState | null;
   readonly nodes: ReadonlyMap<string, NodeVisualState>;
   readonly elevator: {
     readonly width: 'normal' | 'narrow';
@@ -59,7 +108,11 @@ export function deriveSemanticRenderState(state: Readonly<GameState>, animationT
       toolBank: state.run.tool.level - 1 as 0 | 1,
       packBank: state.run.pack.level - 1 as 0 | 1,
       bootsBank: state.run.boots.level - 1 as 0 | 1,
+      carried: state.run.character.carried,
     },
+    porter: state.run.porter.enabled ? derivePorterRenderState(state, animationTimeMs) : null,
+    crew: new Map(state.run.phase5.crew.members.map((member) => [member.id, deriveCrewRenderState(state, member, animationTimeMs)])),
+    engineer: state.run.engineer.unlocked ? deriveEngineerRenderState(state, animationTimeMs) : null,
     nodes: new Map(state.run.floors[state.run.depth.current].nodes.map((node) => [node.id, nodeVisualState(node)])),
     elevator: {
       width: state.run.anomaly.selected === 'EMPTY_SHAFT' ? 'narrow' : 'normal',
@@ -67,6 +120,135 @@ export function deriveSemanticRenderState(state: Readonly<GameState>, animationT
       y: WORLD.elevatorBottomY + (WORLD.topY - WORLD.elevatorBottomY) * state.run.elevator.position,
     },
   };
+}
+
+const PORTER_ROW: Record<PorterClip, number> = {
+  idle: 0, walk: 1, collect: 4, 'carry-walk': 5, 'carry-idle': 6, load: 7,
+};
+
+export function porterClip(state: PorterState, carried: boolean): PorterClip {
+  if (state === 'MOVING_TO_LOOT') return 'walk';
+  if (state === 'COLLECTING') return 'collect';
+  if (state === 'RETURNING_TO_ELEVATOR') return 'carry-walk';
+  if (state === 'WAITING_FOR_ELEVATOR') return 'carry-idle';
+  if (state === 'LOADING') return 'load';
+  return carried ? 'carry-idle' : 'idle';
+}
+
+export function derivePorterRenderState(state: Readonly<GameState>, now: number): PorterRenderState {
+  const porter = state.run.porter;
+  const clip = porterClip(porter.state, porter.carried.length > 0);
+  const frame = clip === 'collect'
+    ? progressFrame(porter.collectTimer, PORTER_COLLECT_DURATION, 4)
+    : clip === 'load'
+      ? progressFrame(porter.loadingTimer, PORTER_LOAD_DURATION, 4)
+      : loopFrame(now, clip === 'walk' || clip === 'carry-walk' ? 135 : 500, clip === 'walk' || clip === 'carry-walk' ? 4 : 2);
+  return {
+    clip, row: PORTER_ROW[clip], frame, facing: porter.facing,
+    worldAnchor: { x: Math.round(porter.x), y: Math.round(porter.y) + 8 }, carried: porter.carried,
+  };
+}
+
+export function crewClip(member: Readonly<CrewMember>): PorterClip | CrewMinerClip {
+  if (member.role === 'MINER') {
+    if (member.state === 'MOVING_TO_NODE' || member.state === 'MOVING_TO_ELEVATOR') return 'walk';
+    if (member.state === 'MINING') return member.swing ? 'mine-swing' : 'mine-ready';
+    return 'idle';
+  }
+  if (member.state === 'MOVING_TO_LOOT') return 'walk';
+  if (member.state === 'COLLECTING') return 'collect';
+  if (member.state === 'RETURNING_TO_CARGO') return 'carry-walk';
+  if (member.state === 'DEPOSITING') return 'load';
+  if (member.state === 'MOVING_TO_ELEVATOR') return member.body.carried.length > 0 ? 'carry-walk' : 'walk';
+  return member.body.carried.length > 0 ? 'carry-idle' : 'idle';
+}
+
+export function deriveCrewRenderState(state: Readonly<GameState>, member: Readonly<CrewMember>, now: number): CrewRenderState {
+  const clip = crewClip(member);
+  const frame = clip === 'mine-swing'
+    ? swingFrame(member.swing)
+    : clip === 'collect'
+      ? progressFrame(member.collectTimer, PORTER_COLLECT_DURATION, 4)
+      : clip === 'load'
+        ? progressFrame(member.loadingTimer, COLLECT_DURATION, 4)
+        : loopFrame(now, clip === 'walk' || clip === 'carry-walk' ? 135 : clip === 'mine-ready' ? 350 : 500,
+          clip === 'walk' || clip === 'carry-walk' ? 4 : 2);
+  const equipped = member.equipment.TOOL
+    ? state.run.phase5.equipment.inventory.find((item) => item.id === member.equipment.TOOL)
+    : undefined;
+  return {
+    role: member.role,
+    clip,
+    row: CLIP_ROW[clip as CharacterClip],
+    frame,
+    facing: member.body.facing,
+    worldAnchor: { x: Math.round(member.body.x), y: Math.round(member.body.y) + 8 },
+    carried: member.body.carried,
+    toolBank: equipmentBank(equipped?.rarity),
+    visible: member.assignedDepth === state.run.depth.current && member.state !== 'TRAVELING',
+  };
+}
+
+const ENGINEER_ROW: Record<EngineerClip, number> = { idle: 0, walk: 1, work: 2, complete: 3 };
+
+export function engineerClip(state: EngineerState): EngineerClip {
+  if (state === 'MOVING_TO_MACHINE') return 'walk';
+  if (state === 'INSTALLING' || state === 'REPAIRING') return 'work';
+  if (state === 'COMPLETE') return 'complete';
+  return 'idle';
+}
+
+export function deriveEngineerRenderState(state: Readonly<GameState>, now: number): EngineerRenderState {
+  const engineer = state.run.engineer;
+  const clip = engineerClip(engineer.state);
+  const targetX = engineer.job ? engineerJobTargetX(state, engineer.job) : engineer.x + 1;
+  const frame = clip === 'work' && engineer.job
+    ? progressFrame(engineer.job.progress, engineer.job.requiredProgress, 4)
+    : loopFrame(now, clip === 'walk' ? 150 : 500, clip === 'walk' || clip === 'work' ? 4 : 2);
+  return {
+    clip, row: ENGINEER_ROW[clip], frame, facing: targetX >= engineer.x ? 1 : -1,
+    worldAnchor: { x: Math.round(engineer.x), y: WORLD.floorY }, carried: [],
+    visible: engineer.assignedDepth === state.run.depth.current && engineer.state !== 'LOCKED',
+  };
+}
+
+function engineerJobTargetX(state: Readonly<GameState>, job: Readonly<EngineerJob>): number {
+  if (job.kind === 'RAIL_INSTALL' || job.kind === 'JAM_RECOVERY') return RAIL_STOP_X - 12;
+  if (job.kind === 'FREIGHT_INSTALL' || job.kind === 'SHAFT_EXTENSION') return WORLD.elevatorX + 54;
+  if (job.kind === 'BORE_INSTALL') {
+    const bore = state.run.deepAutomation.bores.find((candidate) => candidate.id === job.targetId);
+    const node = bore ? state.run.floors[bore.depth].nodes.find((candidate) => candidate.id === bore.siteId) : undefined;
+    return node?.x ?? RAIL_STOP_X;
+  }
+  return WORLD.elevatorX;
+}
+
+function equipmentBank(rarity: EquipmentRarity | undefined): 0 | 1 | 2 | 3 {
+  return rarity === 'RARE' ? 1 : rarity === 'EPIC' ? 2 : rarity === 'ANCIENT' ? 3 : 0;
+}
+
+const CARGO_BY_KIND: Record<LootKind, CargoVisualClass> = {
+  STONE: 'rock', IRON: 'metal', COPPER: 'copper', GOLD_NUGGET: 'gold', NATURAL_GOLD: 'gold', GEM: 'gem',
+  OLD_COIN: 'gold', POCKET_WATCH: 'gold', TRILOBITE: 'fossil', AMMONITE: 'fossil', ANCIENT_FISH: 'fossil',
+  REPTILE_TOOTH: 'fossil', STRANGE_VERTEBRA: 'fossil', PROSPECTOR_LENS: 'relic', RHYTHM_RELAY: 'relic',
+  HUNTER_COMPASS: 'relic', STRIDE_MODULE: 'relic', FRACTURE_CORE: 'relic', BLACK_GLASS_HEART: 'anomaly',
+  CRYSTAL_MEMORY: 'research', SURVEY_CARTRIDGE: 'research', DAMAGED_RESEARCH_LOG: 'research',
+  RESONANCE_SHARD: 'research', UNKNOWN_INSTRUMENT: 'research', CORE_FRAGMENT: 'core', CORE_MATRIX: 'core',
+  ANCIENT_TOOL_CRATE: 'equipment-crate', ANCIENT_PACK_CRATE: 'equipment-crate', ANCIENT_LAMP_CRATE: 'equipment-crate',
+  ARCHIVE_DEVICE: 'research', LOST_SIGNAL_SAMPLE: 'research', ANCIENT_ALLOY: 'metal', RAIL_PARTS: 'industrial-crate',
+  NULL_SAMPLE: 'research', DEEP_COMPONENT: 'industrial-crate',
+};
+
+export function cargoVisualClass(item: Pick<LootStack, 'kind' | 'category' | 'equipmentSeed'>): CargoVisualClass {
+  if (item.equipmentSeed !== undefined) return 'equipment-crate';
+  const byKind = CARGO_BY_KIND[item.kind];
+  if (byKind === 'equipment-crate' || byKind === 'industrial-crate') return byKind;
+  if (item.category === 'CORE') return 'core';
+  if (item.category === 'RESEARCH') return 'research';
+  if (item.category === 'ANOMALY') return 'anomaly';
+  if (item.category === 'FOSSIL') return 'fossil';
+  if (item.category === 'RELIC') return 'relic';
+  return byKind;
 }
 
 export function characterClip(state: CharacterState, hasSwing: boolean): CharacterClip {
@@ -89,14 +271,22 @@ export function nodeVisualState(node: Pick<MiningNode, 'hp' | 'maxHp'>): NodeVis
 
 function characterFrame(state: Readonly<GameState>, clip: CharacterClip, now: number): number {
   if (clip === 'mine-swing') {
-    const elapsed = state.run.character.swing?.elapsed ?? 0;
-    if (elapsed < SWING.hitAt) return Math.min(2, Math.floor(elapsed / SWING.hitAt * 3));
-    return 3 + Math.min(4, Math.floor((elapsed - SWING.hitAt) / (SWING.total - SWING.hitAt) * 5));
+    return swingFrame(state.run.character.swing);
   }
   if (clip === 'collect') return progressFrame(state.run.character.collectTimer, COLLECT_DURATION, 4);
   if (clip === 'load') return progressFrame(state.run.character.loadingTimer, LOAD_DURATION, 4);
   const duration = clip === 'walk' || clip === 'carry-walk' ? 100 : clip === 'mine-ready' ? 350 : 500;
-  return Math.floor(now / duration) % CLIP_FRAMES[clip];
+  return loopFrame(now, duration, CLIP_FRAMES[clip]);
+}
+
+function swingFrame(swing: Readonly<SwingState> | null): number {
+  const elapsed = swing?.elapsed ?? 0;
+  if (elapsed < SWING.hitAt) return Math.min(2, Math.floor(elapsed / SWING.hitAt * 3));
+  return 3 + Math.min(4, Math.floor((elapsed - SWING.hitAt) / (SWING.total - SWING.hitAt) * 5));
+}
+
+function loopFrame(now: number, duration: number, frames: number): number {
+  return Math.floor(now / duration) % frames;
 }
 
 function progressFrame(elapsed: number, duration: number, frames: number): number {

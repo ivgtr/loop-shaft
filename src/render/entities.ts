@@ -6,9 +6,12 @@ import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
 import {
   canDrawD001Player,
+  drawD001Cargo,
+  drawD001CarriedCargo,
   drawD001Elevator,
   drawD001Node,
   drawD001Player,
+  drawD001Porter,
   drawD001Workbench,
   type D001AssetStore,
 } from './d001ImageRenderer';
@@ -24,10 +27,17 @@ export function drawEntities(
   drawNodes(ctx, state, semantic, assets);
   drawWorkbench(ctx, state, assets);
   if (state.run.depth.current === 'D-030') drawScanner(ctx, state, now);
-  if (state.run.porter.enabled) drawPorter(ctx, state, now);
-  if (state.run.depth.current === 'D-001' && semantic && assets && canDrawD001Player(assets)) drawD001Player(ctx, semantic, assets);
-  else drawCharacter(ctx, state, now);
-  drawLoot(ctx, state, now);
+  if (state.run.porter.enabled) {
+    const porterImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets && drawD001Porter(ctx, semantic, assets));
+    if (!porterImage) drawPorter(ctx, state, now);
+    else if (semantic?.porter && assets && !drawD001CarriedCargo(ctx, semantic.porter, assets)) drawFallbackCarriedCargo(ctx, semantic.porter);
+  }
+  const playerImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets && canDrawD001Player(assets));
+  if (playerImage) {
+    drawD001Player(ctx, semantic!, assets!);
+    if (!drawD001CarriedCargo(ctx, semantic!.character, assets!)) drawFallbackCarriedCargo(ctx, semantic!.character);
+  } else drawCharacter(ctx, state, now);
+  drawLoot(ctx, state, now, assets);
   const elevatorImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets && drawD001Elevator(ctx, state, semantic, assets));
   if (!elevatorImage) drawElevator(ctx, state, now);
   drawLiftControl(ctx, state, elevatorImage);
@@ -78,14 +88,26 @@ function drawNode(ctx: CanvasRenderingContext2D, node: MiningNode, depth: DepthI
   if (ratio < 0.4) { ctx.fillRect(node.x - 7, node.y - 8, 8, 1); ctx.fillRect(node.x - 3, node.y - 13, 1, 6); }
 }
 
-function drawLoot(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
+function drawLoot(ctx: CanvasRenderingContext2D, state: GameState, now: number, assets?: D001AssetStore): void {
   for (const item of currentFloor(state).loot) {
     const special = rarityRank(item.rarity) >= 2;
     const bob = special && Math.floor(now / 180) % 2 === 0 ? -1 : 0;
-    ctx.fillStyle = lootColor(item.kind);
-    ctx.fillRect(Math.round(item.x) - 2, Math.round(item.y) - 3 + bob, 5, 4);
+    const cargoImage = Boolean(state.run.depth.current === 'D-001' && assets && drawD001Cargo(ctx, item, item.x, item.y + 1 + bob, assets));
+    if (!cargoImage) {
+      ctx.fillStyle = lootColor(item.kind);
+      ctx.fillRect(Math.round(item.x) - 2, Math.round(item.y) - 3 + bob, 5, 4);
+    }
     if (special) { ctx.fillStyle = rarityColor(item.rarity); ctx.fillRect(Math.round(item.x), Math.round(item.y) - 6 + bob, 1, 1); }
   }
+}
+
+function drawFallbackCarriedCargo(
+  ctx: CanvasRenderingContext2D,
+  actor: { readonly carried: readonly { readonly kind: LootKind }[]; readonly facing: -1 | 1; readonly worldAnchor: { readonly x: number; readonly y: number } },
+): void {
+  if (actor.carried.length === 0) return;
+  ctx.fillStyle = lootColor(actor.carried[0]!.kind);
+  ctx.fillRect(actor.worldAnchor.x + actor.facing * 6 - (actor.facing > 0 ? 0 : 6), actor.worldAnchor.y - 12, 6, 8);
 }
 
 function drawWorkbench(ctx: CanvasRenderingContext2D, state: GameState, assets?: D001AssetStore): void {

@@ -12,6 +12,11 @@ export const D001_ASSET_FILES = {
   playerTool: 'player-tool-atlas.png',
   playerPack: 'player-pack-atlas.png',
   playerBoots: 'player-boots-atlas.png',
+  npcPorter: 'npc-porter-atlas.png',
+  npcCrewMiner: 'npc-crew-miner-atlas.png',
+  npcCrewPorter: 'npc-crew-porter-atlas.png',
+  npcEngineer: 'npc-engineer-atlas.png',
+  cargoItems: 'cargo-items-atlas.png',
   nodeScrapLedge: 'node-scrap-ledge-atlas.png',
   nodeCopperPocket: 'node-copper-pocket-atlas.png',
   nodeFossilCrack: 'node-fossil-crack-atlas.png',
@@ -26,6 +31,15 @@ export const D001_BACKGROUND_KEYS = [
 export const D001_PLAYER_KEYS = [
   'playerBody', 'playerHelmet', 'playerTool', 'playerPack', 'playerBoots',
 ] as const satisfies readonly D001AssetKey[];
+
+export const D001_FALLBACK_GROUPS = {
+  player: D001_PLAYER_KEYS,
+  porter: ['npcPorter'],
+  crewMiner: ['npcCrewMiner'],
+  crewPorter: ['npcCrewPorter'],
+  engineer: ['npcEngineer'],
+  cargo: ['cargoItems'],
+} as const satisfies Record<string, readonly D001AssetKey[]>;
 
 export const D001_NODE_ASSETS = {
   'scrap-ledge': 'nodeScrapLedge',

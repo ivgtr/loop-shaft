@@ -4,13 +4,14 @@ import type { CrewMember, EquipmentItem, EquipmentRarity, GameEvent, GameState, 
 import { CanvasRenderer } from './canvasRenderer';
 import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
-import type { D001AssetStore } from './d001ImageRenderer';
+import { drawD001Cargo, drawD001CarriedCargo, drawD001Crew, type D001AssetStore } from './d001ImageRenderer';
+import { deriveSemanticRenderState, type SemanticRenderState } from './semanticRenderState';
 
 export class Phase5Renderer {
   private readonly base: CanvasRenderer;
   private readonly ctx: CanvasRenderingContext2D;
 
-  constructor(canvas: HTMLCanvasElement, assets: D001AssetStore) {
+  constructor(canvas: HTMLCanvasElement, private readonly assets: D001AssetStore) {
     this.base = new CanvasRenderer(canvas, assets);
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas 2D context is required.');
@@ -31,9 +32,10 @@ export class Phase5Renderer {
     if (state.run.elevator.travel) return;
     this.ctx.save();
     if ((state.run.depth.current as string) === 'D-180') drawAncientRuins(this.ctx, state, now);
+    const semantic = deriveSemanticRenderState(state, now);
     if (state.run.phase5.crew.unlocked) {
-      drawCargoPlatform(this.ctx, state);
-      drawCrew(this.ctx, state, now);
+      drawCargoPlatform(this.ctx, state, this.assets);
+      drawCrew(this.ctx, state, now, semantic, this.assets);
     }
     drawCrewBoard(this.ctx, state, now);
     drawCargoRouteIndicator(this.ctx, state);
@@ -66,7 +68,7 @@ function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: num
   ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.white; ctx.fillText(crew.unlocked ? 'SHIFT BOARD' : 'CREW BOARD', x + 5, y + 27);
 }
 
-function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState): void {
+function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, assets: D001AssetStore): void {
   const floor = phase5Floor(state, state.run.depth.current as Phase5DepthId);
   if (!floor) return;
   const x = WORLD.elevatorX + 38;
@@ -78,19 +80,34 @@ function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState): voi
   for (let index = 0; index < count; index += 1) {
     const row = Math.floor(index / 4); const col = index % 4;
     const item = floor.cargo[index]!;
-    ctx.fillStyle = item.equipmentSeed !== undefined ? '#8b795f' : item.category === 'CORE' ? '#9e8067' : item.category === 'RESEARCH' ? '#718e96' : '#755f43';
-    ctx.fillRect(x + 4 + col * 8, y - 8 - row * 5, 6, 4);
+    const cargoImage = state.run.depth.current === 'D-001' && drawD001Cargo(ctx, item, x + 7 + col * 8, y - 4 - row * 5, assets);
+    if (!cargoImage) {
+      ctx.fillStyle = item.equipmentSeed !== undefined ? '#8b795f' : item.category === 'CORE' ? '#9e8067' : item.category === 'RESEARCH' ? '#718e96' : '#755f43';
+      ctx.fillRect(x + 4 + col * 8, y - 8 - row * 5, 6, 4);
+    }
   }
   if (floor.cargo.length > 8) {
     ctx.font = '4px monospace'; ctx.fillStyle = '#c8bda8'; ctx.fillText(`+${floor.cargo.length - 8}`, x + 27, y - 10);
   }
 }
 
-function drawCrew(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
+function drawCrew(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  now: number,
+  semantic: SemanticRenderState,
+  assets: D001AssetStore,
+): void {
   const depth = state.run.depth.current as Phase5DepthId;
   for (const member of state.run.phase5.crew.members) {
     if (member.assignedDepth !== depth || member.state === 'TRAVELING') continue;
-    drawCrewMember(ctx, state, member, now);
+    const actor = semantic.crew.get(member.id);
+    const imageDrawn = Boolean(state.run.depth.current === 'D-001' && actor && drawD001Crew(ctx, actor, assets));
+    if (!imageDrawn) drawCrewMember(ctx, state, member, now);
+    else if (actor && !drawD001CarriedCargo(ctx, actor, assets) && actor.carried.length > 0) {
+      ctx.fillStyle = '#735e43';
+      ctx.fillRect(actor.worldAnchor.x + actor.facing * 6 - (actor.facing > 0 ? 0 : 6), actor.worldAnchor.y - 12, 6, 8);
+    }
   }
 }
 
