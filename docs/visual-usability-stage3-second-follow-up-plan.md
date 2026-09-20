@@ -467,3 +467,182 @@ Original LOOP SHAFT D-001 elevator layer sheet. Orthographic 56x44 logical-pixel
 
 - Elevator sourceの固定cropは現在の生成sheetへ記録済みで、同sourceを差し替える場合はcropとSHA-256の同時更新が必要である。
 - 目視・E2Eは代表状態に限定しており、全GameState組み合わせのgolden画像比較は行っていない。D-030以深の背景設備化、性能目標、Stage 4以降の変更は今回の範囲外として持ち越さない。
+
+## Stage 3 第3次追加対応計画（2026-09-20、未実装）
+
+`8593f25`実装後の実画面確認で得た次のフィードバックを対象とする。
+
+- 歩行が「左足が前→真横→右足が前」の周期として読めず、真横姿勢の上下動も不足している。
+- Canvas内の文字が潰れ、hoverラベル、案内、施設名、状態表示を読めない。
+- 坑道、縦坑、Elevatorの木材・金属表現が平坦で、素材感が弱い。
+- 採掘姿勢の足が不自然で、頭付近に用途を判別できない黒い物体が現れる。
+
+480×270の論理解像度、GameStateからRendererへの一方向、Simulation・イベント・乱数・経済・保存形式、Player・NPC・Elevator・Cargoのworld座標とanchor、Stage 1・2の操作契約、対象別fallbackを維持する。D-001以外の全面的な素材更新やStage 4以降へは広げない。
+
+### 現行原因
+
+#### 歩行
+
+`semanticRenderState.ts`はPlayerの`worldX`と`facing`から4pxごとに4frameを純粋導出しており、時間依存の足送りは発生していない。一方、`process-d001-assets.mjs`の`rebuildWalkFrame`は元frameの足元5pxだけを4px移動している。頭、胴体、左右脚の前後関係を再構成していないため、4frameが「左右の接地とすれ違い」ではなく、似た全歩幅姿勢の切り替えに見える。
+
+#### Canvas文字
+
+Canvasは480×270のbacking storeへ`4px`から`8px`のブラウザ依存`monospace`を`fillText`している。極小文字がアンチエイリアス付きで描画された後、CSSでCanvas全体が拡大されるため、細い字画と文字間が潰れる。`image-rendering: pixelated`はCanvas要素の拡大方法だけを変え、`fillText`内部の字画を整数pixelへ変換しない。
+
+Canvas文字は`environment.ts`、`interactionOverlay.ts`、`initialGuideOverlay.ts`、`entities.ts`、`phase5Renderer.ts`、`gameRenderer.ts`、`canvasRenderer.ts`へ分散している。DOMのHUDとContextPanelはCSS文字であり、同じ原因ではない。
+
+#### 構造素材
+
+高解像度の生成元をruntimeと異なる縦横比へ`point`で強制縮小し、その後に限定paletteへremapしている。
+
+- 坑道構造は約`740x243`を`194x48`へ縮小する。
+- 通常幅Elevatorは約`330x643`を`42x43`へ縮小する。
+- 狭幅Elevatorは約`206x645`を`32x43`へ縮小する。
+
+生成元にある細い木目、面の陰影、金属端面、継手が1pxノイズまたは均一な矩形へ縮退している。特にElevatorは縦方向の圧縮率が大きく、既存sourceの再cropだけでは素材感を回復できない。
+
+#### 足と頭部の黒い物体
+
+Playerのtool maskは採掘frame別になったが、HelmetとBootsは全frame共通の矩形maskである。
+
+- Helmetは各cellの`y=0..15`にある全opaque pixelを所有する。
+- Bootsは各cellの`y=33..39`にある全opaque pixelを所有する。
+
+mine-swingではつるはしが頭上と足元を横切るため、tool pixelの一部がHelmetまたはBootsへ混入し、元の暗色で再合成される。実際にmine-swingのHelmet layerはframeごとにbboxが`6x1`から`27x9`まで変動し、Boots layerは幅34pxから38pxへ広がるframeがある。足だけ、Helmetだけの所有範囲として成立していない。
+
+### Bitmap font
+
+`src/render/pixelText.ts`へ、整数pixelだけで描くコード定義のbitmap fontを追加する。
+
+- 標準表示は5x7 glyph、計器と短い補助表示は3x5 glyphとする。
+- 英大文字、数字、空白、主要ASCII記号、`·`、`→`を収録する。
+- Canvas内の小文字は大文字へ正規化し、未定義glyphは`?`を表示する。
+- `measurePixelText`とleft・center・right alignmentを共通化する。
+- glyph、文字間、背景box、配置座標を整数にする。
+- font画像や外部font、依存packageは追加しない。
+
+既存の`fillText`と`measureText`はCanvas描画から除き、次を共通helperへ移す。
+
+- hoverラベルと初回案内。
+- 施設名、深度番号、`SEND`、Cargo数、Lift表示。
+- Elevator移動画面、発見banner、獲得通知。
+- D-001以深でCanvasへ描く設備名と状態表示。
+
+文字列、意味、表示条件、label anchor、hoverとselectionの優先順位は変更しない。DOMのHUD、ContextPanel、buttonは現状を維持する。
+
+### Player walk
+
+40x40 cell、anchor `(20,38)`、4frame、`worldX`と`facing`からの純粋導出を維持し、姿勢を次に固定する。
+
+| frame | 姿勢 | 上下位置 |
+| ---: | --- | --- |
+| 0 | 左足が前、右足が後ろ | 通常 |
+| 1 | 両脚が真横ですれ違う | 頭と胴体を1px上げる |
+| 2 | 右足が前、左足が後ろ | 通常 |
+| 3 | 両脚が真横ですれ違う | 頭と胴体を1px上げる |
+
+frame 1と3は脚と腕の前後関係を反転し、同一画像の重複にはしない。全frameで接地点`y=37`を維持し、頭頂の上下差は1pxに限定する。`walk`と`carry-walk`は同じ脚周期を共有し、carry時のCargo位置と腕の接続を維持する。
+
+現行の`generated-player-animation.png`には接地姿勢と真横姿勢へ再構成できるpixelがあるため、Player全体は再生成しない。40x40の論理pixel上でframeを決定的に再構成する。移動速度、world座標、保存状態、Renderer時刻に依存する新しいanimationは追加しない。
+
+### Player layer所有と採掘姿勢
+
+`generation-spec.json`へHelmet、Boots、Toolのframe別所有範囲を記録し、全frame共通矩形maskを置き換える。
+
+- Helmetは帽体とlampだけを所有する。
+- Bootsは左右の靴だけを所有する。
+- 手、前腕、脚、身体はBodyが所有する。
+- つるはしのhandleとmetal headはToolが所有する。
+- 各所有maskを元composite alphaと交差させ、mask内の背景や別部品を取得しない。
+- Tool Level 1・2はhandleと手を共有し、headだけを変更する既存条件を維持する。
+
+mine-ready 2frameとmine-swing 8frameでは、靴の上端と脚を連続させ、片足または両足を`y=37`へ接地させる。Boots layerへ横長の帯やtool片を残さず、crouch時も前脚と後脚を判別できるsilhouetteにする。
+
+つるはしheadは各採掘frameでneutral metalの中間色またはhighlightを最低1px残し、handleとの接続を読めるようにする。Helmetより前へ不自然な黒い孤立componentを残さない。既存の`SWING.hitAt`、frame数、採掘判定、Tool Levelの性能は変更しない。
+
+### D-001 structural material pass
+
+画像フィードバックに写る次の構造物へ限定して素材表現を更新する。
+
+- 坑道の梁、柱、筋交い、継手。
+- 縦坑の木製支柱、金属継手、rail。
+- Elevatorの外枠、床、扉、操作盤。
+- 地上接続と坑底junctionの接続面。
+
+岩盤、鉱脈、Cargo、Workshop、D-030以深の背景は本追加対応で作り直さない。
+
+最初に坑道1区画`194x48`とElevator 1cell`56x44`をruntime実寸のprototypeとして作る。通常色とgrayscaleの双方で次を満たした場合だけ、同じ規則を全状態へ展開する。
+
+- 木材は暗い外周、基調色、長手方向の木目、節または欠けを持つ。
+- 金属は暗い面、端面highlight、継手、rivetsを持つ。
+- 床とrailは木材と異なる直線的な反射を持つ。
+- 同じ柱や梁を完全複製せず、固定した2から3 patternを使う。
+- 1pxのランダムノイズだけで素材感を表現しない。
+- grayscaleでも木と金属を輪郭と明度差で識別できる。
+
+既存生成元は構図、色、接続位置の基準として再利用する。Elevatorはsourceとruntimeの縦横比が大きく異なるため、現行の固定プロンプト、`reference-environment.png`、`generated-background-shaft-back.png`、`reference-equipment.png`を用い、runtime cellの比率へ合う簡潔な大面構成で再生成する。坑道と縦坑は実寸prototypeで既存sourceの再処理を先に試し、木材と金属を判別できない場合だけ対象部分を再生成する。
+
+背景全体、world座標、anchor、占有幅、地上接続軸、坑底sealed/open、Rope、Elevatorのnormal/narrow・open/closed状態、Cargo・人物を内部へ収めるlayer順は維持する。
+
+### 変更責務
+
+- `art/d001/generation-spec.json`: walk姿勢、Helmet・Boots・Tool所有、material rule、prototypeと再生成条件。
+- `art/d001/sources/generated-player-animation.png`: 原則再利用し、Player全体の再生成は行わない。
+- `art/d001/sources/`: 必要性をprototypeで確認した構造sourceだけを更新する。
+- `scripts/process-d001-assets.mjs`: walk再構成、frame別装備mask、採掘姿勢、runtime実寸material処理。
+- `src/render/pixelText.ts`: bitmap glyph、幅計算、alignment、整数描画。
+- `src/render/environment.ts`, `src/render/interactionOverlay.ts`, `src/render/initialGuideOverlay.ts`, `src/render/entities.ts`, `src/render/phase5Renderer.ts`, `src/render/gameRenderer.ts`, `src/render/canvasRenderer.ts`: Canvas文字を共通bitmap fontへ移行する。
+- `public/assets/d001/runtime/`: Player 5 layer、坑道構造、縦坑、Elevator、必要な上下junctionを更新する。
+- `tests/assets.test.ts`, `tests/semanticRenderState.test.ts`, bitmap fontの限定unit、既存代表E2E: 今回の不具合を直接検出する条件だけを追加する。
+- `docs/assets/stage3/second-follow-up/`: 変更前後の代表画像を追加する。
+- 本文書: 実装結果、検証結果、残るリスクを追記する。新しい計画書は作らない。
+
+### 検証規模と性能目標の制約
+
+本追加対応は視覚的不具合の修正であり、性能改善、描画基盤の刷新、テスト基盤の拡張を目的にしない。過度な性能ゴールや網羅的なテストを完了条件にしない。
+
+- FPS、frame time、描画時間、メモリ量、bundle sizeへ新しい数値目標を設けない。
+- profiling、benchmark、長時間負荷試験、端末別性能測定を追加しない。
+- bitmap fontやmaterial描画に明白な問題がない限り、cache、atlas再編、offscreen Canvasなどの最適化を追加しない。
+- 全pixelのgolden snapshot、全glyph画像snapshot、全GameState組み合わせの画像比較を追加しない。
+- 全文字列、全viewport、全装備組み合わせのE2E網羅を求めない。
+- unit testは純粋なframe導出、glyph幅、layer所有、asset寸法・palette・alphaの代表条件に限定する。
+- E2Eは既存操作経路と、今回の不具合が見える代表的なD-001状態に限定する。
+- 素材感の品質を脆いpixel数閾値だけで代替せず、runtime実寸とgrayscaleの目視を正本とする。
+- 同じ条件で成功済みの検証は、新しい変更、失敗、疑問がない限り繰り返さない。
+
+### 自動検査
+
+- walkが`左足前→真横→右足前→真横`の順となる。
+- 真横姿勢だけ頭頂が1px上がり、全frameの接地点は`y=37`となる。
+- 左右移動で同じ周期を反転表示し、Renderer時刻だけではframeが変化しない。
+- Helmet layerへtool-head pixel、Boots layerへtool pixelと横長の非足componentが混入しない。
+- mine-readyとmine-swing全frameでhandleとheadが視覚的に接続する。
+- Tool Level間でhandleと手を共有し、headだけが変化する。
+- bitmap fontの必須glyph、整数幅計算、left・center・right alignment、画面端clampが成立する。
+- 更新素材の寸法、anchor、alpha 0/255、D-001 palette、対象別fallbackを維持する。
+- Elevator全状態の外枠、床、anchor、占有幅、内部収容範囲が変化しない。
+
+### 目視確認
+
+- walkとcarry-walkの4frame strip、左右方向、実寸と拡大表示。
+- mine-ready、mine-swing全frame、Tool Level 1・2。
+- 初期案内、hoverラベル、`SEND`、施設名、深度表示、移動画面、発見banner、獲得通知。
+- 480px相当、2倍相当、非整数倍率の代表viewport。
+- 初期D-001と進行後D-001の坑道、縦坑、地上接続、坑底。
+- Elevator上端・中間・下端、open/closed、normal/narrow、空荷、Cargo、人物搭乗。
+- 通常色とgrayscale。
+
+### 実装順序と完了条件
+
+1. `8593f25`と今回のフィードバック画像を変更前証拠として固定する。
+2. Bitmap fontを導入し、Canvas文字を共通描画へ移行する。
+3. Helmet、Boots、Toolのframe別所有maskを実装する。
+4. mine-ready・mine-swingの足とつるはしの可読性を修正する。
+5. walk・carry-walkの4姿勢を再構成する。
+6. 坑道1区画とElevator 1cellのmaterial prototypeをruntime実寸で確認する。
+7. 合格したmaterial ruleを対象構造と全Elevator状態へ展開する。
+8. 限定unit、typecheck、build、代表E2E、通常色・grayscale目視を行う。
+9. 今回の範囲で見つかった問題を修正し、本正本へ実装結果を追記する。
+
+完了条件は、歩行が左右の接地と真横姿勢を持つ一貫した周期として読めること、Canvas内の代表文字を非整数倍率でも読めること、木材と金属を通常色・grayscaleの双方で区別できること、採掘姿勢の足が身体へ自然につながり頭上に用途不明の孤立物がないこと、既存の操作・Simulation・保存形式・座標・anchor・fallbackを維持することである。
