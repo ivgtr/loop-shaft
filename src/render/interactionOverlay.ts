@@ -2,6 +2,7 @@ import { WORLD } from '../game/config';
 import type { Selection } from '../game/types';
 import type { InteractionTarget, Rect } from './interactionTargets';
 import { sameInteractionTarget } from './interactionTargets';
+import { drawPixelText, fitPixelFont, measurePixelText } from './pixelText';
 
 const COLORS = {
   normal: '#716b63',
@@ -73,8 +74,8 @@ function drawAvailabilityMark(ctx: CanvasRenderingContext2D, rect: Rect, availab
 
 function drawHoverLabel(ctx: CanvasRenderingContext2D, target: InteractionTarget): void {
   const text = target.shortStatus ? `${target.displayName} · ${target.shortStatus}` : target.displayName;
-  ctx.font = '5px monospace';
-  const width = Math.ceil(ctx.measureText(text).width) + 6;
+  const font = fitPixelFont(text, WORLD.width - 12);
+  const width = measurePixelText(text, font) + 6;
   const height = 10;
   const x = Math.round(clamp(target.labelAnchor.x - width / 2, 2, WORLD.width - width - 2));
   let y = Math.round(target.labelAnchor.y - height);
@@ -85,8 +86,7 @@ function drawHoverLabel(ctx: CanvasRenderingContext2D, target: InteractionTarget
   ctx.strokeStyle = target.primaryActionAvailable ? COLORS.available : COLORS.unavailable;
   ctx.strokeRect(crisp(x), crisp(y), width, height);
   ctx.fillStyle = COLORS.labelText;
-  ctx.textAlign = 'left';
-  ctx.fillText(text, x + 3, y + 7);
+  drawPixelText(ctx, text, x + 3, y + 7, { font, baseline: 'bottom' });
 }
 
 function crisp(value: number): number {

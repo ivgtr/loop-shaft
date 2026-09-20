@@ -125,6 +125,38 @@
       "rows": { "mine-ready": 2, "mine-swing": 3 },
       "ownership": "handle and metal-head coordinates only; hands and forearms remain body-owned",
       "encoding": "per-frame rectangle runs in cell-local pixel coordinates",
+      "layerMasks": {
+        "helmet": { "source": "composite-minus-effective-tool", "regionY": 0, "regionHeight": 16, "keepTopComponents": 2, "includes": ["helmet", "lamp"], "miningRowsUseFrameRects": true },
+        "boots": { "source": "composite-minus-effective-tool", "regionY": 33, "regionHeight": 5, "keepTopComponents": 2, "contactY": 37, "excludes": ["tool", "leg-above-contact-band"] },
+        "body": { "source": "composite-minus-tool-and-non-body-masks", "ownsRemainder": true }
+      },
+      "orphanRects": {
+        "mine-ready": [[], []],
+        "mine-swing": [[[10, 5, 10, 4]], [[6, 5, 10, 4]], [], [], [], [], [], []]
+      },
+      "helmetOrphanRects": {
+        "mine-ready": [[[16, 5, 10, 3]], [[6, 7, 7, 3], [27, 15, 4, 4]]],
+        "mine-swing": [[], [[15, 16, 3, 2]], [], [[32, 24, 3, 5]], [[30, 19, 2, 5]], [[23, 18, 1, 1]], [], []]
+      },
+      "toolRepairs": {
+        "mine-swing": {
+          "sourceFrame": 2,
+          "targets": [[0, [31, 17, 7, 6], [28, 24, 32, 20]], [3, [18, 8, 12, 7], [27, 14, 33, 24]]],
+          "rule": "reuse source metal-head crop and bridge to the existing handle before level remap"
+        }
+      },
+      "toolBridges": {
+        "mine-ready": [[], []],
+        "mine-swing": [[], [20, 9, 28, 18], [22, 8, 28, 22], [22, 13, 34, 27], [23, 14, 32, 25], [22, 10, 27, 20], [20, 8, 28, 22], [23, 10, 27, 23]]
+      },
+      "toolOrphanRects": {
+        "mine-ready": [[[22, 19, 2, 3]], []],
+        "mine-swing": [[], [[19, 25, 1, 1]], [[32, 11, 3, 6]], [[18, 29, 9, 2]], [], [], [[32, 16, 3, 2]], []]
+      },
+      "helmetRects": {
+        "mine-ready": [[10, 5, 20, 14], [6, 6, 25, 13]],
+        "mine-swing": [[10, 10, 20, 14], [6, 9, 22, 15], [13, 8, 19, 13], [17, 15, 18, 14], [12, 12, 20, 13], [6, 7, 22, 14], [7, 7, 22, 14], [10, 8, 20, 14]]
+      },
       "toolRects": {
         "mine-ready": [[22, 17, 17, 14], [21, 17, 18, 14]],
         "mine-swing": [[22, 17, 17, 14], [19, 1, 20, 25], [17, 2, 22, 27], [18, 8, 21, 23], [20, 8, 19, 23], [18, 4, 21, 27], [18, 1, 21, 28], [18, 5, 21, 26]]
@@ -147,9 +179,14 @@
       "strideStep": 4,
       "frameCount": 4,
       "phase": "positiveModulo(floor(facing * worldX / strideStep), frameCount)",
+      "frameRoles": ["left-foot-forward", "side-upper-body-up", "right-foot-forward", "side-upper-body-up"],
+      "sideFrames": [1, 3],
+      "sideUpperBodyOffsetY": -1,
+      "walkSourceBaselineCorrectionY": [0, 0, 2, 2],
+      "carryWalkSourceBaselineCorrectionY": [0, -1, -1, -1],
       "contactY": 37,
-      "supportPairs": [[0, 1], [2, 3]],
-      "supportFootCellX": [[26, 22], [26, 22]],
+      "anchor": [20, 38],
+      "footSourcePolicy": "retain-each-source-pose; never copy a five-pixel foot strip from a neighboring frame",
       "maximumVerticalBob": 1,
       "clips": ["walk", "carry-walk"]
     },
@@ -243,6 +280,17 @@
   "backgroundFloor": {
     "shaftOpening": [216, 223, 49, 47],
     "reason": "keep the dynamic sealed/open junction visible after the static floor layer"
+  },
+  "structuralMaterialPass": {
+    "scope": ["tunnel-beams", "shaft-posts", "shaft-joints", "shaft-rail", "elevator-frame", "elevator-floor", "elevator-control-panel", "tunnel-rail"],
+    "prototypeCells": { "tunnel": [194, 48], "elevator": [56, 44] },
+    "sourcePolicy": "reuse-recorded-crops; add deterministic runtime-size material marks after point resize",
+    "wood": { "edge": "dark outer keyline", "base": "#583828", "grain": "#6f4930", "knots": "#392319", "patternCount": 3 },
+    "metal": { "face": "#43413e", "edgeHighlight": "#b8a795", "joints": "fixed rivet pairs", "patternCount": 2 },
+    "rail": { "darkEdge": "#1c1413", "highlight": "#77706c", "notRandom": true },
+    "grayscaleRule": "wood keeps warm midtone and longitudinal dark marks; metal keeps higher-value edge and joint contrast",
+    "elevatorStates": ["normal-back", "narrow-back", "normal-open-front", "narrow-open-front", "normal-closed-overlay", "narrow-closed-overlay", "fixed-control-panel"],
+    "doNotRegenerate": ["rock", "ore", "cargo", "workbench", "D-030-and-deeper-background"]
   },
   "cargoCells": [
     { "class": "rock", "crop": [25, 288, 163, 170], "targetBounds": [9, 8] },

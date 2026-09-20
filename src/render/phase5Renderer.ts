@@ -18,6 +18,7 @@ import {
   deriveSemanticRenderState,
   type SemanticRenderState,
 } from './semanticRenderState';
+import { drawPixelText } from './pixelText';
 
 export class Phase5Renderer {
   private readonly base: CanvasRenderer;
@@ -77,7 +78,8 @@ function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: num
     ctx.fillStyle = '#b6aa8d'; ctx.fillRect(x + 44, y + 18, 8, 5);
     ctx.fillStyle = '#5c5447'; ctx.fillRect(x + 46, y + 19, 4, 1);
   }
-  ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.white; ctx.fillText(crew.unlocked ? 'SHIFT BOARD' : 'CREW BOARD', x + 5, y + 27);
+  ctx.fillStyle = PALETTE.white;
+  drawPixelText(ctx, crew.unlocked ? 'SHIFT BOARD' : 'CREW BOARD', x + 5, y + 27, { font: 'standard', baseline: 'bottom' });
 }
 
 function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, assets: D001AssetStore): void {
@@ -102,7 +104,8 @@ function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, asse
     }
   }
   if (floor.cargo.length > 8) {
-    ctx.font = '4px monospace'; ctx.fillStyle = '#c8bda8'; ctx.fillText(`+${floor.cargo.length - 8}`, x + 27, y - 10);
+    ctx.fillStyle = '#c8bda8';
+    drawPixelText(ctx, `+${floor.cargo.length - 8}`, x + 27, y - 10, { font: 'compact', baseline: 'bottom' });
   }
 }
 
@@ -164,7 +167,8 @@ function drawCargoRouteIndicator(ctx: CanvasRenderingContext2D, state: GameState
   const route = state.run.phase5.cargo.route;
   if (!route) return;
   ctx.fillStyle = '#16181a'; ctx.fillRect(267, 41, 36, 11);
-  ctx.font = '4px monospace'; ctx.fillStyle = '#9f9278'; ctx.fillText(`LIFT→${route.targetDepth.replace('D-', '')}`, 270, 48);
+  ctx.fillStyle = '#9f9278';
+  drawPixelText(ctx, `LIFT→${route.targetDepth.replace('D-', '')}`, 270, 48, { font: 'compact', baseline: 'bottom' });
   const ratio = 1 - route.remaining / route.duration;
   ctx.fillStyle = '#776a50'; ctx.fillRect(270, 50, Math.max(1, Math.round(29 * ratio)), 1);
 }

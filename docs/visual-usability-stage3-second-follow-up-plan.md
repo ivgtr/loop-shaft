@@ -468,7 +468,7 @@ Original LOOP SHAFT D-001 elevator layer sheet. Orthographic 56x44 logical-pixel
 - Elevator sourceの固定cropは現在の生成sheetへ記録済みで、同sourceを差し替える場合はcropとSHA-256の同時更新が必要である。
 - 目視・E2Eは代表状態に限定しており、全GameState組み合わせのgolden画像比較は行っていない。D-030以深の背景設備化、性能目標、Stage 4以降の変更は今回の範囲外として持ち越さない。
 
-## Stage 3 第3次追加対応計画（2026-09-20、未実装）
+## Stage 3 第3次追加対応（2026-09-20、実装済み）
 
 `8593f25`実装後の実画面確認で得た次のフィードバックを対象とする。
 
@@ -646,3 +646,34 @@ mine-ready 2frameとmine-swing 8frameでは、靴の上端と脚を連続させ�
 9. 今回の範囲で見つかった問題を修正し、本正本へ実装結果を追記する。
 
 完了条件は、歩行が左右の接地と真横姿勢を持つ一貫した周期として読めること、Canvas内の代表文字を非整数倍率でも読めること、木材と金属を通常色・grayscaleの双方で区別できること、採掘姿勢の足が身体へ自然につながり頭上に用途不明の孤立物がないこと、既存の操作・Simulation・保存形式・座標・anchor・fallbackを維持することである。
+
+### 実装結果（2026-09-20）
+
+- `8593f25`を機能実装直前、`e99cf50`を現行基準として変更前証拠を固定した。主な変更前画像のSHA-256は、walk `53d877b8d9cec4c50ae8700e93579bea73b71e29a98058670d445ad826119ccd`、carry-walk `8a6b0d3b34409c78ad8a80209a1d67341d6fdfb77504a043b47165142ccd0253`、mine-swing `e52d26f7b5c863477ddcb709ae4c4018fab7f76b5632c629d28df3ad98a7c00d`、初期画面 `37f3cbb707fc740eef1131e205625c4530d15c25a1f9d1fbe1e40246fc443105`、Elevator閉扉normal `6977e505b72e9aec5cc0e539da454b6fc151d80c66efd107e4cbeaa661fba3d6`である。
+- `src/render/pixelText.ts`に依存packageなしの5x7標準glyphと3x5 compact glyphを追加した。英大文字・数字・主要記号・`·`・`→`・未知glyphの`?`を定義し、`measurePixelText`、left/center/right、top/bottom baseline、整数pixel描画を共通化した。Canvasの`fillText`・`measureText`はrender系から除去し、文字列、条件、anchor、boxのclampは維持した。DOMのHUD、ContextPanel、button、`src/style.css`は変更していない。
+- Playerは`art/d001/sources/generated-player-animation.png`を再利用し、`scripts/process-d001-assets.mjs`の決定的な後処理だけで姿勢を再構成した。`semanticRenderState.ts`の`worldX`・`facing`由来の4frame位相は変更していない。walkの最終頭頂は`8/7/8/7`、carry-walkは`13/12/13/12`、全frameの接地点は`y=37`で、frame 0/2を通常、frame 1/3を上体1px上げた真横姿勢に揃えた。anchor `(20,38)`、左右反転、carryのCargo位置、時刻非依存を維持した。
+- Helmet、Boots、Body、Toolのframe別所有maskを`generation-spec.json`へ固定した。Helmetはmine-readyの上方孤立成分とtool漏れを除去し、Bootsは`y=33..37`の接触帯だけを所有する。mine-ready 2frameとmine-swing 8frameのhandle/headは固定bridgeで接続し、Level 2はhandle・手・前腕をLevel 1と共有してhead paletteだけを変更した。Player sourceの再生成は行っていない。
+- 構造素材は`art/d001/sources/`の既存cropを再利用し、`194x48`の坑道1区画、`56x44`のElevator 1cellをprototypeとして、runtime実寸の固定material passを適用した。木材は暗い外周・基調色・長手grain・固定knots、金属は面・端面highlight・継手・rivets、rail/floorは別の直線highlightとした。坑道、縦坑、床、Elevator全normal/narrow・open/closed層へ展開し、既存の地上接続・坑底junction・Rope・sealed/open・Cargo/人物の描画順と収容範囲は維持した。prototypeは通常色とgrayscaleで合格し、Elevatorや岩盤・鉱脈・Cargo・Workshop・D-030以深のsource再生成は行っていない。
+
+### 変更ファイルと比較資料
+
+- コード: `src/render/pixelText.ts`、`src/render/{environment,initialGuideOverlay,interactionOverlay,phase5Renderer,gameRenderer,canvasRenderer,entities}.ts`。
+- 生成仕様・後処理・検査: `art/d001/generation-spec.json`、`scripts/process-d001-assets.mjs`、`tests/assets.test.ts`、`tests/pixelText.test.ts`。
+- runtime: `public/assets/d001/runtime/`のbackground-floor、background-shaft-back、background-tunnel-structure、central-elevator-atlas、Player 5 layer、npc-crew-miner atlasを更新した。`art/d001/palette.json`と既存source画像は維持した。
+- 比較資料: [walk比較](../assets/stage3/second-follow-up/player-walk-comparison.png)、[初期画面比較](../assets/stage3/second-follow-up/new-game-comparison.png)、[初期画面grayscale比較](../assets/stage3/second-follow-up/new-game-grayscale-comparison.png)、[mine-swing比較](../assets/stage3/follow-up/player-mine-swing-third-follow-up-comparison.png)。代表after画像は`docs/assets/stage3/second-follow-up/after/player-walk-frames.png`、`player-carry-walk-frames.png`、`stage3-second-follow-up-new-game.png`、`stage3-second-follow-up-elevator-closed-normal.png`と各grayscale、mine-swingは`docs/assets/stage3/follow-up/after/player-mine-swing-frames.png`へ更新した。
+
+### 検証結果
+
+- `npm run assets:d001`: 成功。runtime寸法、alpha 0/255、D-001 palette、layer再合成条件を後処理内で確認した。
+- `npm test -- --run`: 9 files / 93 tests passed。bitmap fontのglyph幅・未知glyph・alignment、walk/carry-walkのframe順・top差1px・接地、採掘Toolの接続、Helmet孤立成分、Boots接触帯、Tool Level差分、asset条件を検査した。
+- `npm run typecheck`: 成功。
+- `npm run build`: 成功。
+- Playwrightは既存の`tests/e2e/game.spec.ts` 8件を、4173番の外部Next.jsアプリを避けた一時4174番Vite serverへ向けて実行し、8件すべて成功した。操作経路、click/tap、再click、Space、`MINE`、`SEND`、D-030、fallback、後段Boreを確認した。
+- 目視はwalk/carry-walk/mine-ready/mine-swingの実寸・拡大、Tool Level 1/2、初期案内・hover label・施設名・深度・初期Elevator、normal/narrowのElevator atlas、通常色/grayscale、480×270・2倍相当・`777x437`の非整数倍率で行った。Canvas文字は整数字画として読め、木材と金属はgrayscaleでも輪郭と明度差を保ち、mine-swingの頭上孤立物とBootsの横長混入は確認されなかった。
+
+### 残るリスクと範囲外
+
+- bitmap fontは現行Canvas文字列に必要なglyphを収録し、未知文字は`?`へfallbackする。今後新しい文字種をCanvasへ追加する場合はglyph追加が必要である。
+- material passは固定2～3 patternのruntime実寸処理であり、全sourceの再生成ではない。今回の代表状態では合格したが、全pixel golden snapshotや全viewport・全装備組み合わせの画像検査は追加していない。
+- 標準Playwright設定の4173番は外部FGO Labが占有していたため、そのポートでの直接実行は行わず、同じテストを4174番で実行した。外部サーバーは停止・変更していない。
+- Simulation、イベント、乱数、経済、保存形式、world座標、anchor、Stage 1/2の対象・hit領域・操作、対象別fallback、DOM HUD、D-002以降、Stage 4以降、性能目標・profiling・依存関係は範囲外として維持した。コミットは作成していない。

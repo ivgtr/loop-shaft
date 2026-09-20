@@ -17,6 +17,7 @@ import { d001AssetUrls, type D001AssetKey } from './assets/d001Manifest';
 import { drawD001ActorShadow, drawD001Cargo, drawD001Engineer } from './d001ImageRenderer';
 import { drawD001ElevatorFrontLayer } from './entities';
 import { D001_VISUAL_GROUND_OFFSET, deriveSemanticRenderState } from './semanticRenderState';
+import { drawPixelText } from './pixelText';
 
 export class GameRenderer {
   private readonly base: Phase5Renderer;
@@ -171,11 +172,9 @@ function drawD650(ctx: CanvasRenderingContext2D, now: number): void {
   ctx.fillRect(116, 82, 248, 59);
   ctx.fillStyle = Math.floor(now / 1200) % 2 ? '#635e53' : '#4e4b43';
   ctx.fillRect(230, 101, 20, 4);
-  ctx.font = '7px monospace';
   ctx.fillStyle = '#8d887b';
-  ctx.fillText('???', 232, 95);
-  ctx.font = '5px monospace';
-  ctx.fillText('D-650', 8, 48);
+  drawPixelText(ctx, '???', 232, 95, { font: 'standard', baseline: 'bottom' });
+  drawPixelText(ctx, 'D-650', 8, 48, { font: 'standard', baseline: 'bottom' });
 }
 
 function drawTransportLine(ctx: CanvasRenderingContext2D, state: GameState, assets: AssetStore<D001AssetKey>): void {
@@ -289,7 +288,6 @@ function cargoPips(
 }
 
 function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
-  ctx.font = '5px monospace';
   ctx.fillStyle = '#8c877d';
-  ctx.fillText(text, x, y);
+  drawPixelText(ctx, text, x, y, { font: 'standard', baseline: 'bottom' });
 }

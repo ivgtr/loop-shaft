@@ -2,6 +2,7 @@ import { WORLD } from '../game/config';
 import type { InitialLogisticsGuide } from '../game/initialLogisticsGuide';
 import type { GameState } from '../game/types';
 import { sameInteractionTarget, type InteractionTarget, type Point } from './interactionTargets';
+import { drawPixelText, fitPixelFont, measurePixelText } from './pixelText';
 
 const BACKGROUND = '#0b0b0df0';
 const BORDER = '#d0aa5f';
@@ -39,8 +40,8 @@ export function drawDeliveryNotice(ctx: CanvasRenderingContext2D, amount: number
 
 function drawGuideLabel(ctx: CanvasRenderingContext2D, text: string, anchor: Point): void {
   ctx.save();
-  ctx.font = 'bold 6px monospace';
-  const width = Math.ceil(ctx.measureText(text).width) + 8;
+  const font = fitPixelFont(text, WORLD.width - 12);
+  const width = measurePixelText(text, font) + 8;
   const height = 11;
   const x = Math.round(clamp(anchor.x - width / 2, 2, WORLD.width - width - 2));
   let y = Math.round(anchor.y - height);
@@ -51,8 +52,7 @@ function drawGuideLabel(ctx: CanvasRenderingContext2D, text: string, anchor: Poi
   ctx.strokeStyle = BORDER;
   ctx.strokeRect(x + 0.5, y + 0.5, width, height);
   ctx.fillStyle = TEXT;
-  ctx.textAlign = 'left';
-  ctx.fillText(text, x + 4, y + 8);
+  drawPixelText(ctx, text, x + 4, y + 8, { font, baseline: 'bottom' });
   ctx.restore();
 }
 

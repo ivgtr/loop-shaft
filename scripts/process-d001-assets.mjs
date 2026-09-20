@@ -42,11 +42,15 @@ function quantize(input, destination, includeReserved = false, role = null) {
     '-background', '#000000', '-alpha', 'background', '-strip', destination);
 }
 
-function selectLargestComponent(input, destination) {
+function selectComponents(input, destination, keepTop = 1) {
   const mask = join(work, `component-${Math.random().toString(16).slice(2)}.png`);
-  magick(input, '-alpha', 'extract', '-threshold', '50%', '-define', 'connected-components:keep-top=1',
+  magick(input, '-alpha', 'extract', '-threshold', '50%', '-define', `connected-components:keep-top=${keepTop}`,
     '-connected-components', '8', '-auto-level', '-threshold', '0', mask);
   magick(input, mask, '-compose', 'DstIn', '-composite', destination);
+}
+
+function selectLargestComponent(input, destination) {
+  selectComponents(input, destination, 1);
 }
 
 function addKeyline(input, destination, clearFootPerimeter = false) {
@@ -63,7 +67,7 @@ function addKeyline(input, destination, clearFootPerimeter = false) {
   } else magick(merged, destination);
 }
 
-function placeFixedCrops(entries, destination, role, opaqueFill = null) {
+function placeFixedCrops(entries, destination, role, opaqueFill = null, postprocess = null) {
   const canvas = join(work, `fixed-canvas-${destination}`);
   const baseArgs = ['-size', '480x270', 'xc:none'];
   if (opaqueFill) {
@@ -88,15 +92,21 @@ function placeFixedCrops(entries, destination, role, opaqueFill = null) {
     magick(current, resized, '-geometry', `+${x}+${y}`, '-composite', next);
     current = next;
   }
-  quantize(current, join(output, destination), false, role);
+  const processed = join(work, `fixed-processed-${destination}`);
+  if (postprocess) postprocess(current, processed);
+  else magick(current, processed);
+  quantize(processed, join(output, destination), false, role);
 }
 
-function placeTrimmed(sourceFile, width, height, x, y, destination, role = null) {
+function placeTrimmed(sourceFile, width, height, x, y, destination, role = null, postprocess = null) {
   const object = join(work, `object-${Math.random().toString(16).slice(2)}.png`);
   const canvas = join(work, `canvas-${Math.random().toString(16).slice(2)}.png`);
   magick(join(source, sourceFile), '-trim', '+repage', '-filter', 'point', '-resize', `${width}x${height}!`, object);
   magick('-size', '480x270', 'xc:none', object, '-geometry', `+${x}+${y}`, '-composite', canvas);
-  quantize(canvas, join(output, destination), false, role);
+  const processed = join(work, `trimmed-processed-${destination}`);
+  if (postprocess) postprocess(canvas, processed);
+  else magick(canvas, processed);
+  quantize(processed, join(output, destination), false, role);
 }
 
 function cropResize(sourceFile, crop, width, height, destination, role = null) {
@@ -111,6 +121,104 @@ function cropResize(sourceFile, crop, width, height, destination, role = null) {
 
 function clearShaftOpening(file) {
   magick(file, '-alpha', 'on', '-fill', 'none', '-draw', 'rectangle 216,223 264,269', file);
+}
+
+function applyTunnelMaterialPass(input, destination) {
+  const commands = [input,
+    '-fill', '#1c1413', '-draw', 'rectangle 22,180 215,183', '-draw', 'rectangle 265,180 457,183',
+    '-fill', '#583828',
+    '-draw', 'rectangle 34,184 37,226', '-draw', 'rectangle 103,184 106,226',
+    '-draw', 'rectangle 174,184 177,226', '-draw', 'rectangle 296,184 299,226',
+    '-draw', 'rectangle 365,184 368,226', '-draw', 'rectangle 439,184 442,226',
+    '-fill', '#6f4930',
+    '-draw', 'rectangle 35,184 35,225', '-draw', 'rectangle 104,184 104,225',
+    '-draw', 'rectangle 175,184 175,225', '-draw', 'rectangle 297,184 297,225',
+    '-draw', 'rectangle 366,184 366,225', '-draw', 'rectangle 440,184 440,225',
+    '-fill', '#392319',
+    '-draw', 'rectangle 29,181 43,183', '-draw', 'rectangle 98,181 112,183',
+    '-draw', 'rectangle 169,181 183,183', '-draw', 'rectangle 291,181 305,183',
+    '-draw', 'rectangle 360,181 374,183', '-draw', 'rectangle 434,181 448,183',
+    '-draw', 'rectangle 38,204 40,206', '-draw', 'rectangle 107,195 109,197',
+    '-draw', 'rectangle 178,212 180,214', '-draw', 'rectangle 300,198 302,200',
+    '-draw', 'rectangle 369,209 371,211', '-draw', 'rectangle 443,193 445,195',
+    '-fill', '#43413e',
+    '-draw', 'rectangle 31,180 44,181', '-draw', 'rectangle 100,180 113,181',
+    '-draw', 'rectangle 171,180 184,181', '-draw', 'rectangle 293,180 306,181',
+    '-draw', 'rectangle 362,180 375,181', '-draw', 'rectangle 436,180 449,181',
+    '-fill', '#b8a795',
+    '-draw', 'rectangle 34,180 35,181', '-draw', 'rectangle 103,180 104,181',
+    '-draw', 'rectangle 174,180 175,181', '-draw', 'rectangle 296,180 297,181',
+    '-draw', 'rectangle 365,180 366,181', '-draw', 'rectangle 439,180 440,181',
+    destination,
+  ];
+  magick(...commands);
+}
+
+function applyShaftMaterialPass(input, destination) {
+  const commands = [input,
+    '-fill', '#392319', '-draw', 'rectangle 216,38 219,223', '-draw', 'rectangle 261,38 264,223',
+    '-fill', '#6f4930', '-draw', 'rectangle 217,39 217,222', '-draw', 'rectangle 262,39 262,222',
+    '-fill', '#43413e', '-draw', 'rectangle 220,52 225,54', '-draw', 'rectangle 255,52 260,54',
+    '-draw', 'rectangle 220,76 225,78', '-draw', 'rectangle 255,76 260,78',
+    '-draw', 'rectangle 220,100 225,102', '-draw', 'rectangle 255,100 260,102',
+    '-draw', 'rectangle 220,124 225,126', '-draw', 'rectangle 255,124 260,126',
+    '-draw', 'rectangle 220,148 225,150', '-draw', 'rectangle 255,148 260,150',
+    '-draw', 'rectangle 220,172 225,174', '-draw', 'rectangle 255,172 260,174',
+    '-draw', 'rectangle 220,196 225,198', '-draw', 'rectangle 255,196 260,198',
+    '-fill', '#77706c', '-draw', 'rectangle 225,38 226,222', '-draw', 'rectangle 253,38 254,222',
+    '-fill', '#b8a795', '-draw', 'rectangle 220,52 220,52', '-draw', 'rectangle 256,52 256,52',
+    '-draw', 'rectangle 220,100 220,100', '-draw', 'rectangle 256,100 256,100',
+    '-draw', 'rectangle 220,172 220,172', '-draw', 'rectangle 256,172 256,172',
+    destination,
+  ];
+  magick(...commands);
+}
+
+function applyFloorMaterialPass(input, destination) {
+  const commands = [input,
+    '-fill', '#1c1413', '-draw', 'rectangle 22,214 215,215', '-draw', 'rectangle 265,214 457,215',
+    '-fill', '#77706c', '-draw', 'rectangle 22,214 215,214', '-draw', 'rectangle 265,214 457,214',
+    '-fill', '#43413e',
+    '-draw', 'rectangle 42,211 45,213', '-draw', 'rectangle 91,211 94,213',
+    '-draw', 'rectangle 143,211 146,213', '-draw', 'rectangle 187,211 190,213',
+    '-draw', 'rectangle 285,211 288,213', '-draw', 'rectangle 337,211 340,213',
+    '-draw', 'rectangle 389,211 392,213', '-draw', 'rectangle 431,211 434,213',
+    destination,
+  ];
+  magick(...commands);
+}
+
+function applyElevatorMaterialPass(input, destination, index, bounds) {
+  const [x, y, width, height] = bounds;
+  const right = x + width - 1;
+  const bottom = y + height - 1;
+  const commands = [input,
+    '-fill', '#140e0c',
+    '-draw', `rectangle ${x},${y} ${right},${y}`,
+    '-draw', `rectangle ${x},${bottom} ${right},${bottom}`,
+    '-draw', `rectangle ${x},${y} ${x},${bottom}`,
+    '-draw', `rectangle ${right},${y} ${right},${bottom}`,
+    '-fill', '#77706c',
+    '-draw', `rectangle ${x + 1},${y + 1} ${right - 1},${y + 1}`,
+    '-draw', `rectangle ${x + 1},${bottom - 1} ${right - 1},${bottom - 1}`,
+    '-fill', '#6f4930', '-draw', `rectangle ${x + 3},${bottom - 3} ${right - 3},${bottom - 2}`,
+    '-fill', '#b8a795',
+    '-draw', `rectangle ${x + 2},${y + 3} ${x + 2},${y + 4}`,
+    '-draw', `rectangle ${right - 2},${y + 3} ${right - 2},${y + 4}`,
+  ];
+  if (index === 4 || index === 5) {
+    commands.push('-fill', '#43413e', '-draw', `rectangle ${Math.floor((x + right) / 2)},${y + 4} ${Math.floor((x + right) / 2)},${bottom - 5}`);
+  }
+  if (index === 6) {
+    commands.push(
+      '-fill', '#43413e', '-draw', `rectangle ${x + 2},${y + 5} ${right - 2},${bottom - 3}`,
+      '-fill', '#b8a795', '-draw', `rectangle ${x + 4},${y + 8} ${x + 5},${y + 9}`,
+      '-draw', `rectangle ${x + 8},${y + 8} ${x + 9},${y + 9}`,
+      '-fill', '#d06055', '-draw', `rectangle ${right - 4},${y + 8} ${right - 3},${y + 9}`,
+    );
+  }
+  commands.push(destination);
+  magick(...commands);
 }
 
 function processJunctions() {
@@ -157,12 +265,12 @@ function processBackgrounds() {
     specification.sourceCrops.tunnelBackRight,
   ], 'background-tunnel-back.png', 'tunnelInterior', '#140e0c');
   placeTrimmed('generated-background-surface-station.png', 82, 34, 199, 4, 'background-surface-station.png', 'structure');
-  placeFixedCrops([specification.sourceCrops.backgroundShaft], 'background-shaft-back.png', 'structure', '#140e0c');
+  placeFixedCrops([specification.sourceCrops.backgroundShaft], 'background-shaft-back.png', 'structure', '#140e0c', applyShaftMaterialPass);
   placeFixedCrops([
     specification.sourceCrops.tunnelStructureLeft,
     specification.sourceCrops.tunnelStructureRight,
-  ], 'background-tunnel-structure.png', 'structure');
-  placeTrimmed('generated-background-floor.png', 480, 60, 0, 210, 'background-floor.png', 'rock');
+  ], 'background-tunnel-structure.png', 'structure', null, applyTunnelMaterialPass);
+  placeTrimmed('generated-background-floor.png', 480, 60, 0, 210, 'background-floor.png', 'rock', applyFloorMaterialPass);
   clearShaftOpening(join(output, 'background-floor.png'));
   processJunctions();
 }
@@ -247,7 +355,9 @@ function processNodesAndEquipment() {
     magick(join(source, 'generated-central-elevator.png'), '-crop', `${cropWidth}x${cropHeight}+${cropX}+${cropY}`, '+repage', raw);
     magick(raw, '-alpha', 'on', '-channel', 'A', '-threshold', '50%', '+channel',
       '-filter', 'point', '-resize', `${targetWidth}x${targetHeight}!`, resized);
-    magick('-size', '56x44', 'xc:none', resized, '-geometry', `+${x}+${y}`, '-composite', cell);
+    const rawCell = join(work, `elevator-${index}-raw-cell.png`);
+    magick('-size', '56x44', 'xc:none', resized, '-geometry', `+${x}+${y}`, '-composite', rawCell);
+    applyElevatorMaterialPass(rawCell, cell, index, bounds);
     return cell;
   });
   const blank = join(work, 'elevator-blank.png');
@@ -357,34 +467,42 @@ function rebuildIdleFrame(base, label, immutableRegions) {
   return current;
 }
 
-function rebuildWalkFrame(base, supportSource, supportShift, label) {
+function rebuildWalkFrame(base, upperOffset, label) {
   const cleared = join(work, `${label}-walk-cleared.png`);
-  const supportCrop = join(work, `${label}-walk-support.png`);
-  const supportCanvas = join(work, `${label}-walk-support-canvas.png`);
+  const upper = join(work, `${label}-walk-upper.png`);
+  const shifted = join(work, `${label}-walk-shifted.png`);
+  const feet = join(work, `${label}-walk-feet.png`);
   const combined = join(work, `${label}-walk-combined.png`);
-  const destinationX = 17 + supportShift;
-  const clearLeft = Math.min(17, destinationX);
-  const clearRight = Math.max(32, destinationX + 15);
-  const offFootEnd = Math.max(0, 16 + supportShift);
-  magick(base, '-region', `${clearRight - clearLeft + 1}x5+${clearLeft}+33`,
-    '-channel', 'A', '-evaluate', 'set', '0', '+channel', '+region', cleared);
-  magick(supportSource, '-crop', '16x5+17+33', '+repage', supportCrop);
-  magick('-size', '40x5', 'xc:none', supportCrop, '-geometry', `+${destinationX}+0`, '-composite', supportCanvas);
-  magick(cleared, supportCanvas, '-geometry', '+0+33', '-composite',
-    '-region', `${offFootEnd + 1}x3+0+35`, '-channel', 'A', '-evaluate', 'set', '0', '+channel', '+region', combined);
+
+  // Keep the source pose's feet intact.  The old pass copied a five-pixel
+  // strip from the preceding pose, which made frames 1 and 3 read as a
+  // repeated foot shuffle.  Side frames now move only the upper body one
+  // pixel upward; each of the four source poses keeps its own leg relation.
+  magick(base, '-region', '40x33+0+0', '-channel', 'A', '-evaluate', 'set', '0', '+channel', '+region', cleared);
+  magick(base, '-crop', '40x33+0+0', '+repage', upper);
+  magick(cleared, upper, '-geometry', `+0${upperOffset >= 0 ? '+' : ''}${upperOffset}`, '-composite', shifted);
+  magick(base, '-crop', '40x5+0+33', '+repage', feet);
+  magick(shifted, feet, '-geometry', '+0+33', '-composite',
+    '-region', '40x2+0+38', '-channel', 'A', '-evaluate', 'set', '0', '+channel', '+region', combined);
   return combined;
 }
 
 function rebuildPlayerMotion(rows) {
   const idle = specification.playerMotion.idle;
+  const walk = specification.playerMotion.walk;
   rows[0][1] = rebuildIdleFrame(rows[0][0], 'idle', idle.immutableRegions);
   rows[6][1] = rebuildIdleFrame(rows[6][0], 'carry-idle', idle.immutableRegions);
-  for (const [row, leadingShift] of [[1, 0], [5, 4]]) {
+  for (const row of [1, 5]) {
     const original = [...rows[row]];
-    rows[row][0] = rebuildWalkFrame(original[0], original[0], leadingShift, `row-${row}-frame-0`);
-    rows[row][1] = rebuildWalkFrame(original[1], original[0], leadingShift - 4, `row-${row}-frame-1`);
-    rows[row][2] = rebuildWalkFrame(original[2], original[2], leadingShift, `row-${row}-frame-2`);
-    rows[row][3] = rebuildWalkFrame(original[3], original[2], leadingShift - 4, `row-${row}-frame-3`);
+    const baseline = row === 5
+      ? walk.carryWalkSourceBaselineCorrectionY
+      : walk.walkSourceBaselineCorrectionY;
+    const offsets = original.map((_, frame) => baseline[frame]
+      + (walk.sideFrames.includes(frame) ? walk.sideUpperBodyOffsetY : 0));
+    rows[row][0] = rebuildWalkFrame(original[0], offsets[0], `row-${row}-frame-0-left-foot`);
+    rows[row][1] = rebuildWalkFrame(original[1], offsets[1], `row-${row}-frame-1-side`);
+    rows[row][2] = rebuildWalkFrame(original[2], offsets[2], `row-${row}-frame-2-right-foot`);
+    rows[row][3] = rebuildWalkFrame(original[3], offsets[3], `row-${row}-frame-3-side`);
   }
 }
 
@@ -416,6 +534,7 @@ function restoreIdleRegionsInAtlas(atlas) {
 }
 
 function processPlayer() {
+  const ownershipSpec = specification.playerOwnership.toolMasks;
   const { rows } = assembleCharacterAtlas(
     'generated-player-animation.png', CHARACTER_FRAMES, 8, [0, 1, 2, 3, 4, 5, 6, 7],
     {
@@ -423,7 +542,54 @@ function processPlayer() {
       keyline: false,
     },
   );
+
+  // A few source cells contain a small detached dark component near the
+  // helmet.  Remove only the recorded orphan rectangle; the remaining source
+  // components are retained so a separated swing head is not lost.
+  for (const [row, clip] of [[2, 'mine-ready'], [3, 'mine-swing']]) {
+    const orphanRects = ownershipSpec.orphanRects[clip];
+    for (let frame = 0; frame < rows[row].length; frame += 1) {
+      const sourceCell = rows[row][frame];
+      const cleaned = join(work, `player-cleaned-${row}-${frame}.png`);
+      const clearMask = join(work, `player-clean-mask-${row}-${frame}.png`);
+      const args = ['-size', '40x40', 'xc:none', '-fill', 'white'];
+      for (const rect of orphanRects[frame] ?? []) {
+        const [x, y, width, height] = rect;
+        args.push('-draw', `rectangle ${x},${y} ${x + width - 1},${y + height - 1}`);
+      }
+      args.push(clearMask);
+      magick(...args);
+      magick(sourceCell, clearMask, '-compose', 'DstOut', '-composite', cleaned);
+      rows[row][frame] = cleaned;
+    }
+  }
   rebuildPlayerMotion(rows);
+
+  // The first and fourth swing source cells crop the pickaxe head at the
+  // source-cell boundary.  Reuse the intact frame-2 head at the recorded
+  // runtime head anchors and bridge it to the existing handle; this keeps the
+  // repair deterministic and leaves level-specific remapping to the material
+  // pass below.
+  const swingHeadSource = rows[3][2];
+  for (const [frame, rect, sourceRect] of [
+    [0, [31, 17, 7, 6], [17, 2, 12, 8]],
+    [3, [18, 8, 12, 7], [17, 2, 12, 8]],
+  ]) {
+    const [x, y, width, height] = rect;
+    const [sourceX, sourceY, sourceWidth, sourceHeight] = sourceRect;
+    const patch = join(work, `player-swing-head-repair-${frame}.png`);
+    const repaired = join(work, `player-swing-repaired-${frame}.png`);
+    magick(swingHeadSource, '-crop', `${sourceWidth}x${sourceHeight}+${sourceX}+${sourceY}`, '+repage',
+      '-filter', 'point', '-resize', `${width}x${height}!`, patch);
+    magick(rows[3][frame], patch, '-geometry', `+${x}+${y}`, '-composite', repaired);
+    const bridged = join(work, `player-swing-bridged-${frame}.png`);
+    if (frame === 0) {
+      magick(repaired, '-stroke', '#583828', '-strokewidth', '2', '-draw', 'line 28,24 32,20', bridged);
+    } else {
+      magick(repaired, '-stroke', '#583828', '-strokewidth', '2', '-draw', 'line 27,14 33,24', bridged);
+    }
+    rows[3][frame] = bridged;
+  }
   addCharacterKeylines(rows, 'player');
   restoreOutlinedIdleInvariants(rows);
   const blank = join(work, 'player-blank.png');
@@ -431,14 +597,11 @@ function processPlayer() {
   quantize(full, playerCompositeReference, false, 'character');
   restoreIdleRegionsInAtlas(playerCompositeReference);
 
-  const activeRects = [];
-  rows.forEach((frames, row) => frames.forEach((_, column) => activeRects.push({ x: column * 40, y: row * 40 })));
   // Pickaxe ownership is intentionally frame-specific.  The source art has the
   // hands touching the handle, so connected-component extraction would assign
   // both materials to the same component.  These conservative rectangles are
   // clipped to the visible pickaxe area below and are kept in the generation
   // spec as the reviewable ownership boundary.
-  const ownershipSpec = specification.playerOwnership.toolMasks;
   const toolRects = {
     2: ownershipSpec.toolRects['mine-ready'],
     3: ownershipSpec.toolRects['mine-swing'],
@@ -466,6 +629,9 @@ function processPlayer() {
   magick(headRectMask, toolMask, '-compose', 'DstIn', '-composite', headMask);
   const handleMask = join(work, 'player-handle-mask.png');
   magick(toolMask, headMask, '-compose', 'DstOut', '-composite', handleMask);
+  const helmetCandidate = makeHelmetOwnershipMask(playerCompositeReference);
+  const helmetOnlyCandidate = join(work, 'player-helmet-only-candidate.png');
+  magick(helmetCandidate, headRectMask, '-compose', 'DstOut', '-composite', helmetOnlyCandidate);
 
   const materialPalette = (name, colors) => {
     const file = join(work, `palette-${name}.png`);
@@ -486,10 +652,49 @@ function processPlayer() {
   const toolLevel1 = join(work, 'player-tool-level1.png');
   const toolLevel2 = join(work, 'player-tool-level2.png');
   magick(playerCompositeReference, toolMask, '-compose', 'DstIn', '-composite', toolLayer);
-  magick(toolLayer, '-fill', 'none', '-opaque', '#e6a02b', '-opaque', '#d89c67', '-opaque', '#a55b2c', '-opaque', '#b45f2e', toolLayerClean);
+  const toolLayerCleanRaw = join(work, 'player-tool-layer-clean-raw.png');
+  magick(toolLayer, '-fill', 'none', '-opaque', '#e6a02b', '-opaque', '#d89c67', '-opaque', '#a55b2c', '-opaque', '#b45f2e', toolLayerCleanRaw);
+  const toolLayerWithoutHelmet = join(work, 'player-tool-layer-without-helmet.png');
+  magick(toolLayerCleanRaw, helmetOnlyCandidate, '-compose', 'DstOut', '-composite', toolLayerWithoutHelmet);
+  const applyToolBridges = (input, destination) => {
+    const bridgeCommands = [input, '-alpha', 'on', '-fill', '#583828', '-stroke', 'none'];
+    for (const [rowString, bridges] of Object.entries(ownershipSpec.toolBridges)) {
+      const row = Number(rowString === 'mine-ready' ? 2 : 3);
+      bridges.forEach((bridge, frame) => {
+        if (bridge.length === 0) return;
+        const [x1, y1, x2, y2] = bridge;
+        const steps = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1));
+        for (let step = 0; step <= steps; step += 1) {
+          const x = frame * 40 + Math.round(x1 + (x2 - x1) * step / steps);
+          const y = row * 40 + Math.round(y1 + (y2 - y1) * step / steps);
+          bridgeCommands.push('-draw', `rectangle ${x - 1},${y - 1} ${x + 1},${y + 1}`);
+        }
+      });
+    }
+    bridgeCommands.push(destination);
+    magick(...bridgeCommands);
+  };
+  const toolLayerWithBridges = join(work, 'player-tool-layer-with-bridges.png');
+  applyToolBridges(toolLayerWithoutHelmet, toolLayerWithBridges);
+  const toolOrphanMask = join(work, 'player-tool-orphan-mask.png');
+  const orphanCommands = ['-size', '320x320', 'xc:none', '-fill', 'white'];
+  for (const [rowString, rectsByFrame] of Object.entries(ownershipSpec.toolOrphanRects)) {
+    const row = Number(rowString === 'mine-ready' ? 2 : 3);
+    rectsByFrame.forEach((rects, frame) => {
+      for (const rect of rects) {
+        const [x, y, width, height] = rect;
+        orphanCommands.push('-draw', `rectangle ${frame * 40 + x},${row * 40 + y} ${frame * 40 + x + width - 1},${row * 40 + y + height - 1}`);
+      }
+    });
+  }
+  orphanCommands.push(toolOrphanMask);
+  magick(...orphanCommands);
+  magick(toolLayerWithBridges, toolOrphanMask, '-compose', 'DstOut', '-composite', toolLayerClean);
   const effectiveToolAlpha = join(work, 'player-tool-mask-effective-alpha.png');
+  const effectiveToolMaskRaw = join(work, 'player-tool-mask-effective-raw.png');
   magick(toolLayerClean, '-alpha', 'extract', '-threshold', '50%', effectiveToolAlpha);
-  magick('-size', '320x320', 'xc:white', effectiveToolAlpha, '-alpha', 'off', '-compose', 'CopyOpacity', '-composite', effectiveToolMask);
+  magick('-size', '320x320', 'xc:white', effectiveToolAlpha, '-alpha', 'off', '-compose', 'CopyOpacity', '-composite', effectiveToolMaskRaw);
+  magick(effectiveToolMaskRaw, helmetOnlyCandidate, '-compose', 'DstOut', '-composite', effectiveToolMask);
   magick(toolLayerClean, handleMask, '-compose', 'DstIn', '-composite', handleLayer);
   magick(toolLayerClean, headMask, '-compose', 'DstIn', '-composite', headLayer);
   const remapMaterial = (input, paletteFile, destination) => {
@@ -502,8 +707,10 @@ function processPlayer() {
   remapMaterial(handleLayer, handlePalette, handleRemapped);
   remapMaterial(headLayer, headLevel1Palette, headLevel1);
   remapMaterial(headLayer, headLevel2Palette, headLevel2);
-  magick(handleRemapped, headLevel1, '-compose', 'Over', '-composite', toolLevel1);
-  magick(handleRemapped, headLevel2, '-compose', 'Over', '-composite', toolLevel2);
+  const handleRemappedBridged = join(work, 'player-tool-handle-remapped-bridged.png');
+  applyToolBridges(handleRemapped, handleRemappedBridged);
+  magick(handleRemappedBridged, headLevel1, '-compose', 'Over', '-composite', toolLevel1);
+  magick(handleRemappedBridged, headLevel2, '-compose', 'Over', '-composite', toolLevel2);
 
   // Make the level-1 composite the canonical reference used by body/layer
   // extraction and reassembly checks.  The level-2 bank only replaces head
@@ -514,14 +721,108 @@ function processPlayer() {
   magick(clearedComposite, toolLevel1, '-compose', 'Over', '-composite', renderedComposite);
   quantize(renderedComposite, playerCompositeReference, false, 'character');
 
-  const masks = {
-    helmet: activeRects.map(({ x, y }) => `rectangle ${x},${y} ${x + 39},${y + 15}`).join(' '),
-    pack: activeRects.map(({ x, y }) => `rectangle ${x},${y + 16} ${x + 14},${y + 32}`).join(' '),
-    boots: activeRects.map(({ x, y }) => `rectangle ${x},${y + 33} ${x + 39},${y + 39}`).join(' '),
-  };
+  const compositeWithoutTool = join(work, 'player-composite-without-tool.png');
+  magick(playerCompositeReference, effectiveToolMask, '-compose', 'DstOut', '-composite', compositeWithoutTool);
+
+  function makeBandComponentMask(sourceFile, name, bandY, bandHeight, keepTop) {
+    const mask = join(work, `player-${name}-mask.png`);
+    let current = join(work, `player-${name}-mask-empty.png`);
+    magick('-size', '320x320', 'xc:none', current);
+    for (const [row, frameCount] of CHARACTER_FRAMES.entries()) {
+      for (let frame = 0; frame < frameCount; frame += 1) {
+        const x = frame * 40;
+        const y = row * 40 + bandY;
+        const cell = join(work, `player-${name}-cell-${row}-${frame}.png`);
+        const selected = join(work, `player-${name}-selected-${row}-${frame}.png`);
+        const next = join(work, `player-${name}-mask-next-${row}-${frame}.png`);
+        magick(sourceFile, '-crop', `${40}x${bandHeight}+${x}+${y}`, '+repage', cell);
+        selectComponents(cell, selected, keepTop);
+        magick(current, selected, '-geometry', `+${x}+${y}`, '-composite', next);
+        current = next;
+      }
+    }
+    magick(current, '-strip', mask);
+    return mask;
+  }
+
+  function makeHelmetOwnershipMask(sourceFile) {
+    let current = makeBandComponentMask(sourceFile, 'helmet-candidate-band', 0, 16, 2);
+    for (const [row, clip] of [[2, 'mine-ready'], [3, 'mine-swing']]) {
+      const definitions = ownershipSpec.helmetRects[clip];
+      for (let frame = 0; frame < definitions.length; frame += 1) {
+        const x = frame * 40;
+        const y = row * 40;
+        const cleared = join(work, `player-helmet-cleared-${row}-${frame}.png`);
+        const sourceCell = join(work, `player-helmet-source-${row}-${frame}.png`);
+        const regionMask = join(work, `player-helmet-region-${row}-${frame}.png`);
+        const pixels = join(work, `player-helmet-pixels-${row}-${frame}.png`);
+        const next = join(work, `player-helmet-next-${row}-${frame}.png`);
+        const cellClearMask = join(work, `player-helmet-cell-clear-mask-${row}-${frame}.png`);
+        magick('-size', '320x320', 'xc:none', '-fill', 'white',
+          '-draw', `rectangle ${x},${y} ${x + 39},${y + 39}`, cellClearMask);
+        magick(current, cellClearMask, '-compose', 'DstOut', '-composite', cleared);
+        magick(sourceFile, '-crop', `40x40+${x}+${y}`, '+repage', sourceCell);
+        const [rectX, rectY, rectWidth, rectHeight] = definitions[frame];
+        magick('-size', '40x40', 'xc:none', '-fill', 'white',
+          '-draw', `rectangle ${rectX},${rectY} ${rectX + rectWidth - 1},${rectY + rectHeight - 1}`, regionMask);
+        magick(sourceCell, regionMask, '-compose', 'DstIn', '-composite', pixels);
+        magick(cleared, pixels, '-geometry', `+${x}+${y}`, '-composite', next);
+        current = next;
+      }
+    }
+    for (const [row, clip] of [[2, 'mine-ready'], [3, 'mine-swing']]) {
+      const orphanRects = ownershipSpec.helmetOrphanRects[clip];
+      for (let frame = 0; frame < orphanRects.length; frame += 1) {
+        const x = frame * 40;
+        const y = row * 40;
+        const rects = orphanRects[frame] ?? [];
+        if (rects.length === 0) continue;
+        const next = join(work, `player-helmet-orphans-cleared-${row}-${frame}.png`);
+        const clearMask = join(work, `player-helmet-orphan-mask-${row}-${frame}.png`);
+        const args = ['-size', '320x320', 'xc:none', '-fill', 'white'];
+        for (const rect of rects) {
+          const [rectX, rectY, rectWidth, rectHeight] = rect;
+          args.push('-draw', `rectangle ${x + rectX},${y + rectY} ${x + rectX + rectWidth - 1},${y + rectY + rectHeight - 1}`);
+        }
+        args.push(clearMask);
+        magick(...args);
+        magick(current, clearMask, '-compose', 'DstOut', '-composite', next);
+        current = next;
+      }
+    }
+    return current;
+  }
+
+
+  function makeRectangleMask(name, definitions) {
+    const mask = join(work, `player-${name}-mask.png`);
+    const commands = [];
+    for (const [rowString, rects] of Object.entries(definitions)) {
+      const row = Number(rowString);
+      rects.forEach((rect, column) => {
+        const [x, y, width, height] = rect;
+        commands.push('-draw', `rectangle ${column * 40 + x},${row * 40 + y} ${column * 40 + x + width - 1},${row * 40 + y + height - 1}`);
+      });
+    }
+    magick('-size', '320x320', 'xc:none', '-fill', 'white', ...commands, mask);
+    return mask;
+  }
+
+  // Helmet and lamp use the protected frame-local mask above.  Boots are
+  // extracted from the five-pixel contact band, so legs and the swinging tool
+  // cannot claim the whole 40px row.
+  const helmetMask = helmetOnlyCandidate;
+  const bootsMask = makeBandComponentMask(compositeWithoutTool, 'boots', 33, 5, 2);
+  const packDefinitions = {};
+  CHARACTER_FRAMES.forEach((frameCount, row) => {
+    packDefinitions[row] = Array.from({ length: frameCount }, () => [16, 16, 15, 17]);
+  });
+  const packMask = makeRectangleMask('pack', packDefinitions);
+  const masks = { helmet: helmetMask, pack: packMask, boots: bootsMask };
+  const nonBodyMask = join(work, 'player-non-body-mask.png');
+  magick('-size', '320x320', 'xc:none', helmetMask, '-composite', packMask, '-composite', bootsMask, '-composite', nonBodyMask);
   const body = join(work, 'player-body.png');
-  magick(playerCompositeReference, effectiveToolMask, '-compose', 'DstOut', '-composite', body);
-  magick(body, '-fill', 'none', '-draw', Object.values(masks).join(' '), body);
+  magick(compositeWithoutTool, nonBodyMask, '-compose', 'DstOut', '-composite', body);
   quantize(body, join(output, 'player-body-atlas.png'), false, 'character');
 
   function layer(name, tint, destination, doubleBank = false) {
@@ -532,8 +833,7 @@ function processPlayer() {
       return;
     }
     const layerFile = join(work, `player-${name}-layer.png`);
-    const mask = join(work, `player-${name}-mask.png`);
-    magick('-size', '320x320', 'xc:none', '-fill', 'white', '-draw', masks[name], mask);
+    const mask = masks[name];
     magick(playerCompositeReference, mask, '-compose', 'DstIn', '-composite', layerFile);
     if (!doubleBank) {
       quantize(layerFile, join(output, destination), false, 'character');

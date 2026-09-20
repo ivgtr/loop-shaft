@@ -10,6 +10,7 @@ import {
   type D001AssetStore,
 } from './d001ImageRenderer';
 import { d001RopeEndY, deriveSemanticRenderState } from './semanticRenderState';
+import { drawPixelText } from './pixelText';
 
 export function drawEnvironment(ctx: CanvasRenderingContext2D, state: GameState, assets?: D001AssetStore): void {
   const depth = state.run.depth.current;
@@ -46,12 +47,11 @@ function drawD001DynamicEnvironment(
   if (state.run.depth.unlocked.includes('D-060')) drawResearchTerminal(ctx, state);
   if (state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) drawCoreConsole(ctx, state);
   if (!drawD001Rope(ctx, semantic, assets)) drawRopeFallback(ctx, semantic.elevator.y);
-  ctx.font = '4px monospace';
   for (const [label, y] of [['001', 65], ['030', 103], ['060', 141], ['100', 179]] as const) {
     const depth = `D-${label}` as DepthId;
     ctx.fillStyle = state.run.depth.unlocked.includes(depth) ? depthLamp(depth) : '#43413e';
     ctx.fillRect(258, y - 4, 2, 2);
-    ctx.fillText(label, 267, y);
+    drawPixelText(ctx, label, 267, y, { font: 'compact', baseline: 'bottom' });
   }
 }
 
@@ -121,14 +121,10 @@ function drawSurfaceStation(ctx: CanvasRenderingContext2D, state: GameState): vo
   ctx.fillStyle = PALETTE.metal;
   ctx.fillRect(204, 8, 72, 3);
   ctx.fillRect(204, 30, 72, 3);
-  ctx.font = '7px monospace';
-  ctx.textAlign = 'center';
   ctx.fillStyle = PALETTE.white;
-  ctx.fillText('LOOP SHAFT', WORLD.elevatorX, 20);
-  ctx.font = '5px monospace';
+  drawPixelText(ctx, 'LOOP SHAFT', WORLD.elevatorX, 20, { font: 'standard', align: 'center', baseline: 'bottom' });
   ctx.fillStyle = depthLamp(state.run.depth.current);
-  ctx.fillText('SURFACE EXCHANGE', WORLD.elevatorX, 27);
-  ctx.textAlign = 'left';
+  drawPixelText(ctx, 'SURFACE EXCHANGE', WORLD.elevatorX, 27, { font: 'standard', align: 'center', baseline: 'bottom' });
   if (state.run.depth.unlocked.includes('D-030')) drawArchive(ctx, state);
   if (state.run.depth.unlocked.includes('D-060')) drawResearchTerminal(ctx, state);
   if (state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) drawCoreConsole(ctx, state);
@@ -144,7 +140,7 @@ function drawArchive(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.fillStyle = i < lamps ? PALETTE.d030Lamp : '#45433a';
     ctx.fillRect(x + 34 + (i % 3) * 5, y + 8 + Math.floor(i / 3) * 6, 2, 2);
   }
-  ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.white; ctx.fillText('ARCHIVE', x + 5, y + 27);
+  ctx.fillStyle = PALETTE.white; drawPixelText(ctx, 'ARCHIVE', x + 5, y + 27, { font: 'standard', baseline: 'bottom' });
 }
 
 function drawResearchTerminal(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -155,7 +151,7 @@ function drawResearchTerminal(ctx: CanvasRenderingContext2D, state: GameState): 
   const active = state.run.research.active;
   ctx.fillStyle = active ? (Math.floor(state.elapsed * 4) % 2 === 0 ? PALETTE.d060Lamp : '#42616a') : '#3c4a4e';
   ctx.fillRect(x + 42, y + 10, 3, 3); ctx.fillRect(x + 48, y + 10, 3, 3);
-  ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.white; ctx.fillText('ANALYZER', x + 6, y + 27);
+  ctx.fillStyle = PALETTE.white; drawPixelText(ctx, 'ANALYZER', x + 6, y + 27, { font: 'standard', baseline: 'bottom' });
 }
 
 function drawCoreConsole(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -165,7 +161,7 @@ function drawCoreConsole(ctx: CanvasRenderingContext2D, state: GameState): void 
   ctx.fillStyle = '#100f0e'; ctx.fillRect(x + 6, y + 9, 34, 10);
   const lit = Math.min(5, state.meta.protocols.length + (state.meta.core > 0 ? 1 : 0));
   for (let i = 0; i < 5; i += 1) { ctx.fillStyle = i < lit ? PALETTE.d100Lamp : '#4a4339'; ctx.fillRect(x + 48 + i * 5, y + 11, 2, 2); }
-  ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.white; ctx.fillText('CORE CONSOLE', x + 6, y + 27);
+  ctx.fillStyle = PALETTE.white; drawPixelText(ctx, 'CORE CONSOLE', x + 6, y + 27, { font: 'standard', baseline: 'bottom' });
 }
 
 function drawShaft(ctx: CanvasRenderingContext2D, state: GameState): void {
@@ -175,12 +171,11 @@ function drawShaft(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillStyle = '#77706c'; ctx.fillRect(239, 36, 2, Math.max(2, elevatorY(state) - 16));
   ctx.fillStyle = PALETTE.metalDark;
   for (let y = 52; y < 226; y += 18) { ctx.fillRect(219, y, 6, 2); ctx.fillRect(255, y, 6, 2); }
-  ctx.font = '4px monospace';
   for (const [label, y] of [['001', 65], ['030', 103], ['060', 141], ['100', 179]] as const) {
     const depth = `D-${label}` as DepthId;
     ctx.fillStyle = state.run.depth.unlocked.includes(depth) ? depthLamp(depth) : '#3e3b3a';
     ctx.fillRect(258, y - 4, 2, 2);
-    ctx.fillText(label, 267, y);
+    drawPixelText(ctx, label, 267, y, { font: 'compact', baseline: 'bottom' });
   }
 }
 

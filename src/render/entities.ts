@@ -26,6 +26,7 @@ import {
   D001_WORKBENCH_FALLBACK_OFFSET,
   type SemanticRenderState,
 } from './semanticRenderState';
+import { drawPixelText } from './pixelText';
 
 export function drawEntities(
   ctx: CanvasRenderingContext2D,
@@ -211,7 +212,10 @@ function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: numb
   if (closed) { ctx.fillStyle = '#3d4448'; ctx.fillRect(WORLD.elevatorX - half + 5, y - 11, half - 5, 25); ctx.fillRect(WORLD.elevatorX + 1, y - 11, half - 5, 25); }
   else { const count = Math.min(9, e.cargo.length); for (let i = 0; i < count; i += 1) { const row = Math.floor(i / 3); const col = i % 3; ctx.fillStyle = lootColor(e.cargo[i]!.kind); ctx.fillRect(WORLD.elevatorX - 12 + col * 9, y + 8 - row * 6, 7, 5); } }
   ctx.fillStyle = e.state !== 'IDLE_BOTTOM' || e.cargo.length > 0 ? depthAccent(state.run.depth.current) : '#47413a'; ctx.fillRect(WORLD.elevatorX + Math.max(8, half - 7), y - 12, 3, 3);
-  if (e.state === 'IDLE_BOTTOM' && e.cargo.length > 0 && !state.run.automation.autoDispatch.enabled && Math.floor(now / 500) % 2 === 0) { ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.lamp; ctx.textAlign = 'center'; ctx.fillText('SEND', WORLD.elevatorX, y - 22); ctx.textAlign = 'left'; }
+  if (e.state === 'IDLE_BOTTOM' && e.cargo.length > 0 && !state.run.automation.autoDispatch.enabled && Math.floor(now / 500) % 2 === 0) {
+    ctx.fillStyle = PALETTE.lamp;
+    drawPixelText(ctx, 'SEND', WORLD.elevatorX, y - 22, { font: 'standard', align: 'center', baseline: 'bottom' });
+  }
 }
 
 function drawD001ElevatorBackFallback(ctx: CanvasRenderingContext2D, state: GameState, semantic: SemanticRenderState): void {
@@ -254,8 +258,8 @@ function drawD001ElevatorFrontFallback(ctx: CanvasRenderingContext2D, state: Gam
   ctx.fillRect(WORLD.elevatorX + Math.max(8, half - 7), y - 12, 3, 3);
   if (!closed && state.run.elevator.state === 'IDLE_BOTTOM' && state.run.elevator.cargo.length > 0
     && !state.run.automation.autoDispatch.enabled && Math.floor(now / 500) % 2 === 0) {
-    ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.lamp; ctx.textAlign = 'center';
-    ctx.fillText('SEND', WORLD.elevatorX, y - 22); ctx.textAlign = 'left';
+    ctx.fillStyle = PALETTE.lamp;
+    drawPixelText(ctx, 'SEND', WORLD.elevatorX, y - 22, { font: 'standard', align: 'center', baseline: 'bottom' });
   }
 }
 

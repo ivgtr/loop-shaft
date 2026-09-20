@@ -6,6 +6,7 @@ import { drawEnvironment } from './environment';
 import { PALETTE } from './palette';
 import type { D001AssetStore } from './d001ImageRenderer';
 import { deriveSemanticRenderState } from './semanticRenderState';
+import { drawPixelText } from './pixelText';
 
 type DebrisFx = { x: number; y: number; startedAt: number };
 type BannerFx = { label: string; sub: string; rarity: Rarity; startedAt: number };
@@ -78,14 +79,10 @@ export class CanvasRenderer {
       const offset = Math.round(progress * 28);
       this.ctx.fillRect(0, y + offset, WORLD.width, 8);
     }
-    this.ctx.textAlign = 'center';
-    this.ctx.font = '8px monospace';
     this.ctx.fillStyle = PALETTE.white;
-    this.ctx.fillText(travel.viaSurface ? 'SURFACE RELAY' : 'ELEVATOR TRAVEL', WORLD.width / 2, 124);
-    this.ctx.font = '6px monospace';
+    drawPixelText(this.ctx, travel.viaSurface ? 'SURFACE RELAY' : 'ELEVATOR TRAVEL', WORLD.width / 2, 124, { font: 'standard', align: 'center', baseline: 'bottom' });
     this.ctx.fillStyle = PALETTE.d060Lamp;
-    this.ctx.fillText(`${travel.from} → ${travel.to}`, WORLD.width / 2, 137);
-    this.ctx.textAlign = 'left';
+    drawPixelText(this.ctx, `${travel.from} → ${travel.to}`, WORLD.width / 2, 137, { font: 'standard', align: 'center', baseline: 'bottom' });
   }
 
   private drawFx(now: number): void {
@@ -102,12 +99,15 @@ export class CanvasRenderer {
     if (this.banner && now - this.banner.startedAt < 1200) {
       this.ctx.fillStyle = '#111014'; this.ctx.fillRect(157, 53, 166, 23);
       this.ctx.strokeStyle = rarityColor(this.banner.rarity); this.ctx.strokeRect(157.5, 53.5, 165, 22);
-      this.ctx.textAlign = 'center'; this.ctx.font = '5px monospace'; this.ctx.fillStyle = rarityColor(this.banner.rarity); this.ctx.fillText(this.banner.sub.toUpperCase(), 240, 62);
-      this.ctx.font = '8px monospace'; this.ctx.fillStyle = PALETTE.white; this.ctx.fillText(this.banner.label.toUpperCase(), 240, 72); this.ctx.textAlign = 'left';
+      this.ctx.fillStyle = rarityColor(this.banner.rarity);
+      drawPixelText(this.ctx, this.banner.sub.toUpperCase(), 240, 62, { font: 'standard', align: 'center', baseline: 'bottom' });
+      this.ctx.fillStyle = PALETTE.white;
+      drawPixelText(this.ctx, this.banner.label.toUpperCase(), 240, 72, { font: 'standard', align: 'center', baseline: 'bottom' });
     } else if (this.banner) this.banner = null;
     if (this.gain && now - this.gain.startedAt < 1200) {
       this.ctx.fillStyle = '#101214e8'; this.ctx.fillRect(147, 9, 186, 16);
-      this.ctx.font = '5px monospace'; this.ctx.fillStyle = PALETTE.d060Lamp; this.ctx.textAlign = 'center'; this.ctx.fillText(this.gain.label, 240, 19); this.ctx.textAlign = 'left';
+      this.ctx.fillStyle = PALETTE.d060Lamp;
+      drawPixelText(this.ctx, this.gain.label, 240, 19, { font: 'standard', align: 'center', baseline: 'bottom' });
     } else if (this.gain) this.gain = null;
   }
 }

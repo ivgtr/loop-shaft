@@ -26,6 +26,14 @@ function contactXs(path: string, frame: number, row: number): number[] {
     .map((match) => Number(match[1]));
 }
 
+function opaqueComponentCount(path: string, crop: string): number {
+  const output = execFileSync('magick', [
+    path, '-crop', crop, '+repage', '-alpha', 'extract', '-threshold', '50%',
+    '-define', 'connected-components:verbose=true', '-connected-components', '8', 'null:',
+  ], { encoding: 'utf8' });
+  return [...output.matchAll(/srgb\(255,255,255\)/g)].length;
+}
+
 describe('D-001 assets', () => {
   it('matches every generated PNG to the generation specification dimensions', () => {
     const specification = JSON.parse(readFileSync(resolve(root, 'art/d001/generation-spec.json'), 'utf8')) as {
@@ -173,16 +181,17 @@ describe('D-001 assets', () => {
         ], { encoding: 'utf8' });
         expect(Number(difference)).toBe(0);
       }
+      const helmet = resolve(runtime, 'player-helmet-atlas.png');
       for (const row of [1, 5]) {
-        for (const [first, second] of [[0, 1], [2, 3]] as const) {
-          const firstContact = contactXs(composite, first, row);
-          const secondContact = contactXs(composite, second, row);
-          expect(firstContact.length).toBeGreaterThan(0);
-          expect(secondContact.length).toBeGreaterThan(0);
-          const firstCenter = firstContact.reduce((sum, x) => sum + x, 0) / firstContact.length;
-          const secondCenter = secondContact.reduce((sum, x) => sum + x, 0) / secondContact.length;
-          expect(firstCenter - secondCenter).toBe(4);
-        }
+        const contacts = [0, 1, 2, 3].map((frame) => contactXs(composite, frame, row));
+        contacts.forEach((contact, frame) => expect(contact.length, `row ${row} frame ${frame} contact`).toBeGreaterThan(0));
+        expect(contacts.every((contact) => contact.length > 0)).toBe(true);
+        expect(new Set(contacts.map((contact) => contact.join(','))).size).toBeGreaterThan(1);
+        const top = [0, 1, 2, 3].map((frame) => opaqueBounds(helmet, `40x40+${frame * 40}+${row * 40}`)[3]);
+        expect(top[1]).toBe(top[0] - 1);
+        expect(top[2]).toBe(top[0]);
+        expect(top[3]).toBe(top[2] - 1);
+        expect(Math.max(...top) - Math.min(...top)).toBe(1);
       }
     } finally {
       rmSync(temporary, { recursive: true, force: true });
@@ -191,6 +200,17 @@ describe('D-001 assets', () => {
 
   it('keeps pickaxe ownership material-separated across tool levels', () => {
     const tool = resolve(runtime, 'player-tool-atlas.png');
+    const helmet = resolve(runtime, 'player-helmet-atlas.png');
+    const boots = resolve(runtime, 'player-boots-atlas.png');
+    for (const [row, frames] of [[2, 2], [3, 8]] as const) {
+      for (let frame = 0; frame < frames; frame += 1) {
+        const crop = `40x40+${frame * 40}+${row * 40}`;
+        expect(opaqueComponentCount(tool, crop), `tool row ${row} frame ${frame} is connected`).toBe(1);
+        expect(opaqueComponentCount(helmet, crop), `helmet row ${row} frame ${frame} has no detached object`).toBeLessThanOrEqual(1);
+        const [, height, , y] = opaqueBounds(boots, crop);
+        expect([y, height], `boots row ${row} frame ${frame} stays in the contact band`).toEqual([33, 5]);
+      }
+    }
     const colors = execFileSync('magick', [tool, '-alpha', 'off', '-unique-colors', 'txt:-'], { encoding: 'utf8' });
     for (const forbidden of ['#E6A02B', '#D89C67', '#A55B2C', '#B45F2E']) {
       expect(colors.toUpperCase()).not.toContain(forbidden);
