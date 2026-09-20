@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "assets:d001": "node scripts/process-d001-assets.mjs"
+    "assets:d001": "node scripts/process-d001-assets.mjs && node scripts/refine-d001-assets.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

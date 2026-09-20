@@ -38,3 +38,12 @@ button { font:inherit; }
 .help-line span:last-child { text-align:right; } kbd { border:1px solid #494248; background:#17151a; padding:1px 4px; color:#aaa1a0; font:inherit; }
 @media (max-width:800px) { .context-strip { grid-template-columns:1fr; gap:8px; } .context-actions { justify-content:flex-start; max-width:none; } .archive-layout { width:100%; grid-template-columns:1fr; } .choice-stack,.passive-stack,.research-stack,.protocol-stack { min-width:0; width:100%; } }
 @media (max-width:680px) { .game-root { padding:0; align-content:start; } .game-shell { border-left:0; border-right:0; } .action { flex:1; } .help-line { padding:8px; } .hud { top:5px; } .hud-left { left:5px; } .hud-right { right:5px; } .choice-line,.passive-line,.research-line,.protocol-line { grid-template-columns:1fr; gap:2px; } .archive-grid { grid-template-columns:1fr; } }
+/* D-001: use an integer logical-pixel scale when the complete desktop view fits.
+   Smaller/shorter viewports retain the existing responsive layout. Other depths
+   are deliberately unchanged; this is not a mobile layout redesign. */
+@media (min-width:1000px) and (min-height:700px) {
+  .game-root:has(.hud-right[data-depth="D-001"]) { width:998px; }
+}
+@media (min-width:1480px) and (min-height:1000px) {
+  .game-root:has(.hud-right[data-depth="D-001"]) { width:1478px; }
+}
