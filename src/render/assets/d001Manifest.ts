@@ -1,5 +1,10 @@
 export type D001AssetKey = keyof typeof D001_ASSET_FILES;
 
+// Public runtime PNGs keep stable filenames for the fallback manifest. Bump this
+// value whenever those files change so a deployed browser cannot reuse an older
+// atlas from its HTTP cache.
+export const D001_ASSET_VERSION = '020e172-walk-side-2';
+
 export const D001_ASSET_FILES = {
   backgroundRock: 'background-rock-base.png',
   backgroundTunnel: 'background-tunnel-back.png',
@@ -55,7 +60,7 @@ export const D001_NODE_ASSETS = {
 } as const satisfies Record<string, D001AssetKey>;
 
 export function d001AssetUrl(key: D001AssetKey): string {
-  return `${import.meta.env.BASE_URL}assets/d001/runtime/${D001_ASSET_FILES[key]}`;
+  return `${import.meta.env.BASE_URL}assets/d001/runtime/${D001_ASSET_FILES[key]}?v=${D001_ASSET_VERSION}`;
 }
 
 export function d001AssetUrls(): Record<D001AssetKey, string> {

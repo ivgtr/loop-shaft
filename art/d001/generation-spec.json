@@ -188,11 +188,11 @@
       "lowerBodyRegionHeight": 12,
       "leftFootSource": "generated-player-walk-left-foot.png",
       "rightFootSource": "generated-player-walk-right-foot.png",
-      "lowerBodySources": ["generated-left-foot", "source-frame-1", "generated-right-foot", "source-frame-3"],
+      "lowerBodySources": ["generated-left-foot", "source-idle-frame-0", "generated-right-foot", "source-idle-frame-0"],
       "mirrorLowerBodyFrames": [],
       "contactY": 37,
       "anchor": [20, 38],
-      "footSourcePolicy": "frame-0-generated-left-foot; frame-1-source-frame-1; frame-2-generated-right-foot; frame-3-source-frame-3; lower-body-only replacement; no-horizontal-flip; never-copy-a-five-pixel-foot-strip",
+      "footSourcePolicy": "frame-0-generated-left-foot; frame-1/3-source-idle-frame-0-side; frame-2-generated-right-foot; lower-body-only replacement; no-horizontal-flip; never-copy-a-five-pixel-foot-strip",
       "maximumVerticalBob": 1,
       "clips": ["walk", "carry-walk"]
     },

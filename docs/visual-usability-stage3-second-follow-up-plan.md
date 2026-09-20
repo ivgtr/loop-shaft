@@ -683,10 +683,11 @@ mine-ready 2frameとmine-swing 8frameでは、靴の上端と脚を連続させ�
 
 初回実装後の目視で、walkのboots接触pixelがframe 0と2で同一となり、左足が前に残って見える問題を確認した。source frameの下半身を再利用し、frame 2を水平反転していたことが原因である。反転では足先の向きが後ろになるため、この案は採用せず、左右の前足を別画像で生成し直した。
 
-- `art/d001/sources/generated-player-walk-left-foot.png`と`generated-player-walk-right-foot.png`を別々の右向き姿勢として生成し、`walk`と`carry-walk`の下半身領域`y=26..37`へ個別に適用した。frame 0は前足姿勢、frame 2は逆脚を前へ出した交差姿勢を使い、どちらも水平反転しない。frame 1/3は既存sourceのside姿勢を使い、上体だけ1px上げる。上半身、接地点`y=37`、anchor、worldX/facing由来の位相、carryの荷物位置は維持した。
-- runtimeのwalk stripはframe 0/2で別の脚経路と接触silhouetteになり、grayscaleでも同じ足の反復ではなく逆脚の交差が読めることを確認した。carry-walkも同じ4frame脚周期を共有する。
-- `tests/assets.test.ts`へframe role、生成source、水平反転でないframe 0/2、frame 0/2・1/3の接触差分、全frameの接地点を検査する条件を追加した。比較画像のwalk/carry-walkとgrayscale afterも更新した。
-- 最終確認は`npm run assets:d001`、`npm test -- --run`（9 files / 93 tests）、`npm run typecheck`、`npm run build`、4174番へ分離したPlaywright 8件を実行してすべて成功した。標準4173番は従来どおり外部FGO Labが占有しているため使用していない。
+- `art/d001/sources/generated-player-walk-left-foot.png`と`generated-player-walk-right-foot.png`を別々の右向き姿勢として生成し、`walk`と`carry-walk`の下半身領域`y=26..37`へ個別に適用した。frame 0は前足姿勢、frame 2は逆脚を前へ出した交差姿勢を使い、どちらも水平反転しない。frame 1/3は既存idle frame 0の下半身を使った真横の中間姿勢とし、上半身の腕差と1px上げはsource frameごとに維持した。上半身、接地点`y=37`、anchor、worldX/facing由来の位相、carryの荷物位置は維持した。
+- runtimeのwalk stripはframe 0/2で別の脚経路、frame 1/3で体の真下へ戻る共通の脚silhouetteになり、grayscaleでも「左足前→真横→右足前→真横」が読めることを確認した。carry-walkも同じ4frame脚周期を共有する。
+- `tests/assets.test.ts`へframe role、生成source、水平反転でないframe 0/2、frame 1/3の共通side接地と上半身差分、全frameの接地点を検査する条件を追加した。比較画像のwalk/carry-walkとgrayscale afterも更新した。
+- 最終確認は`npm run assets:d001`、`npm test -- --run`（9 files / 94 tests）、`npm run typecheck`、`npm run build`、4174番へ分離したPlaywright 8件を実行してすべて成功した。標準4173番は従来どおり外部FGO Labが占有しているため使用していない。
+- runtime PNGの固定URL再利用を避けるため、`d001Manifest.ts`へasset version queryを追加した。歩行atlas更新時はversionも更新し、既存ブラウザのHTTPキャッシュを使わない。
 
 ### 歩行速度の追加調整（2026-09-20）
 

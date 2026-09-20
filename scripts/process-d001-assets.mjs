@@ -510,6 +510,7 @@ function rebuildPlayerMotion(rows, generatedWalkPoses) {
   const walk = specification.playerMotion.walk;
   rows[0][1] = rebuildIdleFrame(rows[0][0], 'idle', idle.immutableRegions);
   rows[6][1] = rebuildIdleFrame(rows[6][0], 'carry-idle', idle.immutableRegions);
+  const sideLowerBody = rows[0][0];
   for (const row of [1, 5]) {
     const original = [...rows[row]];
     const baseline = row === 5
@@ -519,9 +520,9 @@ function rebuildPlayerMotion(rows, generatedWalkPoses) {
       + (walk.sideFrames.includes(frame) ? walk.sideUpperBodyOffsetY : 0));
     const lowerSources = [
       generatedWalkPoses.leftFoot,
-      original[1],
+      sideLowerBody,
       generatedWalkPoses.rightFoot,
-      original[3],
+      sideLowerBody,
     ];
     rows[row][0] = rebuildWalkFrame(original[0], offsets[0], `row-${row}-frame-0-left-foot`, lowerSources[0]);
     rows[row][1] = rebuildWalkFrame(original[1], offsets[1], `row-${row}-frame-1-side`, lowerSources[1]);

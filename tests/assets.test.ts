@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { AssetStore } from '../src/render/assets/assetStore';
-import { D001_ASSET_FILES, D001_FALLBACK_GROUPS } from '../src/render/assets/d001Manifest';
+import {
+  D001_ASSET_FILES,
+  D001_ASSET_VERSION,
+  D001_FALLBACK_GROUPS,
+  d001AssetUrls,
+} from '../src/render/assets/d001Manifest';
 
 const root = resolve(import.meta.dirname, '..');
 const runtime = resolve(root, 'public/assets/d001/runtime');
@@ -43,6 +48,12 @@ function differenceMean(path: string, firstCrop: string, secondCrop: string, sec
 }
 
 describe('D-001 assets', () => {
+  it('version-tags runtime URLs so changed PNGs bypass the browser cache', () => {
+    const urls = Object.values(d001AssetUrls());
+    expect(urls).toHaveLength(Object.keys(D001_ASSET_FILES).length);
+    expect(urls.every((url) => url.endsWith(`?v=${D001_ASSET_VERSION}`))).toBe(true);
+  });
+
   it('matches every generated PNG to the generation specification dimensions', () => {
     const specification = JSON.parse(readFileSync(resolve(root, 'art/d001/generation-spec.json'), 'utf8')) as {
       runtimeAssets: Array<{ file: string; size: [number, number] }>;
@@ -190,6 +201,7 @@ describe('D-001 assets', () => {
         expect(Number(difference)).toBe(0);
       }
       const helmet = resolve(runtime, 'player-helmet-atlas.png');
+      const body = resolve(runtime, 'player-body-atlas.png');
       const boots = resolve(runtime, 'player-boots-atlas.png');
       const walkSpecification = JSON.parse(readFileSync(resolve(root, 'art/d001/generation-spec.json'), 'utf8')) as {
         playerMotion: {
@@ -206,7 +218,7 @@ describe('D-001 assets', () => {
         'left-foot-forward', 'side-upper-body-up', 'right-foot-forward', 'side-upper-body-up',
       ]);
       expect(walkSpecification.playerMotion.walk.lowerBodySources).toEqual([
-        'generated-left-foot', 'source-frame-1', 'generated-right-foot', 'source-frame-3',
+        'generated-left-foot', 'source-idle-frame-0', 'generated-right-foot', 'source-idle-frame-0',
       ]);
       expect(walkSpecification.playerMotion.walk.mirrorLowerBodyFrames).toEqual([]);
       for (const sourceFile of [
@@ -219,7 +231,12 @@ describe('D-001 assets', () => {
         expect(contacts.every((contact) => contact.length > 0)).toBe(true);
         expect(new Set(contacts.map((contact) => contact.join(','))).size).toBeGreaterThan(1);
         expect(contacts[0]!.join(',')).not.toBe(contacts[2]!.join(','));
-        expect(contacts[1]!.join(',')).not.toBe(contacts[3]!.join(','));
+        expect(contacts[1]!.join(',')).toBe(contacts[3]!.join(','));
+        expect(differenceMean(
+          body,
+          `40x40+40+${row * 40}`,
+          `40x40+120+${row * 40}`,
+        )).toBeGreaterThan(0.01);
         if (row === 1) {
           expect(opaqueComponentCount(boots, '40x5+0+73'), 'walk frame 0 foot silhouette').toBe(1);
           expect(opaqueComponentCount(boots, '40x5+80+73'), 'walk frame 2 foot silhouette').toBe(2);
