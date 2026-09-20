@@ -34,6 +34,14 @@ function opaqueComponentCount(path: string, crop: string): number {
   return [...output.matchAll(/srgb\(255,255,255\)/g)].length;
 }
 
+function differenceMean(path: string, firstCrop: string, secondCrop: string, secondTransform: string[] = []): number {
+  return Number(execFileSync('magick', [
+    path, '-crop', firstCrop, '+repage',
+    '(', path, '-crop', secondCrop, '+repage', ...secondTransform, ')',
+    '-compose', 'difference', '-composite', '-threshold', '0', '-format', '%[fx:mean]', 'info:',
+  ], { encoding: 'utf8' }));
+}
+
 describe('D-001 assets', () => {
   it('matches every generated PNG to the generation specification dimensions', () => {
     const specification = JSON.parse(readFileSync(resolve(root, 'art/d001/generation-spec.json'), 'utf8')) as {
@@ -182,11 +190,46 @@ describe('D-001 assets', () => {
         expect(Number(difference)).toBe(0);
       }
       const helmet = resolve(runtime, 'player-helmet-atlas.png');
+      const boots = resolve(runtime, 'player-boots-atlas.png');
+      const walkSpecification = JSON.parse(readFileSync(resolve(root, 'art/d001/generation-spec.json'), 'utf8')) as {
+        playerMotion: {
+          walk: {
+            frameRoles: string[];
+            leftFootSource: string;
+            rightFootSource: string;
+            lowerBodySources: string[];
+            mirrorLowerBodyFrames: number[];
+          };
+        };
+      };
+      expect(walkSpecification.playerMotion.walk.frameRoles).toEqual([
+        'left-foot-forward', 'side-upper-body-up', 'right-foot-forward', 'side-upper-body-up',
+      ]);
+      expect(walkSpecification.playerMotion.walk.lowerBodySources).toEqual([
+        'generated-left-foot', 'source-frame-1', 'generated-right-foot', 'source-frame-3',
+      ]);
+      expect(walkSpecification.playerMotion.walk.mirrorLowerBodyFrames).toEqual([]);
+      for (const sourceFile of [
+        walkSpecification.playerMotion.walk.leftFootSource,
+        walkSpecification.playerMotion.walk.rightFootSource,
+      ]) expect(readFileSync(resolve(root, 'art/d001/sources', sourceFile)).subarray(1, 4).toString()).toBe('PNG');
       for (const row of [1, 5]) {
         const contacts = [0, 1, 2, 3].map((frame) => contactXs(composite, frame, row));
         contacts.forEach((contact, frame) => expect(contact.length, `row ${row} frame ${frame} contact`).toBeGreaterThan(0));
         expect(contacts.every((contact) => contact.length > 0)).toBe(true);
         expect(new Set(contacts.map((contact) => contact.join(','))).size).toBeGreaterThan(1);
+        expect(contacts[0]!.join(',')).not.toBe(contacts[2]!.join(','));
+        expect(contacts[1]!.join(',')).not.toBe(contacts[3]!.join(','));
+        if (row === 1) {
+          expect(opaqueComponentCount(boots, '40x5+0+73'), 'walk frame 0 foot silhouette').toBe(1);
+          expect(opaqueComponentCount(boots, '40x5+80+73'), 'walk frame 2 foot silhouette').toBe(2);
+          expect(differenceMean(boots, '40x40+0+40', '40x40+80+40', ['-flop']))
+            .toBeGreaterThan(0.02);
+        }
+        for (const frame of [0, 1, 2, 3]) {
+          const [, height, , y] = opaqueBounds(composite, `40x40+${frame * 40}+${row * 40}`);
+          expect(y + height - 1, `row ${row} frame ${frame} contact`).toBe(37);
+        }
         const top = [0, 1, 2, 3].map((frame) => opaqueBounds(helmet, `40x40+${frame * 40}+${row * 40}`)[3]);
         expect(top[1]).toBe(top[0] - 1);
         expect(top[2]).toBe(top[0]);

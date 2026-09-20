@@ -13,6 +13,7 @@ import {
   engineerClip,
   nodeVisualState,
   playerIdleFrame,
+  PLAYER_WALK_STRIDE_STEP,
   playerWalkFrame,
   porterClip,
 } from '../src/render/semanticRenderState';
@@ -53,12 +54,12 @@ describe('semantic render state', () => {
 
   it('derives Player walk and carry-walk frames from distance in both directions', () => {
     const right = playerWalkFrame(100, 1);
-    expect(playerWalkFrame(104, 1)).toBe((right + 1) % 4);
-    expect(playerWalkFrame(116, 1)).toBe(right);
+    expect(playerWalkFrame(100 + PLAYER_WALK_STRIDE_STEP, 1)).toBe((right + 1) % 4);
+    expect(playerWalkFrame(100 + PLAYER_WALK_STRIDE_STEP * 4, 1)).toBe(right);
 
     const left = playerWalkFrame(100, -1);
-    expect(playerWalkFrame(96, -1)).toBe((left + 1) % 4);
-    expect(playerWalkFrame(84, -1)).toBe(left);
+    expect(playerWalkFrame(100 - PLAYER_WALK_STRIDE_STEP, -1)).toBe((left + 1) % 4);
+    expect(playerWalkFrame(100 - PLAYER_WALK_STRIDE_STEP * 4, -1)).toBe(left);
 
     const state = createGameState(9410);
     state.run.character.state = 'MOVING_TO_NODE';

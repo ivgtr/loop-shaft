@@ -410,6 +410,22 @@ function extractCell(sourceFile, row, rows, frame, frames, options = {}) {
   return cell;
 }
 
+function extractStandaloneCell(sourceFile, label) {
+  const file = join(source, sourceFile);
+  const rawCell = join(work, `${label}-raw-cell.png`);
+  const silhouette = join(work, `${label}-silhouette.png`);
+  const cell = join(work, `${label}-cell.png`);
+  magick(file, '-alpha', 'on', '-fuzz', '8%', '-fill', 'none', '-draw', 'alpha 0,0 floodfill',
+    '-trim', '+repage', '-filter', 'point', '-resize', '38x32>',
+    '-gravity', 'south', '-background', 'none', '-extent', '40x38', '-gravity', 'north', '-extent', '40x40', rawCell);
+  magick(rawCell, '-alpha', 'extract', '-threshold', '50%', '-define', 'connected-components:keep-top=1',
+    '-connected-components', '8', '-auto-level', '-threshold', '0', '-alpha', 'copy', silhouette);
+  magick(rawCell, silhouette, '-compose', 'DstIn', '-composite', '-fill', 'none',
+    '-draw', 'rectangle 0,36 39,39', '-compose', 'Over', '-trim', '+repage',
+    '-gravity', 'south', '-background', 'none', '-extent', '40x38', '-gravity', 'north', '-extent', '40x40', cell);
+  return cell;
+}
+
 function assembleCharacterAtlas(sourceFile, sourceFrames, sourceRows, targetRows, options = {}) {
   const blank = join(work, 'player-blank.png');
   magick('-size', '40x40', 'xc:none', blank);
@@ -467,27 +483,29 @@ function rebuildIdleFrame(base, label, immutableRegions) {
   return current;
 }
 
-function rebuildWalkFrame(base, upperOffset, label) {
+function rebuildWalkFrame(base, upperOffset, label, lowerSource) {
   const cleared = join(work, `${label}-walk-cleared.png`);
   const upper = join(work, `${label}-walk-upper.png`);
   const shifted = join(work, `${label}-walk-shifted.png`);
-  const feet = join(work, `${label}-walk-feet.png`);
+  const lower = join(work, `${label}-walk-lower.png`);
+  const lowerCleared = join(work, `${label}-walk-lower-cleared.png`);
   const combined = join(work, `${label}-walk-combined.png`);
+  const { lowerBodyRegionY: lowerY, lowerBodyRegionHeight: lowerHeight } = specification.playerMotion.walk;
 
-  // Keep the source pose's feet intact.  The old pass copied a five-pixel
-  // strip from the preceding pose, which made frames 1 and 3 read as a
-  // repeated foot shuffle.  Side frames now move only the upper body one
-  // pixel upward; each of the four source poses keeps its own leg relation.
+  // Keep the source pose's upper body and replace only the lower-body region.
+  // The two traveling poses come from separately generated right-facing
+  // sprites; horizontal flipping is deliberately not part of the walk pass.
   magick(base, '-region', '40x33+0+0', '-channel', 'A', '-evaluate', 'set', '0', '+channel', '+region', cleared);
   magick(base, '-crop', '40x33+0+0', '+repage', upper);
   magick(cleared, upper, '-geometry', `+0${upperOffset >= 0 ? '+' : ''}${upperOffset}`, '-composite', shifted);
-  magick(base, '-crop', '40x5+0+33', '+repage', feet);
-  magick(shifted, feet, '-geometry', '+0+33', '-composite',
+  magick(lowerSource, '-crop', `40x${lowerHeight}+0+${lowerY}`, '+repage', lower);
+  magick(shifted, '-region', `40x${lowerHeight}+0+${lowerY}`, '-channel', 'A', '-evaluate', 'set', '0', '+channel', '+region', lowerCleared);
+  magick(lowerCleared, lower, '-geometry', `+0+${lowerY}`, '-composite',
     '-region', '40x2+0+38', '-channel', 'A', '-evaluate', 'set', '0', '+channel', '+region', combined);
   return combined;
 }
 
-function rebuildPlayerMotion(rows) {
+function rebuildPlayerMotion(rows, generatedWalkPoses) {
   const idle = specification.playerMotion.idle;
   const walk = specification.playerMotion.walk;
   rows[0][1] = rebuildIdleFrame(rows[0][0], 'idle', idle.immutableRegions);
@@ -499,10 +517,16 @@ function rebuildPlayerMotion(rows) {
       : walk.walkSourceBaselineCorrectionY;
     const offsets = original.map((_, frame) => baseline[frame]
       + (walk.sideFrames.includes(frame) ? walk.sideUpperBodyOffsetY : 0));
-    rows[row][0] = rebuildWalkFrame(original[0], offsets[0], `row-${row}-frame-0-left-foot`);
-    rows[row][1] = rebuildWalkFrame(original[1], offsets[1], `row-${row}-frame-1-side`);
-    rows[row][2] = rebuildWalkFrame(original[2], offsets[2], `row-${row}-frame-2-right-foot`);
-    rows[row][3] = rebuildWalkFrame(original[3], offsets[3], `row-${row}-frame-3-side`);
+    const lowerSources = [
+      generatedWalkPoses.leftFoot,
+      original[1],
+      generatedWalkPoses.rightFoot,
+      original[3],
+    ];
+    rows[row][0] = rebuildWalkFrame(original[0], offsets[0], `row-${row}-frame-0-left-foot`, lowerSources[0]);
+    rows[row][1] = rebuildWalkFrame(original[1], offsets[1], `row-${row}-frame-1-side`, lowerSources[1]);
+    rows[row][2] = rebuildWalkFrame(original[2], offsets[2], `row-${row}-frame-2-right-foot`, lowerSources[2]);
+    rows[row][3] = rebuildWalkFrame(original[3], offsets[3], `row-${row}-frame-3-side`, lowerSources[3]);
   }
 }
 
@@ -535,6 +559,7 @@ function restoreIdleRegionsInAtlas(atlas) {
 
 function processPlayer() {
   const ownershipSpec = specification.playerOwnership.toolMasks;
+  const walk = specification.playerMotion.walk;
   const { rows } = assembleCharacterAtlas(
     'generated-player-animation.png', CHARACTER_FRAMES, 8, [0, 1, 2, 3, 4, 5, 6, 7],
     {
@@ -563,7 +588,11 @@ function processPlayer() {
       rows[row][frame] = cleaned;
     }
   }
-  rebuildPlayerMotion(rows);
+  const generatedWalkPoses = {
+    leftFoot: extractStandaloneCell(walk.leftFootSource, 'walk-generated-left-foot'),
+    rightFoot: extractStandaloneCell(walk.rightFootSource, 'walk-generated-right-foot'),
+  };
+  rebuildPlayerMotion(rows, generatedWalkPoses);
 
   // The first and fourth swing source cells crop the pickaxe head at the
   // source-cell boundary.  Reuse the intact frame-2 head at the recorded

@@ -71,7 +71,7 @@ const CLIP_FRAMES: Record<CharacterClip, number> = {
   load: 4,
 };
 
-export const PLAYER_WALK_STRIDE_STEP = 4;
+export const PLAYER_WALK_STRIDE_STEP = 6;
 export const PLAYER_IDLE_CYCLE_MS = 1600;
 export const PLAYER_IDLE_ACTIVE_MS = 1200;
 export const D001_VISUAL_GROUND_OFFSET = 13;

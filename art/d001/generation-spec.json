@@ -176,7 +176,7 @@
   },
   "playerMotion": {
     "walk": {
-      "strideStep": 4,
+      "strideStep": 6,
       "frameCount": 4,
       "phase": "positiveModulo(floor(facing * worldX / strideStep), frameCount)",
       "frameRoles": ["left-foot-forward", "side-upper-body-up", "right-foot-forward", "side-upper-body-up"],
@@ -184,9 +184,15 @@
       "sideUpperBodyOffsetY": -1,
       "walkSourceBaselineCorrectionY": [0, 0, 2, 2],
       "carryWalkSourceBaselineCorrectionY": [0, -1, -1, -1],
+      "lowerBodyRegionY": 26,
+      "lowerBodyRegionHeight": 12,
+      "leftFootSource": "generated-player-walk-left-foot.png",
+      "rightFootSource": "generated-player-walk-right-foot.png",
+      "lowerBodySources": ["generated-left-foot", "source-frame-1", "generated-right-foot", "source-frame-3"],
+      "mirrorLowerBodyFrames": [],
       "contactY": 37,
       "anchor": [20, 38],
-      "footSourcePolicy": "retain-each-source-pose; never copy a five-pixel foot strip from a neighboring frame",
+      "footSourcePolicy": "frame-0-generated-left-foot; frame-1-source-frame-1; frame-2-generated-right-foot; frame-3-source-frame-3; lower-body-only replacement; no-horizontal-flip; never-copy-a-five-pixel-foot-strip",
       "maximumVerticalBob": 1,
       "clips": ["walk", "carry-walk"]
     },

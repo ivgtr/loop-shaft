@@ -587,7 +587,8 @@ mine-ready 2frameとmine-swing 8frameでは、靴の上端と脚を連続させ�
 ### 変更責務
 
 - `art/d001/generation-spec.json`: walk姿勢、Helmet・Boots・Tool所有、material rule、prototypeと再生成条件。
-- `art/d001/sources/generated-player-animation.png`: 原則再利用し、Player全体の再生成は行わない。
+- `art/d001/sources/generated-player-animation.png`: Helmet、Body、side frameの基準として再利用する。
+- `art/d001/sources/generated-player-walk-left-foot.png`, `generated-player-walk-right-foot.png`: walkのframe 0/2へ限定して使う、独立生成した右向き下半身姿勢。
 - `art/d001/sources/`: 必要性をprototypeで確認した構造sourceだけを更新する。
 - `scripts/process-d001-assets.mjs`: walk再構成、frame別装備mask、採掘姿勢、runtime実寸material処理。
 - `src/render/pixelText.ts`: bitmap glyph、幅計算、alignment、整数描画。
@@ -660,7 +661,7 @@ mine-ready 2frameとmine-swing 8frameでは、靴の上端と脚を連続させ�
 - コード: `src/render/pixelText.ts`、`src/render/{environment,initialGuideOverlay,interactionOverlay,phase5Renderer,gameRenderer,canvasRenderer,entities}.ts`。
 - 生成仕様・後処理・検査: `art/d001/generation-spec.json`、`scripts/process-d001-assets.mjs`、`tests/assets.test.ts`、`tests/pixelText.test.ts`。
 - runtime: `public/assets/d001/runtime/`のbackground-floor、background-shaft-back、background-tunnel-structure、central-elevator-atlas、Player 5 layer、npc-crew-miner atlasを更新した。`art/d001/palette.json`と既存source画像は維持した。
-- 比較資料: [walk比較](../assets/stage3/second-follow-up/player-walk-comparison.png)、[初期画面比較](../assets/stage3/second-follow-up/new-game-comparison.png)、[初期画面grayscale比較](../assets/stage3/second-follow-up/new-game-grayscale-comparison.png)、[mine-swing比較](../assets/stage3/follow-up/player-mine-swing-third-follow-up-comparison.png)。代表after画像は`docs/assets/stage3/second-follow-up/after/player-walk-frames.png`、`player-carry-walk-frames.png`、`stage3-second-follow-up-new-game.png`、`stage3-second-follow-up-elevator-closed-normal.png`と各grayscale、mine-swingは`docs/assets/stage3/follow-up/after/player-mine-swing-frames.png`へ更新した。
+- 比較資料: [walk比較](../assets/stage3/second-follow-up/player-walk-comparison.png)、[初期画面比較](../assets/stage3/second-follow-up/new-game-comparison.png)、[初期画面grayscale比較](../assets/stage3/second-follow-up/new-game-grayscale-comparison.png)、[mine-swing比較](../assets/stage3/follow-up/player-mine-swing-third-follow-up-comparison.png)。代表after画像は`docs/assets/stage3/second-follow-up/after/player-walk-frames.png`、`player-walk-frames-grayscale.png`、`player-carry-walk-frames.png`、`player-carry-walk-frames-grayscale.png`、`stage3-second-follow-up-new-game.png`、`stage3-second-follow-up-elevator-closed-normal.png`と各grayscale、mine-swingは`docs/assets/stage3/follow-up/after/player-mine-swing-frames.png`へ更新した。
 
 ### 検証結果
 
@@ -676,4 +677,21 @@ mine-ready 2frameとmine-swing 8frameでは、靴の上端と脚を連続させ�
 - bitmap fontは現行Canvas文字列に必要なglyphを収録し、未知文字は`?`へfallbackする。今後新しい文字種をCanvasへ追加する場合はglyph追加が必要である。
 - material passは固定2～3 patternのruntime実寸処理であり、全sourceの再生成ではない。今回の代表状態では合格したが、全pixel golden snapshotや全viewport・全装備組み合わせの画像検査は追加していない。
 - 標準Playwright設定の4173番は外部FGO Labが占有していたため、そのポートでの直接実行は行わず、同じテストを4174番で実行した。外部サーバーは停止・変更していない。
-- Simulation、イベント、乱数、経済、保存形式、world座標、anchor、Stage 1/2の対象・hit領域・操作、対象別fallback、DOM HUD、D-002以降、Stage 4以降、性能目標・profiling・依存関係は範囲外として維持した。コミットは作成していない。
+- Simulation、イベント、乱数、経済、保存形式、world座標、anchor、Stage 1/2の対象・hit領域・操作、対象別fallback、DOM HUD、D-002以降、Stage 4以降、性能目標・profiling・依存関係は範囲外として維持した。初回実装は`6c17e88`へ記録し、今回の追加修正は未コミットである。
+
+### 追加修正（2026-09-20）
+
+初回実装後の目視で、walkのboots接触pixelがframe 0と2で同一となり、左足が前に残って見える問題を確認した。source frameの下半身を再利用し、frame 2を水平反転していたことが原因である。反転では足先の向きが後ろになるため、この案は採用せず、左右の前足を別画像で生成し直した。
+
+- `art/d001/sources/generated-player-walk-left-foot.png`と`generated-player-walk-right-foot.png`を別々の右向き姿勢として生成し、`walk`と`carry-walk`の下半身領域`y=26..37`へ個別に適用した。frame 0は前足姿勢、frame 2は逆脚を前へ出した交差姿勢を使い、どちらも水平反転しない。frame 1/3は既存sourceのside姿勢を使い、上体だけ1px上げる。上半身、接地点`y=37`、anchor、worldX/facing由来の位相、carryの荷物位置は維持した。
+- runtimeのwalk stripはframe 0/2で別の脚経路と接触silhouetteになり、grayscaleでも同じ足の反復ではなく逆脚の交差が読めることを確認した。carry-walkも同じ4frame脚周期を共有する。
+- `tests/assets.test.ts`へframe role、生成source、水平反転でないframe 0/2、frame 0/2・1/3の接触差分、全frameの接地点を検査する条件を追加した。比較画像のwalk/carry-walkとgrayscale afterも更新した。
+- 最終確認は`npm run assets:d001`、`npm test -- --run`（9 files / 93 tests）、`npm run typecheck`、`npm run build`、4174番へ分離したPlaywright 8件を実行してすべて成功した。標準4173番は従来どおり外部FGO Labが占有しているため使用していない。
+
+### 歩行速度の追加調整（2026-09-20）
+
+上記の左右足差分を実プレイで確認したところ、`strideStep: 4`では通常速度42px/sで約95ms、Boots Level 2の66px/sで約61msごとにframeが切り替わり、4姿勢の差が見える前に一周していた。`worldX`/`facing`からの純粋導出、4姿勢の順序、carry-walk共有は維持したまま、`strideStep`を6へ変更した。
+
+- frame 0→1→2→3の順序と左右移動時の位相は変更していない。
+- 1周の距離は24pxとなり、frame差を読み取る時間を確保する。実際の移動速度、Boots Levelによる速度差、world座標は変更していない。
+- `tests/semanticRenderState.test.ts`の距離位相検査を新しいstrideへ追従させた。素材atlasの再生成は不要なコード・仕様変更である。
