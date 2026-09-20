@@ -90,8 +90,10 @@ test('uses a pointer cursor only on targets and selects the hovered target', asy
 test('keeps D-001 operable when individual image targets fail to load', async ({ page }) => {
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
-  await page.route('**/player-body-atlas.png', (route) => route.abort());
-  await page.route('**/node-scrap-ledge-atlas.png', (route) => route.abort());
+  for (const file of [
+    'player-body-atlas.png', 'node-scrap-ledge-atlas.png', 'elevator-rope-tile.png',
+    'central-elevator-atlas.png', 'shaft-surface-junction.png', 'shaft-bottom-junction-atlas.png',
+  ]) await page.route(`**/${file}`, (route) => route.abort());
   await page.goto('/');
   const canvas = page.getByLabel('LOOP SHAFT mining floor');
   const box = await canvas.boundingBox();
@@ -136,6 +138,28 @@ test('keeps NPC and Cargo paths visible and operable when their image groups fai
   await expect(page.getByRole('heading', { name: 'Scrap Ledge' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'MINE' })).toBeEnabled({ timeout: 10_000 });
   expect(pageErrors).toEqual([]);
+});
+
+test('opens the D-001 shaft bottom only after EXTEND D-030 succeeds', async ({ page }) => {
+  const state = createGameState(9102);
+  state.run.scrap = 5_000;
+  state.run.porter.enabled = true;
+  state.run.automation.autoDispatch.unlocked = true;
+  await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), {
+    key: SAVE_KEY,
+    value: serializeGameState(state),
+  });
+  await page.goto('/');
+  const canvas = page.getByLabel('LOOP SHAFT mining floor');
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.click(box!.x + box!.width * (240 / 480), box!.y + box!.height * (190 / 270));
+  await expect(page.getByRole('heading', { name: 'Central Elevator' })).toBeVisible();
+  const extend = page.getByRole('button', { name: /EXTEND D-030/ });
+  await expect(extend).toBeEnabled();
+  await extend.click();
+  await expect(page.getByRole('button', { name: /EXTEND D-030/ })).toHaveCount(0);
+  await expect(page.locator('.context-meta')).toContainText(/Priority transport|Use SEND/);
 });
 
 test('keeps Bore hover and selected context aligned in a later-game state', async ({ page }) => {

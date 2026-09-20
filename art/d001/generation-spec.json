@@ -20,7 +20,8 @@
       "crewMiner": "8e9182239d4287c290b551ab55d30f9c2697bcf683745c79387a7d998422d912",
       "crewPorter": "04e641bb56fb7e7a70849099edfbd236cc8aaa3f3b4c07940a330d8a54f7545e",
       "engineer": "4ce2e5fa54d5384f42138ed0e8a15d463e33b74df8accb3f554b418c156a0939",
-      "cargo": "8571ef82831f940fc04e7a4f7fede6eda86067ab9b5d06ac65ea6d5d792d91ad"
+      "cargo": "8571ef82831f940fc04e7a4f7fede6eda86067ab9b5d06ac65ea6d5d792d91ad",
+      "centralElevator": "c1e8237890ef47d37fda46fe99fbfb3f7bc806ad091b26879b34643ab26578ca"
     }
   },
   "variableFields": [
@@ -55,7 +56,10 @@
     { "file": "node-copper-pocket-atlas.png", "size": [192, 40], "cell": [48, 40], "anchor": [24, 40], "group": "node:copper-pocket" },
     { "file": "node-fossil-crack-atlas.png", "size": [192, 40], "cell": [48, 40], "anchor": [24, 40], "group": "node:fossil-crack" },
     { "file": "workbench-atlas.png", "size": [224, 32], "cell": [32, 32], "anchor": [16, 32], "group": "workbench" },
-    { "file": "central-elevator-atlas.png", "size": [224, 88], "cell": [56, 44], "anchor": [28, 20], "group": "elevator" }
+    { "file": "central-elevator-atlas.png", "size": [224, 88], "cell": [56, 44], "anchor": [28, 20], "group": "elevator" },
+    { "file": "elevator-rope-tile.png", "size": [4, 8], "anchor": [2, 0], "group": "rope" },
+    { "file": "shaft-surface-junction.png", "size": [82, 38], "anchor": [41, 0], "group": "surface-junction" },
+    { "file": "shaft-bottom-junction-atlas.png", "size": [98, 47], "cell": [49, 47], "anchor": [0, 0], "group": "shaft-bottom" }
   ],
   "characterClips": [
     { "id": "idle", "row": 0, "frames": 2 },
@@ -116,7 +120,27 @@
   "playerOwnership": {
     "layers": ["pack", "body", "boots", "tool", "helmet"],
     "rule": "Every opaque composite pixel is owned by exactly one layer; equipment alpha is always intersected with composite alpha.",
-    "compositeOrder": ["pack", "body", "boots", "tool", "helmet", "cargo"]
+    "compositeOrder": ["pack", "body", "boots", "tool", "helmet", "cargo"],
+    "toolMasks": {
+      "rows": { "mine-ready": 2, "mine-swing": 3 },
+      "ownership": "handle and metal-head coordinates only; hands and forearms remain body-owned",
+      "encoding": "per-frame rectangle runs in cell-local pixel coordinates",
+      "toolRects": {
+        "mine-ready": [[22, 17, 17, 14], [21, 17, 18, 14]],
+        "mine-swing": [[22, 17, 17, 14], [19, 1, 20, 25], [17, 2, 22, 27], [18, 8, 21, 23], [20, 8, 19, 23], [18, 4, 21, 27], [18, 1, 21, 28], [18, 5, 21, 26]]
+      },
+      "headRects": {
+        "mine-ready": [[32, 17, 7, 6], [31, 17, 8, 6]],
+        "mine-swing": [[31, 17, 8, 6], [19, 1, 12, 7], [17, 2, 12, 8], [18, 8, 12, 7], [20, 8, 12, 7], [18, 4, 12, 8], [18, 1, 12, 8], [18, 5, 12, 7]]
+      },
+      "forbiddenHeadColors": ["#e6a02b", "#d89c67", "#a55b2c", "#b45f2e"]
+    },
+    "toolMaterials": {
+      "handle": ["#1c1413", "#392319", "#583828", "#6f4930"],
+      "headLevel1": ["#140e0c", "#43413e", "#564537", "#655b4f"],
+      "headLevel2": ["#140e0c", "#43413e", "#655b4f", "#b8a795"],
+      "sharedAcrossLevels": ["handle", "hand", "forearm"]
+    }
   },
   "playerMotion": {
     "walk": {
@@ -171,6 +195,54 @@
     "elevatorTopCenterY": 52,
     "elevatorBottomCenterY": 200,
     "elevatorOffsetRule": "10 * (1 - position)"
+  },
+  "elevatorLayers": {
+    "cell": [56, 44],
+    "anchor": [28, 20],
+    "order": ["normal-back", "narrow-back", "normal-open-front", "narrow-open-front", "normal-closed-overlay", "narrow-closed-overlay", "fixed-control-panel"],
+    "outerBounds": {
+      "normal": [7, 1, 42, 43],
+      "narrow": [12, 1, 32, 43]
+    },
+    "floorY": 43,
+    "roofAttachment": [28, 4],
+    "interiorBounds": {
+      "normal": [13, 12, 30, 29],
+      "narrow": [17, 12, 22, 29]
+    },
+    "fixedControlPanelCell": [2, 1],
+    "sourceSheet": "generated-central-elevator.png",
+    "sourceSelection": "fixed component crops recorded after generation; never equal-width partition"
+  },
+  "shaftJunctions": {
+    "surface": {
+      "source": "generated-background-surface-station.png",
+      "crop": [650, 256, 400, 353],
+      "destination": [199, 0, 82, 38],
+      "openingX": [216, 264],
+      "centerX": 240
+    },
+    "rope": {
+      "source": "generated-background-surface-station.png",
+      "crop": [1354, 380, 14, 64],
+      "tile": [4, 8],
+      "anchor": [2, 0],
+      "start": [240, 36],
+      "endRule": "round(semantic.elevator.y) - 16"
+    },
+    "bottom": {
+      "sourceOpen": "generated-background-shaft-back.png",
+      "openCrop": [739, 707, 194, 219],
+      "sourceSeal": "generated-background-surface-station.png",
+      "sealCrop": [730, 457, 245, 152],
+      "destination": [216, 223, 49, 47],
+      "frames": ["sealed", "open"],
+      "sealedWhen": "!run.depth.unlocked.includes('D-030')"
+    }
+  },
+  "backgroundFloor": {
+    "shaftOpening": [216, 223, 49, 47],
+    "reason": "keep the dynamic sealed/open junction visible after the static floor layer"
   },
   "cargoCells": [
     { "class": "rock", "crop": [25, 288, 163, 170], "targetBounds": [9, 8] },

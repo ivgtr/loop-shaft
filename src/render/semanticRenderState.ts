@@ -80,6 +80,11 @@ export const D001_WORKBENCH_IMAGE_OFFSET = 14;
 export const D001_WORKBENCH_FALLBACK_OFFSET = 9;
 export const D001_CARGO_PLATFORM_OFFSET = 8;
 export const D001_ELEVATOR_BOTTOM_OFFSET = 10;
+export const D001_ROPE_START_Y = 36;
+
+export function d001RopeEndY(elevatorY: number): number {
+  return Math.max(D001_ROPE_START_Y, Math.round(elevatorY) - 16);
+}
 
 export interface CharacterRenderState {
   readonly clip: CharacterClip;
@@ -104,6 +109,7 @@ export interface SemanticRenderState {
     readonly door: 'open' | 'closed';
     readonly y: number;
   };
+  readonly shaftBottom: 'sealed' | 'open';
 }
 
 export function deriveSemanticRenderState(state: Readonly<GameState>, animationTimeMs: number): SemanticRenderState {
@@ -129,6 +135,7 @@ export function deriveSemanticRenderState(state: Readonly<GameState>, animationT
       door: ['ASCENDING', 'DESCENDING', 'TRAVELING'].includes(state.run.elevator.state) ? 'closed' : 'open',
       y: d001ElevatorVisualY(state.run.elevator.position),
     },
+    shaftBottom: state.run.depth.unlocked.includes('D-030') ? 'open' : 'sealed',
   };
 }
 

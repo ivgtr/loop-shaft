@@ -430,3 +430,40 @@ Original LOOP SHAFT D-001 elevator layer sheet. Orthographic 56x44 logical-pixel
 7. 実装結果を本正本へ追記する。
 
 完了条件は、Ropeが継ぎ目のない素材として縦坑とElevatorへ接続すること、Elevatorの開閉両状態が木製縦坑の画風へ一致すること、地上接続が一体に見えること、EXTEND前後で坑底が閉鎖状態から地下へ連続する開口へ変化すること、つるはしの手・handle・金属headが材質ごとに正しい色となること、既存の操作・Simulation・保存形式を維持することである。
+
+## 実装結果（2026-09-20）
+
+- `01c7717`時点の変更前証拠は既存の`docs/assets/stage3/second-follow-up/before/new-game.png`を再確認した。`git show 01c7717:docs/assets/stage3/second-follow-up/before/new-game.png`と現ファイルのSHA-256は`3ccc40058d56fd336d6f1ca4c4546ccc22d53a0d641580be5c642bad36d2e737`で一致する。
+- Ropeは`generated-background-surface-station.png`の固定cropから4x8 tileを作り、上端位相を固定して`y=36`から`round(semantic.elevator.y)-16`まで整数反復する。端数tileは屋根位置で切り、asset failure時は従来の単色線へ戻る。
+- 地上接続は同じ生成元の中央cropから`shaft-surface-junction.png`を作り、縦坑開口`x=216..264`と中心`x=240`へ固定した。坑底は同じ縦坑生成元のopen cropと地上設備のseal cropを合成した49x47のsealed/open atlasとし、`run.depth.unlocked.includes('D-030')`だけから状態を導出する。`background-floor.png`の該当範囲は透明化してjunctionを後面へ置いた。
+- Elevatorは固定プロンプトと`reference-environment.png`、`generated-background-shaft-back.png`、`reference-equipment.png`を基準に再生成した`generated-central-elevator.png`（SHA-256 `c1e8237890ef47d37fda46fe99fbfb3f7bc806ad091b26879b34643ab26578ca`）を7固定cropへ後処理した。normal/narrowの外枠、床、anchorを共有し、rear→Cargo・人物→front/closed overlayの順で描画する。Crew・Engineerの後にfrontを重ね、travel中だけtravel overlayの前に閉扉を描く。
+- つるはしはsource再生成を行わず、mine-ready 2frame・mine-swing 8frameのcell-local maskを生成仕様へ記録した。handleとheadを分離して用途別paletteへremapし、forbidden amber/skin colorsをtool layerから除外した。Level 2はhead paletteだけを変更し、handle・手・前腕はLevel 1と共有する。player compositeの再構成検査は透明RGBを正規化した上で行う。
+- ManifestへRope、surface junction、shaft-bottom atlasを独立fallback単位として追加した。既存のPlayer、NPC、Cargo、操作対象、GameState、Simulation、保存形式、hit領域は変更していない。
+
+### 変更ファイルと素材
+
+- 生成仕様・後処理: `art/d001/generation-spec.json`, `scripts/process-d001-assets.mjs`
+- 再生成source: `art/d001/sources/generated-central-elevator.png`
+- runtime素材: `public/assets/d001/runtime/elevator-rope-tile.png`, `shaft-surface-junction.png`, `shaft-bottom-junction-atlas.png`、Elevator、Player tool、Player composite依存のCrew Miner atlas、background floor
+- 描画・状態: `src/render/assets/d001Manifest.ts`, `src/render/d001ImageRenderer.ts`, `src/render/environment.ts`, `src/render/entities.ts`, `src/render/canvasRenderer.ts`, `src/render/gameRenderer.ts`, `src/render/semanticRenderState.ts`
+- 限定検査: `tests/assets.test.ts`, `tests/semanticRenderState.test.ts`, `tests/e2e/game.spec.ts`
+
+### 検証結果
+
+- `npm run assets:d001`: 成功。全runtime PNGの寸法、alpha 0/255、共通palette、Player layer再構成を後処理内で確認。
+- `npm test -- --run`: 8 files / 91 tests passed。
+- `npm run typecheck`: 成功。
+- `npm run build`: 成功。
+- `PLAYWRIGHT_BASE_URL=http://127.0.0.1:4174 npm run test:e2e -- --project=chromium`: 8 tests passed。初回MINE/SEND、移動・採掘・save reload、hover/touch、対象別fallback、`EXTEND D-030`成功後の坑底状態更新を含む。
+- asset unitではRope上下半分の一致、surface/bottomの寸法・中心、Elevator 7 cellの外形、通常/強化tool bankの差分範囲、forbidden色不在を検査した。semantic unitではsealed/openをD-030 unlock結果から検査した。
+
+### 比較画像と目視確認
+
+- 通常色・grayscaleの初期D-001とD-030解放後中間Elevator: `docs/assets/stage3/second-follow-up/after/stage3-second-follow-up-new-game.png`, `stage3-second-follow-up-new-game-grayscale.png`, `stage3-second-follow-up-progressed.png`, `stage3-second-follow-up-progressed-grayscale.png`
+- 閉扉normal/narrow、中間位置、Cargo搭載: `stage3-second-follow-up-elevator-closed-normal*.png`, `stage3-second-follow-up-elevator-closed-narrow*.png`
+- 目視では地上巻上設備・縦坑・Ropeが同じ中心軸へ連続し、初期sealed底とD-030解放後open底、Elevatorの上端・中間・下端、開扉・閉扉、normal/narrow、通常色/grayscaleを確認した。Ropeに時間依存animationはなく、Cargo・人物はfront/closed overlayの後ろへ収まる。
+
+### 残るリスクと持ち越し
+
+- Elevator sourceの固定cropは現在の生成sheetへ記録済みで、同sourceを差し替える場合はcropとSHA-256の同時更新が必要である。
+- 目視・E2Eは代表状態に限定しており、全GameState組み合わせのgolden画像比較は行っていない。D-030以深の背景設備化、性能目標、Stage 4以降の変更は今回の範囲外として持ち越さない。

@@ -11,6 +11,7 @@ import {
   drawD001CargoShadow,
   drawD001CarriedCargo,
   drawD001ElevatorBack,
+  drawD001ElevatorCargo,
   drawD001ElevatorFront,
   drawD001Node,
   drawD001Player,
@@ -38,6 +39,11 @@ export function drawEntities(
   if (state.run.depth.current === 'D-030') drawScanner(ctx, state, now);
   const elevatorImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets
     && drawD001ElevatorBack(ctx, semantic, assets));
+  const d001 = state.run.depth.current === 'D-001' && semantic;
+  if (d001 && !elevatorImage) drawD001ElevatorBackFallback(ctx, state, semantic!);
+  if (d001 && !(assets && drawD001ElevatorCargo(ctx, state, semantic!, assets))) {
+    drawElevatorCargoFallback(ctx, state, semantic!);
+  }
   if (state.run.porter.enabled) {
     if (state.run.depth.current === 'D-001' && semantic?.porter && assets?.ready('npcPorter')) {
       drawD001ActorShadow(ctx, semantic.porter);
@@ -53,9 +59,23 @@ export function drawEntities(
     if (!drawD001CarriedCargo(ctx, semantic!.character, assets!)) drawFallbackCarriedCargo(ctx, semantic!.character);
   } else drawWithD001GroundOffset(ctx, state.run.depth.current, () => drawCharacter(ctx, state, now));
   drawLoot(ctx, state, now, assets);
-  if (elevatorImage) drawD001ElevatorFront(ctx, state, semantic!, assets!);
-  else drawElevator(ctx, state, now);
-  drawLiftControl(ctx, state, elevatorImage);
+  if (!d001) {
+    drawElevator(ctx, state, now);
+    drawLiftControl(ctx, state, false);
+  }
+}
+
+export function drawD001ElevatorFrontLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  semantic: SemanticRenderState,
+  now: number,
+  assets?: D001AssetStore,
+): boolean {
+  const imageDrawn = Boolean(assets && drawD001ElevatorFront(ctx, state, semantic, assets));
+  if (!imageDrawn) drawD001ElevatorFrontFallback(ctx, state, semantic, now);
+  drawLiftControl(ctx, state, imageDrawn);
+  return imageDrawn;
 }
 
 function drawNodes(
@@ -194,7 +214,52 @@ function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: numb
   if (e.state === 'IDLE_BOTTOM' && e.cargo.length > 0 && !state.run.automation.autoDispatch.enabled && Math.floor(now / 500) % 2 === 0) { ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.lamp; ctx.textAlign = 'center'; ctx.fillText('SEND', WORLD.elevatorX, y - 22); ctx.textAlign = 'left'; }
 }
 
-function drawLiftControl(ctx: CanvasRenderingContext2D, state: GameState, housingDrawn = false): void {
+function drawD001ElevatorBackFallback(ctx: CanvasRenderingContext2D, state: GameState, semantic: SemanticRenderState): void {
+  const y = Math.round(semantic.elevator.y);
+  const half = semantic.elevator.width === 'narrow' ? 15 : 20;
+  ctx.fillStyle = '#22262b';
+  ctx.fillRect(WORLD.elevatorX - half, y - 16, half * 2 + 1, 35);
+  ctx.fillStyle = PALETTE.metal;
+  ctx.fillRect(WORLD.elevatorX - half, y - 16, half * 2 + 1, 3);
+  ctx.fillRect(WORLD.elevatorX - half, y + 16, half * 2 + 1, 3);
+  ctx.fillRect(WORLD.elevatorX - half, y - 16, 3, 35);
+  ctx.fillRect(WORLD.elevatorX + half - 2, y - 16, 3, 35);
+  if (state.run.elevator.state === 'ASCENDING' || state.run.elevator.state === 'DESCENDING' || state.run.elevator.state === 'TRAVELING') {
+    ctx.fillStyle = '#30363a';
+    ctx.fillRect(WORLD.elevatorX - half + 5, y - 11, half - 5, 25);
+    ctx.fillRect(WORLD.elevatorX + 1, y - 11, half - 5, 25);
+  }
+}
+
+function drawElevatorCargoFallback(ctx: CanvasRenderingContext2D, state: GameState, semantic: SemanticRenderState): void {
+  const count = Math.min(9, state.run.elevator.cargo.length);
+  for (let index = 0; index < count; index += 1) {
+    const row = Math.floor(index / 3);
+    const column = index % 3;
+    ctx.fillStyle = lootColor(state.run.elevator.cargo[index]!.kind);
+    ctx.fillRect(WORLD.elevatorX - 12 + column * 9, Math.round(semantic.elevator.y) + 8 - row * 6, 7, 5);
+  }
+}
+
+function drawD001ElevatorFrontFallback(ctx: CanvasRenderingContext2D, state: GameState, semantic: SemanticRenderState, now: number): void {
+  const y = Math.round(semantic.elevator.y);
+  const half = semantic.elevator.width === 'narrow' ? 15 : 20;
+  const closed = semantic.elevator.door === 'closed';
+  if (closed) {
+    ctx.fillStyle = '#3d4448';
+    ctx.fillRect(WORLD.elevatorX - half + 5, y - 11, half - 5, 25);
+    ctx.fillRect(WORLD.elevatorX + 1, y - 11, half - 5, 25);
+  }
+  ctx.fillStyle = state.run.elevator.state !== 'IDLE_BOTTOM' || state.run.elevator.cargo.length > 0 ? depthAccent(state.run.depth.current) : '#47413a';
+  ctx.fillRect(WORLD.elevatorX + Math.max(8, half - 7), y - 12, 3, 3);
+  if (!closed && state.run.elevator.state === 'IDLE_BOTTOM' && state.run.elevator.cargo.length > 0
+    && !state.run.automation.autoDispatch.enabled && Math.floor(now / 500) % 2 === 0) {
+    ctx.font = '5px monospace'; ctx.fillStyle = PALETTE.lamp; ctx.textAlign = 'center';
+    ctx.fillText('SEND', WORLD.elevatorX, y - 22); ctx.textAlign = 'left';
+  }
+}
+
+export function drawLiftControl(ctx: CanvasRenderingContext2D, state: GameState, housingDrawn = false): void {
   const { x, y } = INTERACTION_LAYOUT.liftControl;
   if (!housingDrawn) { ctx.fillStyle = '#24272a'; ctx.fillRect(x, y, 8, 12); }
   ctx.fillStyle = state.run.automation.autoDispatch.enabled ? PALETTE.cyan : state.run.automation.autoDispatch.unlocked ? PALETTE.lampDim : '#3c3b3b'; ctx.fillRect(x + 3, y + 2, 2, 2);

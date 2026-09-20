@@ -78,6 +78,42 @@ describe('D-001 assets', () => {
     }
   });
 
+  it('keeps the rope tile periodic and the junction atlases centered', () => {
+    const rope = resolve(runtime, 'elevator-rope-tile.png');
+    expect(opaqueBounds(rope)).toEqual([3, 8, 0, 0]);
+    const ropeDifference = execFileSync('magick', [
+      rope, '-crop', '4x4+0+0', '+repage',
+      '(', rope, '-crop', '4x4+0+4', '+repage', ')',
+      '-compose', 'difference', '-composite', '-format', '%[fx:mean]', 'info:',
+    ], { encoding: 'utf8' });
+    expect(Number(ropeDifference)).toBe(0);
+
+    const surface = resolve(runtime, 'shaft-surface-junction.png');
+    expect(opaqueBounds(surface)[0]).toBeGreaterThanOrEqual(80);
+    expect(opaqueBounds(surface)[2]).toBe(0);
+    const bottom = resolve(runtime, 'shaft-bottom-junction-atlas.png');
+    for (const frame of [0, 1]) expect(opaqueBounds(bottom, `49x47+${frame * 49}+0`)).toEqual([49, 47, 0, 0]);
+  });
+
+  it('keeps Elevator cells fixed while changing only width and door layer', () => {
+    const elevator = resolve(runtime, 'central-elevator-atlas.png');
+    const cells = [
+      [0, 0, [42, 43, 7, 1]], [1, 0, [32, 43, 12, 1]],
+      [2, 0, [42, 43, 7, 1]], [3, 0, [32, 43, 12, 1]],
+      [0, 44, [42, 43, 7, 1]], [1, 44, [32, 43, 12, 1]], [2, 44, [18, 34, 19, 10]],
+    ] as const;
+    for (const [frame, y, expected] of cells) {
+      expect(opaqueBounds(elevator, `56x44+${frame * 56}+${y}`), `Elevator frame ${frame}`).toEqual(expected);
+    }
+    const normalRear = resolve(root, 'public/assets/d001/runtime/central-elevator-atlas.png');
+    const rearDiff = execFileSync('magick', [
+      normalRear, '-crop', '56x44+0+0', '+repage',
+      '(', normalRear, '-crop', '56x44+0+44', '+repage', ')',
+      '-compose', 'difference', '-composite', '-format', '%[fx:mean]', 'info:',
+    ], { encoding: 'utf8' });
+    expect(Number(rearDiff)).toBeGreaterThan(0);
+  });
+
   it('grounds every mining node frame in its cell', () => {
     for (const file of [
       'node-scrap-ledge-atlas.png',
@@ -153,12 +189,48 @@ describe('D-001 assets', () => {
     }
   });
 
+  it('keeps pickaxe ownership material-separated across tool levels', () => {
+    const tool = resolve(runtime, 'player-tool-atlas.png');
+    const colors = execFileSync('magick', [tool, '-alpha', 'off', '-unique-colors', 'txt:-'], { encoding: 'utf8' });
+    for (const forbidden of ['#E6A02B', '#D89C67', '#A55B2C', '#B45F2E']) {
+      expect(colors.toUpperCase()).not.toContain(forbidden);
+    }
+    const temporary = mkdtempSync(join(tmpdir(), 'loop-shaft-tool-test-'));
+    try {
+      const first = join(temporary, 'first.png');
+      const second = join(temporary, 'second.png');
+      const difference = join(temporary, 'difference.png');
+      const outsideHead = join(temporary, 'outside-head.png');
+      execFileSync('magick', [tool, '-crop', '320x320+0+0', '+repage', first]);
+      execFileSync('magick', [tool, '-crop', '320x320+320+0', '+repage', second]);
+      execFileSync('magick', [first, second, '-compose', 'difference', '-composite', difference]);
+      execFileSync('magick', [difference, '-fill', 'black',
+        '-draw', [
+          'rectangle 32,97 38,102', 'rectangle 71,97 78,102',
+          'rectangle 31,137 38,142', 'rectangle 59,121 70,127',
+          'rectangle 97,122 108,129', 'rectangle 138,128 149,134',
+          'rectangle 180,128 191,134', 'rectangle 218,124 229,131',
+          'rectangle 258,121 269,128', 'rectangle 298,125 309,131',
+        ].join(' '), outsideHead]);
+      const outsideMean = Number(execFileSync('magick', [outsideHead, '-threshold', '0', '-format', '%[fx:mean]', 'info:'], { encoding: 'utf8' }));
+      expect(outsideMean).toBe(0);
+      const totalMean = Number(execFileSync('magick', [difference, '-threshold', '0', '-format', '%[fx:mean]', 'info:'], { encoding: 'utf8' }));
+      expect(totalMean).toBeGreaterThan(0);
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+
   it('keeps Player, each NPC role and Cargo as independent fallback groups', () => {
     expect(Object.keys(D001_FALLBACK_GROUPS)).toEqual([
       'player', 'porter', 'crewMiner', 'crewPorter', 'engineer', 'cargo',
+      'elevator', 'rope', 'surfaceJunction', 'shaftBottom',
     ]);
     expect(D001_FALLBACK_GROUPS.player).toHaveLength(5);
     for (const group of ['porter', 'crewMiner', 'crewPorter', 'engineer', 'cargo'] as const) {
+      expect(D001_FALLBACK_GROUPS[group]).toHaveLength(1);
+    }
+    for (const group of ['elevator', 'rope', 'surfaceJunction', 'shaftBottom'] as const) {
       expect(D001_FALLBACK_GROUPS[group]).toHaveLength(1);
     }
     const keys = Object.values(D001_FALLBACK_GROUPS).flat();

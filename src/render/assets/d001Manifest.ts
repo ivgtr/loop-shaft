@@ -7,6 +7,9 @@ export const D001_ASSET_FILES = {
   backgroundShaft: 'background-shaft-back.png',
   backgroundStructure: 'background-tunnel-structure.png',
   backgroundFloor: 'background-floor.png',
+  elevatorRopeTile: 'elevator-rope-tile.png',
+  shaftSurfaceJunction: 'shaft-surface-junction.png',
+  shaftBottomJunction: 'shaft-bottom-junction-atlas.png',
   playerBody: 'player-body-atlas.png',
   playerHelmet: 'player-helmet-atlas.png',
   playerTool: 'player-tool-atlas.png',
@@ -25,7 +28,7 @@ export const D001_ASSET_FILES = {
 } as const;
 
 export const D001_BACKGROUND_KEYS = [
-  'backgroundRock', 'backgroundTunnel', 'backgroundShaft', 'backgroundSurface', 'backgroundStructure', 'backgroundFloor',
+  'backgroundRock', 'backgroundTunnel', 'backgroundShaft', 'backgroundStructure', 'backgroundFloor',
 ] as const satisfies readonly D001AssetKey[];
 
 export const D001_PLAYER_KEYS = [
@@ -39,6 +42,10 @@ export const D001_FALLBACK_GROUPS = {
   crewPorter: ['npcCrewPorter'],
   engineer: ['npcEngineer'],
   cargo: ['cargoItems'],
+  elevator: ['elevator'],
+  rope: ['elevatorRopeTile'],
+  surfaceJunction: ['shaftSurfaceJunction'],
+  shaftBottom: ['shaftBottomJunction'],
 } as const satisfies Record<string, readonly D001AssetKey[]>;
 
 export const D001_NODE_ASSETS = {

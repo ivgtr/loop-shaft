@@ -15,6 +15,7 @@ import {
 import { AssetStore } from './assets/assetStore';
 import { d001AssetUrls, type D001AssetKey } from './assets/d001Manifest';
 import { drawD001ActorShadow, drawD001Cargo, drawD001Engineer } from './d001ImageRenderer';
+import { drawD001ElevatorFrontLayer } from './entities';
 import { D001_VISUAL_GROUND_OFFSET, deriveSemanticRenderState } from './semanticRenderState';
 
 export class GameRenderer {
@@ -44,6 +45,7 @@ export class GameRenderer {
 
   render(state: GameState, now: number, hoveredKey: string | null = null): void {
     this.base.render(state, now);
+    const semantic = deriveSemanticRenderState(state, now);
     if (state.run.elevator.travel) {
       this.base.drawForegroundFx(now);
       return;
@@ -56,7 +58,7 @@ export class GameRenderer {
     drawTransportLine(this.ctx, state, this.assets);
     drawFreightCage(this.ctx, state, this.assets);
     drawBores(this.ctx, state, now, this.assets);
-    const engineer = deriveSemanticRenderState(state, now).engineer;
+    const engineer = semantic.engineer;
     if (engineer?.visible && state.run.depth.current === 'D-001' && this.assets.ready('npcEngineer')) {
       drawD001ActorShadow(this.ctx, engineer);
     }
@@ -66,6 +68,7 @@ export class GameRenderer {
       drawEngineer(this.ctx, state, now);
       this.ctx.restore();
     }
+    if (depth === 'D-001') drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets);
     const targets = deriveInteractionTargets(state);
     const guide = deriveInitialLogisticsGuide(state);
     const guideTargetKey = initialGuideTargetKey(guide, targets);

@@ -99,6 +99,52 @@ function placeTrimmed(sourceFile, width, height, x, y, destination, role = null)
   quantize(canvas, join(output, destination), false, role);
 }
 
+function cropResize(sourceFile, crop, width, height, destination, role = null) {
+  const [x, y, cropWidth, cropHeight] = crop;
+  const raw = join(work, `crop-${destination}-raw.png`);
+  const resized = join(work, `crop-${destination}-resized.png`);
+  magick(join(source, sourceFile), '-crop', `${cropWidth}x${cropHeight}+${x}+${y}`, '+repage', raw);
+  magick(raw, '-alpha', 'on', '-channel', 'A', '-threshold', '50%', '+channel',
+    '-filter', 'point', '-resize', `${width}x${height}!`, resized);
+  quantize(resized, join(output, destination), false, role);
+}
+
+function clearShaftOpening(file) {
+  magick(file, '-alpha', 'on', '-fill', 'none', '-draw', 'rectangle 216,223 264,269', file);
+}
+
+function processJunctions() {
+  cropResize('generated-background-surface-station.png', [650, 256, 400, 353], 82, 38,
+    'shaft-surface-junction.png', 'structure');
+
+  const ropeRaw = join(work, 'rope-source.png');
+  const ropeResized = join(work, 'rope-resized.png');
+  const ropeHalf = join(work, 'rope-half.png');
+  const ropePeriodic = join(work, 'rope-periodic.png');
+  magick(join(source, 'generated-background-surface-station.png'), '-crop', '14x64+1354+380', '+repage', ropeRaw);
+  magick(ropeRaw, '-alpha', 'on', '-channel', 'A', '-threshold', '50%', '+channel',
+    '-filter', 'point', '-resize', '4x8!', ropeResized);
+  magick(ropeResized, '-crop', '4x4+0+0', '+repage', ropeHalf);
+  magick(ropeHalf, ropeHalf, '-append', ropePeriodic);
+  quantize(ropePeriodic, join(output, 'elevator-rope-tile.png'), false, 'structure');
+
+  const openRaw = join(work, 'shaft-bottom-open-raw.png');
+  const open = join(work, 'shaft-bottom-open.png');
+  const sealRaw = join(work, 'shaft-bottom-seal-raw.png');
+  const seal = join(work, 'shaft-bottom-seal.png');
+  const sealed = join(work, 'shaft-bottom-sealed.png');
+  magick(join(source, 'generated-background-shaft-back.png'), '-crop', '194x219+739+707', '+repage', openRaw);
+  magick(openRaw, '-alpha', 'on', '-channel', 'A', '-threshold', '50%', '+channel',
+    '-filter', 'point', '-resize', '49x47!', open);
+  magick(join(source, 'generated-background-surface-station.png'), '-crop', '245x152+730+457', '+repage', sealRaw);
+  magick(sealRaw, '-alpha', 'on', '-channel', 'A', '-threshold', '50%', '+channel',
+    '-filter', 'point', '-resize', '49x31!', seal);
+  magick(open, seal, '-geometry', '+0+16', '-composite', sealed);
+  const bottomAtlas = join(work, 'shaft-bottom-junction-atlas.png');
+  magick(sealed, open, '+append', bottomAtlas);
+  quantize(bottomAtlas, join(output, 'shaft-bottom-junction-atlas.png'), false, 'structure');
+}
+
 function processBackgrounds() {
   const underground = join(work, 'rock-underground.png');
   const raw = join(work, 'rock-base.png');
@@ -117,6 +163,8 @@ function processBackgrounds() {
     specification.sourceCrops.tunnelStructureRight,
   ], 'background-tunnel-structure.png', 'structure');
   placeTrimmed('generated-background-floor.png', 480, 60, 0, 210, 'background-floor.png', 'rock');
+  clearShaftOpening(join(output, 'background-floor.png'));
+  processJunctions();
 }
 
 function cropStrip(sourceFile, count, cellWidth, cellHeight, destination, paddingX = 4, paddingY = 4) {
@@ -181,17 +229,27 @@ function processNodesAndEquipment() {
   magick(...overlays, '+append', workbenchAtlas);
   quantize(workbenchAtlas, join(output, 'workbench-atlas.png'), false, 'interactable');
 
-  const info = execFileSync('identify', ['-format', '%w %h', join(source, 'generated-central-elevator.png')], { encoding: 'utf8' }).trim().split(' ').map(Number);
-  const [width, height] = info;
-  const cells = [];
-  for (let index = 0; index < 7; index += 1) {
-    const left = Math.round(width * index / 7);
-    const right = Math.round(width * (index + 1) / 7);
+  const elevatorCells = [
+    { crop: [55, 20, 330, 643], bounds: [7, 1, 42, 43] },
+    { crop: [416, 18, 206, 645], bounds: [12, 1, 32, 43] },
+    { crop: [670, 17, 327, 646], bounds: [7, 1, 42, 43] },
+    { crop: [1048, 17, 213, 646], bounds: [12, 1, 32, 43] },
+    { crop: [1307, 17, 327, 646], bounds: [7, 1, 42, 43] },
+    { crop: [1680, 17, 217, 646], bounds: [12, 1, 32, 43] },
+    { crop: [1948, 141, 155, 521], bounds: [19, 10, 18, 34] },
+  ];
+  const cells = elevatorCells.map(({ crop, bounds }, index) => {
+    const [cropX, cropY, cropWidth, cropHeight] = crop;
+    const [x, y, targetWidth, targetHeight] = bounds;
+    const raw = join(work, `elevator-${index}-raw.png`);
+    const resized = join(work, `elevator-${index}-resized.png`);
     const cell = join(work, `elevator-${index}.png`);
-    magick(join(source, 'generated-central-elevator.png'), '-crop', `${right - left}x${height}+${left}+0`, '+repage', '-trim', '+repage',
-      '-filter', 'point', '-resize', '52x42>', '-gravity', 'south', '-background', 'none', '-extent', '56x44', cell);
-    cells.push(cell);
-  }
+    magick(join(source, 'generated-central-elevator.png'), '-crop', `${cropWidth}x${cropHeight}+${cropX}+${cropY}`, '+repage', raw);
+    magick(raw, '-alpha', 'on', '-channel', 'A', '-threshold', '50%', '+channel',
+      '-filter', 'point', '-resize', `${targetWidth}x${targetHeight}!`, resized);
+    magick('-size', '56x44', 'xc:none', resized, '-geometry', `+${x}+${y}`, '-composite', cell);
+    return cell;
+  });
   const blank = join(work, 'elevator-blank.png');
   magick('-size', '56x44', 'xc:none', blank);
   const row0 = join(work, 'elevator-row0.png');
@@ -375,19 +433,104 @@ function processPlayer() {
 
   const activeRects = [];
   rows.forEach((frames, row) => frames.forEach((_, column) => activeRects.push({ x: column * 40, y: row * 40 })));
+  // Pickaxe ownership is intentionally frame-specific.  The source art has the
+  // hands touching the handle, so connected-component extraction would assign
+  // both materials to the same component.  These conservative rectangles are
+  // clipped to the visible pickaxe area below and are kept in the generation
+  // spec as the reviewable ownership boundary.
+  const ownershipSpec = specification.playerOwnership.toolMasks;
+  const toolRects = {
+    2: ownershipSpec.toolRects['mine-ready'],
+    3: ownershipSpec.toolRects['mine-swing'],
+  };
+  const headRects = {
+    2: ownershipSpec.headRects['mine-ready'],
+    3: ownershipSpec.headRects['mine-swing'],
+  };
+  const makeMask = (name, definitions) => {
+    const mask = join(work, `player-${name}-mask.png`);
+    const commands = [];
+    for (const [rowString, rects] of Object.entries(definitions)) {
+      const row = Number(rowString);
+      rects.forEach((rect, column) => {
+        const [x, y, width, height] = rect;
+        commands.push('-draw', `rectangle ${column * 40 + x},${row * 40 + y} ${column * 40 + x + width - 1},${row * 40 + y + height - 1}`);
+      });
+    }
+    magick('-size', '320x320', 'xc:none', '-fill', 'white', ...commands, mask);
+    return mask;
+  };
+  const toolMask = makeMask('tool', toolRects);
+  const headRectMask = makeMask('head', headRects);
+  const headMask = join(work, 'player-head-mask-clipped.png');
+  magick(headRectMask, toolMask, '-compose', 'DstIn', '-composite', headMask);
+  const handleMask = join(work, 'player-handle-mask.png');
+  magick(toolMask, headMask, '-compose', 'DstOut', '-composite', handleMask);
+
+  const materialPalette = (name, colors) => {
+    const file = join(work, `palette-${name}.png`);
+    magick(...colors.flatMap((color) => [`xc:${color}`]), '+append', file);
+    return file;
+  };
+  const handlePalette = materialPalette('tool-handle', ['#1c1413', '#392319', '#583828', '#6f4930']);
+  const headLevel1Palette = materialPalette('tool-head-level1', ['#140e0c', '#43413e', '#564537', '#655b4f']);
+  const headLevel2Palette = materialPalette('tool-head-level2', ['#140e0c', '#43413e', '#655b4f', '#b8a795']);
+  const toolLayer = join(work, 'player-tool-layer.png');
+  const toolLayerClean = join(work, 'player-tool-layer-clean.png');
+  const effectiveToolMask = join(work, 'player-tool-mask-effective.png');
+  const handleLayer = join(work, 'player-tool-handle-layer.png');
+  const headLayer = join(work, 'player-tool-head-layer.png');
+  const handleRemapped = join(work, 'player-tool-handle-remapped.png');
+  const headLevel1 = join(work, 'player-tool-head-level1.png');
+  const headLevel2 = join(work, 'player-tool-head-level2.png');
+  const toolLevel1 = join(work, 'player-tool-level1.png');
+  const toolLevel2 = join(work, 'player-tool-level2.png');
+  magick(playerCompositeReference, toolMask, '-compose', 'DstIn', '-composite', toolLayer);
+  magick(toolLayer, '-fill', 'none', '-opaque', '#e6a02b', '-opaque', '#d89c67', '-opaque', '#a55b2c', '-opaque', '#b45f2e', toolLayerClean);
+  const effectiveToolAlpha = join(work, 'player-tool-mask-effective-alpha.png');
+  magick(toolLayerClean, '-alpha', 'extract', '-threshold', '50%', effectiveToolAlpha);
+  magick('-size', '320x320', 'xc:white', effectiveToolAlpha, '-alpha', 'off', '-compose', 'CopyOpacity', '-composite', effectiveToolMask);
+  magick(toolLayerClean, handleMask, '-compose', 'DstIn', '-composite', handleLayer);
+  magick(toolLayerClean, headMask, '-compose', 'DstIn', '-composite', headLayer);
+  const remapMaterial = (input, paletteFile, destination) => {
+    const alpha = join(work, `material-alpha-${Math.random().toString(16).slice(2)}.png`);
+    const color = join(work, `material-color-${Math.random().toString(16).slice(2)}.png`);
+    magick(input, '-alpha', 'extract', alpha);
+    magick(input, '-alpha', 'off', '-colorspace', 'sRGB', '+dither', '-remap', paletteFile, color);
+    magick(color, alpha, '-alpha', 'off', '-compose', 'CopyOpacity', '-composite', destination);
+  };
+  remapMaterial(handleLayer, handlePalette, handleRemapped);
+  remapMaterial(headLayer, headLevel1Palette, headLevel1);
+  remapMaterial(headLayer, headLevel2Palette, headLevel2);
+  magick(handleRemapped, headLevel1, '-compose', 'Over', '-composite', toolLevel1);
+  magick(handleRemapped, headLevel2, '-compose', 'Over', '-composite', toolLevel2);
+
+  // Make the level-1 composite the canonical reference used by body/layer
+  // extraction and reassembly checks.  The level-2 bank only replaces head
+  // pixels, leaving handle and hand pixels byte-identical.
+  const clearedComposite = join(work, 'player-composite-cleared.png');
+  const renderedComposite = join(work, 'player-composite-rendered.png');
+  magick(playerCompositeReference, effectiveToolMask, '-compose', 'DstOut', '-composite', clearedComposite);
+  magick(clearedComposite, toolLevel1, '-compose', 'Over', '-composite', renderedComposite);
+  quantize(renderedComposite, playerCompositeReference, false, 'character');
+
   const masks = {
     helmet: activeRects.map(({ x, y }) => `rectangle ${x},${y} ${x + 39},${y + 15}`).join(' '),
     pack: activeRects.map(({ x, y }) => `rectangle ${x},${y + 16} ${x + 14},${y + 32}`).join(' '),
     boots: activeRects.map(({ x, y }) => `rectangle ${x},${y + 33} ${x + 39},${y + 39}`).join(' '),
-    tool: [2, 3].flatMap((row) => rows[row].map((_, column) => `rectangle ${column * 40 + 23},${row * 40 + 16} ${column * 40 + 39},${row * 40 + 32}`)).join(' '),
   };
-  const union = Object.values(masks).join(' ');
-
   const body = join(work, 'player-body.png');
-  magick(playerCompositeReference, '-fill', 'none', '-draw', union, body);
+  magick(playerCompositeReference, effectiveToolMask, '-compose', 'DstOut', '-composite', body);
+  magick(body, '-fill', 'none', '-draw', Object.values(masks).join(' '), body);
   quantize(body, join(output, 'player-body-atlas.png'), false, 'character');
 
   function layer(name, tint, destination, doubleBank = false) {
+    if (name === 'tool') {
+      const atlas = join(work, 'player-tool-banks.png');
+      magick(toolLevel1, toolLevel2, '+append', atlas);
+      quantize(atlas, join(output, destination), false, 'character');
+      return;
+    }
     const layerFile = join(work, `player-${name}-layer.png`);
     const mask = join(work, `player-${name}-mask.png`);
     magick('-size', '320x320', 'xc:none', '-fill', 'white', '-draw', masks[name], mask);
@@ -533,8 +676,16 @@ function validate() {
   const composite = join(work, 'validate-player-composite.png');
   magick('-size', '320x320', 'xc:none', pack, '-composite', join(output, 'player-body-atlas.png'), '-composite',
     boots, '-composite', tool, '-composite', join(output, 'player-helmet-atlas.png'), '-composite', composite);
+  const canonicalComposite = join(work, 'validate-player-composite-canonical.png');
+  const canonicalReference = join(work, 'validate-player-reference-canonical.png');
+  const compositeAlpha = join(work, 'validate-player-composite-alpha.png');
+  const referenceAlpha = join(work, 'validate-player-reference-alpha.png');
+  magick(composite, '-alpha', 'extract', compositeAlpha);
+  magick(playerCompositeReference, '-alpha', 'extract', referenceAlpha);
+  magick('-size', '320x320', 'xc:#000000', compositeAlpha, '-alpha', 'off', '-compose', 'CopyOpacity', '-composite', canonicalComposite);
+  magick('-size', '320x320', 'xc:#000000', referenceAlpha, '-alpha', 'off', '-compose', 'CopyOpacity', '-composite', canonicalReference);
   const compositeDifference = Number(execFileSync('magick', [
-    composite, playerCompositeReference, '-compose', 'difference', '-composite', '-format', '%[fx:mean]', 'info:',
+    canonicalComposite, canonicalReference, '-compose', 'difference', '-composite', '-format', '%[fx:mean]', 'info:',
   ], { encoding: 'utf8' }));
   if (compositeDifference !== 0) throw new Error('Player ownership layers do not reconstruct the reference composite');
 

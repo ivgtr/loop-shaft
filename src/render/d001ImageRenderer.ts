@@ -12,6 +12,8 @@ import {
   cargoVisualClass,
   D001_WORKBENCH_IMAGE_OFFSET,
   D001_VISUAL_GROUND_OFFSET,
+  D001_ROPE_START_Y,
+  d001RopeEndY,
   type ActorRenderState,
   type CrewRenderState,
   type EngineerRenderState,
@@ -25,6 +27,41 @@ export function drawD001Background(ctx: CanvasRenderingContext2D, assets: D001As
   for (const key of D001_BACKGROUND_KEYS) {
     const image = assets.ready(key);
     if (image) ctx.drawImage(image, 0, 0);
+  }
+  return true;
+}
+
+export function drawD001SurfaceJunction(ctx: CanvasRenderingContext2D, assets: D001AssetStore): boolean {
+  const image = assets.ready('shaftSurfaceJunction');
+  if (!image) return false;
+  ctx.drawImage(image, 199, 0, 82, 38);
+  return true;
+}
+
+export function drawD001ShaftBottom(
+  ctx: CanvasRenderingContext2D,
+  semantic: SemanticRenderState,
+  assets: D001AssetStore,
+): boolean {
+  const image = assets.ready('shaftBottomJunction');
+  if (!image) return false;
+  const frame = semantic.shaftBottom === 'open' ? 1 : 0;
+  ctx.drawImage(image, frame * 49, 0, 49, 47, 216, 223, 49, 47);
+  return true;
+}
+
+export function drawD001Rope(
+  ctx: CanvasRenderingContext2D,
+  semantic: SemanticRenderState,
+  assets: D001AssetStore,
+): boolean {
+  const image = assets.ready('elevatorRopeTile');
+  if (!image) return false;
+  const top = D001_ROPE_START_Y;
+  const bottom = d001RopeEndY(semantic.elevator.y);
+  for (let y = top; y < bottom; y += 8) {
+    const height = Math.min(8, bottom - y);
+    ctx.drawImage(image, 0, 0, 4, height, WORLD.elevatorX - 2, y, 4, height);
   }
   return true;
 }
@@ -187,6 +224,27 @@ export function drawD001ElevatorBack(
   return true;
 }
 
+export function drawD001ElevatorCargo(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  semantic: SemanticRenderState,
+  assets: D001AssetStore,
+): boolean {
+  if (!assets.ready('cargoItems')) return false;
+  const count = Math.min(9, state.run.elevator.cargo.length);
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const row = Math.floor(index / 3);
+    const column = index % 3;
+    const item = state.run.elevator.cargo[index]!;
+    if (!drawD001Cargo(ctx, item, WORLD.elevatorX - 8 + column * 9,
+      Math.round(semantic.elevator.y) + 13 - row * 6, assets)) {
+      ctx.fillStyle = lootColor(item.kind);
+      ctx.fillRect(WORLD.elevatorX - 12 + column * 9, Math.round(semantic.elevator.y) + 8 - row * 6, 7, 5);
+    }
+  }
+  return true;
+}
+
 export function drawD001ElevatorFront(
   ctx: CanvasRenderingContext2D,
   state: GameState,
@@ -199,18 +257,6 @@ export function drawD001ElevatorFront(
   const x = WORLD.elevatorX - 28;
   const y = Math.round(semantic.elevator.y) - 20;
   const variant = narrow ? 1 : 0;
-
-  const count = Math.min(9, state.run.elevator.cargo.length);
-  for (let index = count - 1; index >= 0; index -= 1) {
-    const row = Math.floor(index / 3);
-    const column = index % 3;
-    const item = state.run.elevator.cargo[index]!;
-    if (!drawD001Cargo(ctx, item, WORLD.elevatorX - 8 + column * 9, Math.round(semantic.elevator.y) + 13 - row * 6, assets)) {
-      ctx.fillStyle = lootColor(item.kind);
-      ctx.fillRect(WORLD.elevatorX - 12 + column * 9, Math.round(semantic.elevator.y) + 8 - row * 6, 7, 5);
-    }
-  }
-
   ctx.drawImage(image, (2 + variant) * 56, 0, 56, 44, x, y, 56, 44);
   if (semantic.elevator.door === 'closed') ctx.drawImage(image, variant * 56, 44, 56, 44, x, y, 56, 44);
   ctx.drawImage(image, 2 * 56, 44, 56, 44, 269 - 28, 198 - 20, 56, 44);

@@ -8,6 +8,7 @@ import {
   characterClip,
   crewClip,
   d001ElevatorVisualY,
+  d001RopeEndY,
   deriveSemanticRenderState,
   engineerClip,
   nodeVisualState,
@@ -107,6 +108,11 @@ describe('semantic render state', () => {
     state.run.elevator.state = 'ASCENDING';
     const semantic = deriveSemanticRenderState(state, 0);
     expect(semantic.elevator).toMatchObject({ width: 'narrow', door: 'closed' });
+    expect(semantic.shaftBottom).toBe('sealed');
+    state.run.depth.unlocked.push('D-030');
+    expect(deriveSemanticRenderState(state, 0).shaftBottom).toBe('open');
+    expect(d001RopeEndY(d001ElevatorVisualY(0))).toBe(184);
+    expect(d001RopeEndY(d001ElevatorVisualY(1))).toBe(36);
     expect(d001ElevatorVisualY(0)).toBe(200);
     expect(d001ElevatorVisualY(0.5)).toBe(126);
     expect(d001ElevatorVisualY(1)).toBe(52);

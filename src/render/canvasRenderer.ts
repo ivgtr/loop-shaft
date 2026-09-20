@@ -1,7 +1,7 @@
 import { WORLD } from '../game/config';
 import { currentFloor } from '../game/simulation';
 import type { GameEvent, GameState, Rarity } from '../game/types';
-import { drawEntities } from './entities';
+import { drawD001ElevatorFrontLayer, drawEntities } from './entities';
 import { drawEnvironment } from './environment';
 import { PALETTE } from './palette';
 import type { D001AssetStore } from './d001ImageRenderer';
@@ -56,6 +56,9 @@ export class CanvasRenderer {
     const semantic = deriveSemanticRenderState(state, now);
     drawEnvironment(this.ctx, state, this.assets);
     drawEntities(this.ctx, state, now, semantic, this.assets);
+    if (state.run.depth.current === 'D-001' && state.run.elevator.travel) {
+      drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets);
+    }
     this.ctx.restore();
     if (state.run.elevator.travel) this.drawTravel(state);
   }
