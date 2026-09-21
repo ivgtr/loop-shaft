@@ -1,4 +1,4 @@
-import { drawCargoMark } from './discoveryCues';
+import { drawDetailedCargo, drawCargoFallback } from './cargoSprites';
 import { WORLD } from '../game/config';
 import type { GameState, LootKind, LootStack, MiningNode } from '../game/types';
 import type { AssetStore } from './assets/assetStore';
@@ -98,6 +98,15 @@ export function canDrawD001Player(assets: D001AssetStore): boolean {
   return assets.groupReady(D001_PLAYER_KEYS);
 }
 
+// Cell-local helmet lamp positions, reviewed against the existing pose atlas.
+// The first two collect helmets belong to the body layer below the original helmet mask.
+export const PLAYER_LAMP_ANCHORS: readonly (readonly (readonly [number, number])[])[] = [
+  [[27, 12], [27, 12]], [[25, 13], [27, 10], [27, 12], [27, 11]],
+  [[23, 13], [23, 14]], [[26, 14], [27, 21], [29, 19], [25, 21], [23, 19], [20, 15], [24, 11], [25, 12]],
+  [[29, 25], [29, 27], [26, 19], [26, 20]], [[26, 17], [26, 16], [24, 18], [25, 15]],
+  [[25, 17], [24, 16]], [[30, 16], [29, 18], [28, 12], [27, 10]],
+];
+
 export function drawD001Player(
   ctx: CanvasRenderingContext2D,
   semantic: SemanticRenderState,
@@ -112,8 +121,14 @@ export function drawD001Player(
   drawPlayerLayer(ctx, assets, 'playerPack', character.packBank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
   drawPlayerLayer(ctx, assets, 'playerBody', character.frame * 40, character.row * 40, destinationX, destinationY);
   drawPlayerLayer(ctx, assets, 'playerBoots', character.bootsBank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
-  drawPlayerLayer(ctx, assets, 'playerTool', character.toolBank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
+  const recovered = character.recoveredTool !== null && assets.ready('playerRecoveredTools');
+  const bank = recovered ? { basic: 0, fossil: 1, light: 2, survey: 3 }[character.recoveredTool!] : character.toolBank;
+  drawPlayerLayer(ctx, assets, recovered ? 'playerRecoveredTools' : 'playerTool', bank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
   drawPlayerLayer(ctx, assets, 'playerHelmet', character.frame * 40, character.row * 40, destinationX, destinationY);
+  const lamp = PLAYER_LAMP_ANCHORS[character.row]?.[character.frame];
+  if (character.lampColor && lamp) {
+    ctx.fillStyle = character.lampColor; ctx.fillRect(destinationX + lamp[0], destinationY + lamp[1], 2, 1);
+  }
   ctx.restore();
 }
 
@@ -165,11 +180,11 @@ export function drawD001Cargo(
   anchorY: number,
   assets: D001AssetStore,
 ): boolean {
+  if (drawDetailedCargo(ctx, item, anchorX, anchorY)) return true;
   const image = assets.ready('cargoItems');
   if (!image) return false;
   const frame = CARGO_FRAME[cargoVisualClass(item)];
   ctx.drawImage(image, frame * 12, 0, 12, 10, Math.round(anchorX) - 6, Math.round(anchorY) - 10, 12, 10);
-  drawCargoMark(ctx, item, anchorX, anchorY);
   return true;
 }
 
@@ -178,11 +193,12 @@ export function drawD001CarriedCargo(
   actor: ActorRenderState<string>,
   assets: D001AssetStore,
 ): boolean {
-  if (actor.carried.length === 0 || !assets.ready('cargoItems')) return false;
+  if (actor.carried.length === 0) return false;
   const visible = actor.carried.slice(0, 3);
   visible.forEach((item, index) => {
     const forward = actor.worldAnchor.x + actor.facing * (8 + index * 2);
-    drawD001Cargo(ctx, item, forward, actor.worldAnchor.y - 7 - index * 3, assets);
+    const y = actor.worldAnchor.y - 7 - index * 3;
+    if (!drawD001Cargo(ctx, item, forward, y, assets)) drawCargoFallback(ctx, item, forward, y, lootColor(item.kind));
   });
   return true;
 }
@@ -232,7 +248,6 @@ export function drawD001ElevatorCargo(
   semantic: SemanticRenderState,
   assets: D001AssetStore,
 ): boolean {
-  if (!assets.ready('cargoItems')) return false;
   const count = Math.min(9, state.run.elevator.cargo.length);
   for (let index = count - 1; index >= 0; index -= 1) {
     const row = Math.floor(index / 3);
@@ -240,8 +255,7 @@ export function drawD001ElevatorCargo(
     const item = state.run.elevator.cargo[index]!;
     if (!drawD001Cargo(ctx, item, WORLD.elevatorX - 8 + column * 9,
       Math.round(semantic.elevator.y) + 13 - row * 6, assets)) {
-      ctx.fillStyle = lootColor(item.kind);
-      ctx.fillRect(WORLD.elevatorX - 12 + column * 9, Math.round(semantic.elevator.y) + 8 - row * 6, 7, 5);
+      drawCargoFallback(ctx, item, WORLD.elevatorX - 8 + column * 9, Math.round(semantic.elevator.y) + 13 - row * 6, lootColor(item.kind));
     }
   }
   return true;

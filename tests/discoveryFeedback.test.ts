@@ -4,7 +4,8 @@ import { appraisePhysicalCargo } from '../src/game/appraisal';
 import { advanceProspecting, applyOreQuality } from '../src/game/prospecting';
 import { rewardNotice, RewardNoticeQueue } from '../src/game/rewardFeedback';
 import { deriveSemanticRenderState } from '../src/render/semanticRenderState';
-import { drawCargoMark, drawDiscoveryCues } from '../src/render/discoveryCues';
+import { drawDiscoveryCues } from '../src/render/discoveryCues';
+import { drawDetailedCargo } from '../src/render/cargoSprites';
 import { restoreGameState, serializeGameState } from '../src/game/save';
 import { canTravelToDepth, requestFloorTravel, sendElevator, togglePorterHold } from '../src/game/simulation';
 import { GameRuntime } from '../src/runtime/GameRuntime';
@@ -50,13 +51,14 @@ describe('reward feedback and semantic marks', () => {
     expect(new Set(signatures).size).toBe(3);
   });
   it('marks quality and unidentified cargo without revealing pristine grade', () => {
-    const normal = ctx(); drawCargoMark(normal, loot('IRON'), 20, 30); expect(normal.fillRect).not.toHaveBeenCalled();
-    const fine = ctx(); const a = loot('IRON'); applyOreQuality(a, 'FINE'); drawCargoMark(fine, a, 20, 30);
-    const pure = ctx(); applyOreQuality(a, 'PURE'); drawCargoMark(pure, a, 20, 30);
-    expect(vi.mocked(pure.fillRect).mock.calls.length).toBeGreaterThan(vi.mocked(fine.fillRect).mock.calls.length);
+    const normal = ctx(); drawDetailedCargo(normal, loot('IRON'), 20, 30); expect(normal.fillRect).toHaveBeenCalled();
+    const fine = ctx(); const a = loot('IRON'); applyOreQuality(a, 'FINE'); drawDetailedCargo(fine, a, 20, 30);
+    const pure = ctx(); applyOreQuality(a, 'PURE'); drawDetailedCargo(pure, a, 20, 30);
+    expect(vi.mocked(pure.fillRect).mock.calls).not.toEqual(vi.mocked(fine.fillRect).mock.calls);
+    expect(vi.mocked(fine.fillRect).mock.calls).not.toEqual(vi.mocked(normal.fillRect).mock.calls);
     const b = loot('AMMONITE'); b.specimen = { grade: 'INTACT', value: 69 };
-    const intact = ctx(); drawCargoMark(intact, b, 20, 30); b.specimen = { grade: 'PRISTINE', value: 138 };
-    const pristine = ctx(); drawCargoMark(pristine, b, 20, 30);
+    const intact = ctx(); drawDetailedCargo(intact, b, 20, 30); b.specimen = { grade: 'PRISTINE', value: 138 };
+    const pristine = ctx(); drawDetailedCargo(pristine, b, 20, 30);
     expect(vi.mocked(pristine.fillRect).mock.calls).toEqual(vi.mocked(intact.fillRect).mock.calls);
   });
   it('requires the live confirmation screen to spend duplicates, including direct commands', () => {

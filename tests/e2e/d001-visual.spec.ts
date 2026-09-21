@@ -16,7 +16,7 @@ test('D-001 PNGs keep their palette, binary alpha and logical dimensions', async
     'background-tunnel-structure': [480, 270], 'background-floor': [480, 270],
     'node-scrap-ledge-atlas': [192, 40], 'node-copper-pocket-atlas': [192, 40],
     'node-fossil-crack-atlas': [192, 40], 'player-body-atlas': [320, 320],
-    'player-helmet-atlas': [320, 320], 'npc-porter-atlas': [320, 320], 'cargo-items-atlas': [144, 10],
+    'player-recovered-tools-atlas': [1280, 320], 'player-helmet-atlas': [320, 320], 'npc-porter-atlas': [320, 320], 'cargo-items-atlas': [144, 10],
   };
   const results = await page.evaluate(async ({ dimensions, colors, version }) => {
     return Promise.all(Object.keys(dimensions).map(async (name) => {
@@ -29,7 +29,7 @@ test('D-001 PNGs keep their palette, binary alpha and logical dimensions', async
       ctx.drawImage(image, 0, 0);
       const data = ctx.getImageData(0, 0, image.width, image.height).data;
       // Porter already uses the reserved automation pair; retain that identity.
-      const allowed = name === 'npc-porter-atlas' ? colors : colors.slice(0, 30);
+      const allowed = ['npc-porter-atlas', 'player-recovered-tools-atlas'].includes(name) ? colors : colors.slice(0, 30);
       let opaque = 0, invalid = 0;
       for (let i = 0; i < data.length; i += 4) {
         if (data[i + 3] === 0) continue;

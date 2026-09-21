@@ -1,4 +1,6 @@
-import { drawCargoMark } from './discoveryCues';
+import { drawToolHead, equipmentColor, toolProfile } from './equipmentArt';
+import { drawDiscoveryCues } from './discoveryCues';
+import { drawCargoFallback } from './cargoSprites';
 import { WORLD } from '../game/config';
 import { currentFloor } from '../game/simulation';
 import type { DepthId, GameState, LootKind, LootStack, MiningNode, Rarity } from '../game/types';
@@ -37,6 +39,7 @@ export function drawEntities(
   assets?: D001AssetStore,
 ): void {
   drawNodes(ctx, state, semantic, assets);
+  if (semantic) drawDiscoveryCues(ctx, state, semantic);
   drawWorkbench(ctx, state, assets);
   if (state.run.depth.current === 'D-030') drawScanner(ctx, state, now);
   const elevatorImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets
@@ -108,7 +111,19 @@ function drawNode(ctx: CanvasRenderingContext2D, node: MiningNode, depth: DepthI
     return;
   }
   const ratio = node.hp / node.maxHp;
-  if (node.id === 'dense-vein') {
+  if (node.id === 'ruined-workshop') {
+    ctx.fillStyle = '#403c34'; ctx.fillRect(node.x - 17, 188, 34, 19);
+    ctx.fillStyle = '#746b5d'; ctx.fillRect(node.x - 12, 191, 21, 3); ctx.fillRect(node.x + 8, 194, 3, 11);
+    ctx.fillStyle = '#5c5143'; ctx.fillRect(node.x - 10, 199, 8, 6);
+  } else if (node.id === 'archive-vault') {
+    ctx.fillStyle = '#343633'; ctx.fillRect(node.x - 18, 184, 36, 23);
+    ctx.fillStyle = '#77766c'; ctx.fillRect(node.x - 13, 188, 26, 2); ctx.fillRect(node.x - 13, 197, 26, 2);
+    ctx.fillStyle = '#202320'; ctx.fillRect(node.x - 8, 191, 16, 5);
+  } else if (node.id === 'sealed-chamber') {
+    ctx.fillStyle = '#302f2b'; ctx.fillRect(node.x - 22, 178, 44, 29);
+    ctx.strokeStyle = '#706a5c'; ctx.strokeRect(node.x - 16.5, 183.5, 33, 22);
+    ctx.fillStyle = '#514a3f'; ctx.fillRect(node.x - 2, 185, 4, 18);
+  } else if (node.id === 'dense-vein') {
     ctx.fillStyle = '#354044'; ctx.fillRect(node.x - 14, node.y - 20, 29, 20); ctx.fillStyle = '#68777a'; ctx.fillRect(node.x - 8, node.y - 16, 4, 3); ctx.fillRect(node.x + 4, node.y - 12, 5, 3);
   } else if (node.id === 'fossil-seam' || node.id === 'fossil-bloom') {
     ctx.fillStyle = depth === 'D-060' ? '#31414a' : '#3d3c38'; ctx.fillRect(node.x - 13, node.y - 18, 27, 18); ctx.fillStyle = PALETTE.fossil; ctx.fillRect(node.x - 8, node.y - 13, 13, 2); ctx.fillRect(node.x - 1, node.y - 16, 2, 8);
@@ -142,9 +157,7 @@ function drawLoot(ctx: CanvasRenderingContext2D, state: GameState, now: number, 
     }
     const cargoImage = Boolean(state.run.depth.current === 'D-001' && assets && drawD001Cargo(ctx, item, item.x, anchorY + bob, assets));
     if (!cargoImage) {
-      ctx.fillStyle = lootColor(item.kind);
-      ctx.fillRect(Math.round(item.x) - 2, Math.round(anchorY) - 4 + bob, 5, 4);
-      drawCargoMark(ctx, item, item.x, anchorY + bob);
+      drawCargoFallback(ctx, item, item.x, anchorY + bob, lootColor(item.kind));
     }
     if (special) { ctx.fillStyle = rarityColor(item.rarity); ctx.fillRect(Math.round(item.x), Math.round(anchorY) - 7 + bob, 1, 1); }
   }
@@ -155,9 +168,7 @@ function drawFallbackCarriedCargo(
   actor: { readonly carried: readonly (Pick<LootStack, 'kind' | 'quality' | 'specimen'>)[]; readonly facing: -1 | 1; readonly worldAnchor: { readonly x: number; readonly y: number } },
 ): void {
   if (actor.carried.length === 0) return;
-  ctx.fillStyle = lootColor(actor.carried[0]!.kind);
-  ctx.fillRect(actor.worldAnchor.x + actor.facing * 6 - (actor.facing > 0 ? 0 : 6), actor.worldAnchor.y - 12, 6, 8);
-  drawCargoMark(ctx, actor.carried[0]!, actor.worldAnchor.x + actor.facing * 8, actor.worldAnchor.y - 4);
+  drawCargoFallback(ctx, actor.carried[0]!, actor.worldAnchor.x + actor.facing * 8, actor.worldAnchor.y - 4, lootColor(actor.carried[0]!.kind));
 }
 
 function drawWorkbench(ctx: CanvasRenderingContext2D, state: GameState, assets?: D001AssetStore): void {
@@ -187,24 +198,30 @@ function drawCharacter(ctx: CanvasRenderingContext2D, state: GameState, now: num
   const run = state.run; const c = run.character; const walking = c.state === 'MOVING_TO_NODE' || c.state === 'MOVING_TO_POINT' || c.state === 'RETURNING'; const step = walking && Math.floor(now / 120) % 2 === 0 ? 1 : 0;
   const x = Math.round(c.x); const y = Math.round(c.y) - step; const dir = c.facing;
   ctx.fillStyle = '#6a4935'; ctx.fillRect(x - 3, y - 7, 7, 7); ctx.fillStyle = PALETTE.helmet; ctx.fillRect(x - 4, y - 9, 8, 3); ctx.fillStyle = PALETTE.worker; ctx.fillRect(x - 3, y - 4, 7, 6);
-  ctx.fillStyle = run.boots.level === 1 ? '#4a5660' : '#87979d'; ctx.fillRect(x - 3, y + 2, 2, 4 + step); ctx.fillRect(x + 2, y + 2, 2, 5 - step);
-  if (c.carried.length > 0 || run.pack.level === 2) { const w = run.pack.level === 1 ? 5 : 7; const h = run.pack.level === 1 ? 7 : 9; ctx.fillStyle = run.pack.level === 1 ? '#685642' : '#846c47'; ctx.fillRect(x - dir * (run.pack.level === 1 ? 6 : 7) - (dir > 0 ? w : 0), y - 5, w, h); }
-  if (c.carried[0]) drawCargoMark(ctx, c.carried[0], x - dir * 7, y + 3);
-  drawPickaxe(ctx, state, x, y, dir);
+  const equipment = run.phase5.equipment;
+  const equipped = (slot: 'BOOTS' | 'PACK' | 'LAMP') => equipment.inventory.find((item) => item.id === equipment.equippedPlayer[slot]);
+  const boots = equipped('BOOTS'); const pack = equipped('PACK'); const lamp = equipped('LAMP');
+  ctx.fillStyle = boots ? equipmentColor(boots.rarity) : run.boots.level === 1 ? '#4a5660' : '#87979d'; ctx.fillRect(x - 3, y + 2, 2, 4 + step); ctx.fillRect(x + 2, y + 2, 2, 5 - step);
+  if (c.carried.length > 0 || run.pack.level === 2 || pack) { const w = run.pack.level === 1 ? 5 : 7; const h = run.pack.level === 1 ? 7 : 9; ctx.fillStyle = pack ? equipmentColor(pack.rarity) : run.pack.level === 1 ? '#685642' : '#846c47'; ctx.fillRect(x - dir * (run.pack.level === 1 ? 6 : 7) - (dir > 0 ? w : 0), y - 5, w, h); }
+  if (c.carried[0]) drawCargoFallback(ctx, c.carried[0], x + dir * 8, y + 3, lootColor(c.carried[0].kind));
+  if (lamp) { ctx.fillStyle = equipmentColor(lamp.rarity); ctx.fillRect(x + dir * 3, y - 9, 2, 1); }
+  if (c.state === 'MINING' || c.swing) drawPickaxe(ctx, state, x, y, dir);
 }
 
 function drawPorter(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
   const p = state.run.porter; const walking = p.state === 'MOVING_TO_LOOT' || p.state === 'RETURNING_TO_ELEVATOR'; const step = walking && Math.floor(now / 135) % 2 === 0 ? 1 : 0;
   const x = Math.round(p.x); const y = Math.round(p.y) - step; const dir = p.facing;
   ctx.fillStyle = '#5b4537'; ctx.fillRect(x - 3, y - 7, 7, 7); ctx.fillStyle = PALETTE.cyan; ctx.fillRect(x - 4, y - 9, 8, 3); ctx.fillStyle = '#8f8b72'; ctx.fillRect(x - 3, y - 4, 7, 6); ctx.fillStyle = '#46535a'; ctx.fillRect(x - 3, y + 2, 2, 4 + step); ctx.fillRect(x + 2, y + 2, 2, 5 - step);
-  if (p.carried.length > 0) { ctx.fillStyle = '#705a3d'; ctx.fillRect(x - dir * 7 - (dir > 0 ? 6 : 0), y - 5, 6, 8); drawCargoMark(ctx, p.carried[0]!, x - dir * 7, y + 3); }
+  if (p.carried.length > 0) { ctx.fillStyle = '#705a3d'; ctx.fillRect(x - dir * 7 - (dir > 0 ? 6 : 0), y - 5, 6, 8); drawCargoFallback(ctx, p.carried[0]!, x + dir * 8, y + 3, lootColor(p.carried[0]!.kind)); }
 }
 
 function drawPickaxe(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number, dir: -1 | 1): void {
-  const swing = state.run.character.swing; const metal = state.run.tool.level === 1 ? PALETTE.rust : PALETTE.steel; ctx.strokeStyle = '#805c3d'; ctx.lineWidth = 1;
-  if (!swing) { ctx.beginPath(); ctx.moveTo(x + dir * 3, y - 2); ctx.lineTo(x + dir * 9, y - 8); ctx.stroke(); ctx.fillStyle = metal; ctx.fillRect(x + dir * 8 - (dir < 0 ? 4 : 0), y - 10, 5, 2); return; }
+  const equipment = state.run.phase5.equipment;
+  const tool = equipment.inventory.find((item) => item.id === equipment.equippedPlayer.TOOL);
+  const swing = state.run.character.swing; const metal = tool ? equipmentColor(tool.rarity) : state.run.tool.level === 1 ? PALETTE.rust : PALETTE.steel; ctx.strokeStyle = '#805c3d'; ctx.lineWidth = 1;
+  if (!swing) { ctx.beginPath(); ctx.moveTo(x + dir * 3, y - 2); ctx.lineTo(x + dir * 9, y - 8); ctx.stroke(); drawToolHead(ctx, toolProfile(tool), x + dir * 8, y - 9, dir, metal); return; }
   const progress = Math.min(1, swing.elapsed / 0.44); const phase = progress < 0.45 ? progress / 0.45 : 1 - (progress - 0.45) / 0.55; const headX = x + dir * (5 + Math.round(phase * 9)); const headY = y - 12 + Math.round(phase * 8);
-  ctx.beginPath(); ctx.moveTo(x + dir * 2, y - 3); ctx.lineTo(headX, headY); ctx.stroke(); ctx.fillStyle = metal; ctx.fillRect(headX - (dir < 0 ? 4 : 0), headY - 1, 5, 2);
+  ctx.beginPath(); ctx.moveTo(x + dir * 2, y - 3); ctx.lineTo(headX, headY); ctx.stroke(); drawToolHead(ctx, toolProfile(tool), headX, headY, dir, metal);
 }
 
 function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
@@ -214,7 +231,7 @@ function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: numb
   ctx.fillStyle = '#22262b'; ctx.fillRect(WORLD.elevatorX - half, y - 16, half * 2 + 1, 35); ctx.fillStyle = PALETTE.metal; ctx.fillRect(WORLD.elevatorX - half, y - 16, half * 2 + 1, 3); ctx.fillRect(WORLD.elevatorX - half, y + 16, half * 2 + 1, 3); ctx.fillRect(WORLD.elevatorX - half, y - 16, 3, 35); ctx.fillRect(WORLD.elevatorX + half - 2, y - 16, 3, 35);
   const closed = e.state === 'ASCENDING' || e.state === 'DESCENDING' || e.state === 'TRAVELING';
   if (closed) { ctx.fillStyle = '#3d4448'; ctx.fillRect(WORLD.elevatorX - half + 5, y - 11, half - 5, 25); ctx.fillRect(WORLD.elevatorX + 1, y - 11, half - 5, 25); }
-  else { const count = Math.min(9, e.cargo.length); for (let i = 0; i < count; i += 1) { const row = Math.floor(i / 3); const col = i % 3; ctx.fillStyle = lootColor(e.cargo[i]!.kind); ctx.fillRect(WORLD.elevatorX - 12 + col * 9, y + 8 - row * 6, 7, 5); drawCargoMark(ctx, e.cargo[i]!, WORLD.elevatorX - 8 + col * 9, y + 13 - row * 6); } }
+  else { const count = Math.min(9, e.cargo.length); for (let i = 0; i < count; i += 1) { const row = Math.floor(i / 3); const col = i % 3; drawCargoFallback(ctx, e.cargo[i]!, WORLD.elevatorX - 8 + col * 9, y + 13 - row * 6, lootColor(e.cargo[i]!.kind)); } }
   ctx.fillStyle = e.state !== 'IDLE_BOTTOM' || e.cargo.length > 0 ? depthAccent(state.run.depth.current) : '#47413a'; ctx.fillRect(WORLD.elevatorX + Math.max(8, half - 7), y - 12, 3, 3);
   if (e.state === 'IDLE_BOTTOM' && e.cargo.length > 0 && !state.run.automation.autoDispatch.enabled && Math.floor(now / 500) % 2 === 0) {
     ctx.fillStyle = PALETTE.lamp;
@@ -244,9 +261,7 @@ function drawElevatorCargoFallback(ctx: CanvasRenderingContext2D, state: GameSta
   for (let index = 0; index < count; index += 1) {
     const row = Math.floor(index / 3);
     const column = index % 3;
-    ctx.fillStyle = lootColor(state.run.elevator.cargo[index]!.kind);
-    ctx.fillRect(WORLD.elevatorX - 12 + column * 9, Math.round(semantic.elevator.y) + 8 - row * 6, 7, 5);
-    drawCargoMark(ctx, state.run.elevator.cargo[index]!, WORLD.elevatorX - 8 + column * 9, Math.round(semantic.elevator.y) + 13 - row * 6);
+    drawCargoFallback(ctx, state.run.elevator.cargo[index]!, WORLD.elevatorX - 8 + column * 9, Math.round(semantic.elevator.y) + 13 - row * 6, lootColor(state.run.elevator.cargo[index]!.kind));
   }
 }
 

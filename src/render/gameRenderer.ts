@@ -1,4 +1,4 @@
-import { drawCargoMark, drawDiscoveryCues } from './discoveryCues';
+import { drawCargoFallback } from './cargoSprites';
 import { CARGO_HUB_X, RAIL_STOP_X, WORLD } from '../game/config';
 import { deriveInitialLogisticsGuide, isFirstLiveScrapGain } from '../game/initialLogisticsGuide';
 import { cargoWeight } from '../game/simulation';
@@ -71,7 +71,6 @@ export class GameRenderer {
       this.ctx.restore();
     }
     if (depth === 'D-001') drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets);
-    drawDiscoveryCues(this.ctx, state, semantic);
     const targets = deriveInteractionTargets(state);
     const guide = deriveInitialLogisticsGuide(state);
     const guideTargetKey = initialGuideTargetKey(guide, targets);
@@ -279,14 +278,12 @@ function cargoPips(
   assets: AssetStore<D001AssetKey>,
 ): void {
   const visible = items.slice(0, 6);
-  for (let index = 0; index < visible.length; index += 1) {
+  for (let index = visible.length - 1; index >= 0; index -= 1) {
     const item = visible[index]!;
     const anchorX = x + 3 + (index % 3) * 5;
     const anchorY = y + 3 - Math.floor(index / 3) * 4;
     if (state.run.depth.current === 'D-001' && drawD001Cargo(ctx, item, anchorX, anchorY, assets)) continue;
-    ctx.fillStyle = '#8a7150';
-    ctx.fillRect(x + (index % 3) * 5, y - Math.floor(index / 3) * 4, 4, 3);
-    drawCargoMark(ctx, item, anchorX, anchorY);
+    drawCargoFallback(ctx, item, anchorX, anchorY);
   }
 }
 
