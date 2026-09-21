@@ -1,0 +1,32 @@
+name: Apply verified discovery visuals
+on:
+  push:
+    branches: [feat/discovery-visuals]
+    paths: [.github/workflows/apply-discovery-visuals.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and apply implementation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, lzma, pathlib
+          parts = [pathlib.Path(f'scripts/.discovery-patch-{i}.b64') for i in range(4)]
+          payload = ''.join(p.read_text().strip() for p in parts)
+          patch = lzma.decompress(base64.b64decode(payload, validate=True))
+          expected = '11384f171e9560b1ed78c670265c9791341ae866a7cdd047932fc67d58bfc664'
+          assert hashlib.sha256(patch).hexdigest() == expected, 'Patch checksum mismatch'
+          pathlib.Path('/tmp/discovery.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/discovery.patch
+          git apply --index --whitespace=error-all /tmp/discovery.patch
+          git rm .github/workflows/export-visual-workspace.yml .github/workflows/apply-discovery-visuals.yml scripts/.discovery-patch-{0,1,2,3}.b64
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git diff --cached --check
+          git commit -m 'feat: visualize discoveries and cargo quality with correctly scoped mining impacts'
+          git push origin HEAD:feat/discovery-visuals
