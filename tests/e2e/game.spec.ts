@@ -124,9 +124,13 @@ test('keeps Bore hover and selected context aligned in a later-game state', asyn
     connectedLineId: null, installProgress: 10, requiredInstallProgress: 10 });
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: SAVE_KEY, value: serializeGameState(state) });
   await page.goto('/');
-  await clickWorld(page, 364, 190);
   const canvas = page.getByLabel('LOOP SHAFT mining floor');
+  const box = (await canvas.boundingBox())!;
+  const x = box.x + box.width * 364 / 480; const y = box.y + box.height * 190 / 270;
+  await page.mouse.move(x, y);
   await expect(canvas).toHaveAttribute('data-interaction-target', 'bore-console:bore-echo-pocket');
+  await page.mouse.click(x, y);
+  await expect(canvas).not.toHaveAttribute('data-interaction-target');
   const facility = page.getByRole('dialog', { name: 'DEEP LOGISTICS' });
   await expect(facility).toBeVisible();
   await expect(facility).toHaveAttribute('data-selected-item', 'echo-pocket');
