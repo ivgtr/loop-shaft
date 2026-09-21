@@ -51,7 +51,7 @@ test('completes the first physical delivery using only keyboard controls', async
   const start = await x(page);
   await expect.poll(() => x(page)).toBeLessThan(start - 5);
   await page.keyboard.up('ArrowLeft');
-  await expect(page.locator('.hud-left strong').first()).toContainText(/SCRAP [1-9]/, { timeout: 15_000 });
+  await expect(page.getByTestId('resource-status')).toContainText(/SCRAP [1-9]/, { timeout: 15_000 });
 });
 
 test('holding Space or its OS repeat does not become unpaid Auto Swing', async ({ page }) => {
@@ -64,9 +64,9 @@ test('holding Space or its OS repeat does not become unpaid Auto Swing', async (
   await expect(canvas).toHaveAttribute('data-swing', 'ready');
   for (let i = 0; i < 8; i += 1) await page.keyboard.down('Space');
   await page.keyboard.up('Space');
-  await expect(page.locator('.context-meta')).toContainText('HP 20/30');
+  await expect(page.getByTestId('scene-detail')).toContainText('HP 20/30');
   await page.waitForTimeout(500);
-  await expect(page.locator('.context-meta')).toContainText('HP 20/30');
+  await expect(page.getByTestId('scene-detail')).toContainText('HP 20/30');
 });
 
 test('Tab, window blur, and Escape release movement instead of leaving stuck keys', async ({ page }) => {
@@ -121,7 +121,7 @@ test('native button focus keeps Space activation without also mining', async ({ 
   await canvas.focus();
   await swing(page);
   // Only this explicit canvas key performs a swing, now using the purchased tool.
-  await expect(page.locator('.context-meta')).toContainText('HP 14/30');
+  await expect(page.getByTestId('scene-detail')).toContainText('HP 14/30');
 });
 
 test('a full pack still allows movement and mining while pickup explains the limit', async ({ page }) => {
@@ -132,7 +132,7 @@ test('a full pack still allows movement and mining while pickup explains the lim
   await page.goto('/');
   const canvas = page.getByLabel('LOOP SHAFT mining floor');
   await expect(page.getByRole('button', { name: 'PICK UP', exact: true })).toBeDisabled();
-  await expect(page.locator('.player-readout')).toContainText('PACK FULL');
+  await expect(page.getByTestId('pack-status')).toContainText('PACK FULL');
   await canvas.focus();
   await swing(page);
   await page.keyboard.down('KeyD');
@@ -173,7 +173,7 @@ test.describe('compact touch controls', () => {
     await expect(send).toBeEnabled({ timeout: 10_000 });
     await send.tap();
     await expect(canvas).toHaveAttribute('data-elevator-state', 'ASCENDING');
-    const controls = page.locator('.player-buttons button, .canvas-hit[data-ui-action=send]');
+    const controls = page.locator('.canvas-hit');
     for (const button of await controls.all()) {
       const box = (await button.boundingBox())!;
       expect(box.height).toBeGreaterThanOrEqual(44);

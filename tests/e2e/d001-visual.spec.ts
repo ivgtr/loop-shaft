@@ -54,8 +54,8 @@ test('keeps D-001 readable through the first real manual delivery', async ({ pag
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
   const canvas = page.getByLabel('LOOP SHAFT mining floor');
-  await expect(page.locator('.hud-right')).toHaveAttribute('data-depth', 'D-001');
-  await expect(page.locator('.hud-right')).not.toContainText(/LOCKED|UNBUILT|RESEARCH/);
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-depth', 'D-001');
+  await expect(page.getByTestId('resource-status')).not.toContainText(/LOCKED|UNBUILT|RESEARCH/);
   const box = await canvas.boundingBox();
   expect(box?.width).toBe(960);
   // Decode the largest changed image before capturing the initial state.
@@ -76,21 +76,20 @@ test('keeps D-001 readable through the first real manual delivery', async ({ pag
     await expect(canvas).toHaveAttribute('data-swing', 'active');
     await expect(canvas).toHaveAttribute('data-swing', 'ready');
   }
-  await page.getByRole('button', { name: 'Pick up nearby ore', exact: true }).click();
+  await page.getByRole('button', { name: 'PICK UP', exact: true }).click();
   await expect(canvas).not.toHaveAttribute('data-carried-weight', '0.00');
   await page.getByRole('button', { name: 'RETURN', exact: true }).click();
   await expect(page.getByRole('button', { name: 'SEND', exact: true })).toBeEnabled({ timeout: 15_000 });
   await testInfo.attach('d001-loaded', { body: await page.screenshot(), contentType: 'image/png' });
-  await page.mouse.click(point(240, 190).x, point(240, 190).y);
   await page.getByRole('button', { name: 'SEND', exact: true }).click();
-  await expect(page.locator('.hud-left strong').first()).toContainText(/SCRAP [1-9]/, { timeout: 15_000 });
+  await expect(page.getByTestId('resource-status')).toContainText(/SCRAP [1-9]/, { timeout: 15_000 });
   expect(errors).toEqual([]);
 });
 
 test('uses 3x on a large D-001 viewport and preserves later-depth layout and HUD', async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1050 });
   await page.goto('/');
-  await expect(page.locator('.hud-right')).toHaveAttribute('data-depth', 'D-001');
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-depth', 'D-001');
   expect((await page.locator('.game-canvas').boundingBox())?.width).toBe(1440);
   const state = createGameState(9103);
   state.run.depth.current = 'D-030';
@@ -98,7 +97,7 @@ test('uses 3x on a large D-001 viewport and preserves later-depth layout and HUD
   state.meta.bestDepth = 'D-030';
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: SAVE_KEY, value: serializeGameState(state) });
   await page.reload();
-  await expect(page.locator('.hud-right')).toHaveAttribute('data-depth', 'D-030');
-  await expect(page.locator('.hud-right')).toContainText('ENGINEER LOCKED');
-  expect((await page.locator('.game-canvas').boundingBox())?.width).toBe(1142);
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-depth', 'D-030');
+  await expect(page.getByTestId('resource-status')).not.toContainText('ENGINEER LOCKED');
+  expect((await page.locator('.game-canvas').boundingBox())?.width).toBe(1440);
 });

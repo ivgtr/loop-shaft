@@ -1,17 +1,11 @@
 import { Fragment } from 'react';
 import {
-  D250_EXTENSION_COST,
-  D400_EXTENSION_COST,
-  D650_SHAFT_COST,
   FREIGHT_INSTALL_COST,
   RAIL_INSTALL_COST,
 } from '../../game/config';
 import {
-  canStartD650Construction,
   canStartFreightConstruction,
   canStartRailConstruction,
-  canUnlockD250,
-  canUnlockD400,
 } from '../../game/deepGame';
 import type { FreightPriority, GameState, RailPriority } from '../../game/types';
 import { ActionButton } from './common';
@@ -23,9 +17,6 @@ export function DeepControls({ state }: { state: GameState }) {
   const run = state.run;
   const controls = [];
 
-  if (run.depth.unlocked.includes('D-180') && !run.depth.unlocked.includes('D-250')) {
-    controls.push(<ActionButton key="d250" command={{ type: 'extend-d250' }} className="depth-action" disabled={!canUnlockD250(state)}>EXTEND D-250 · {D250_EXTENSION_COST}</ActionButton>);
-  }
   if (run.depth.unlocked.includes('D-250')) {
     const line = run.logistics.lines.find((candidate) => candidate.depth === 'D-250');
     controls.push(line
@@ -34,12 +25,6 @@ export function DeepControls({ state }: { state: GameState }) {
     controls.push(run.logistics.freightCage.state === 'UNBUILT'
       ? <ActionButton key="freight-build" command={{ type: 'build-freight' }} disabled={!canStartFreightConstruction(state)}>BUILD FREIGHT CAGE · {FREIGHT_INSTALL_COST}</ActionButton>
       : <FreightPriorities key="freight-priority" selected={run.logistics.freightCage.priority} prefix="FREIGHT " />);
-    if (!run.depth.unlocked.includes('D-400')) {
-      controls.push(<ActionButton key="d400" command={{ type: 'extend-d400' }} className="depth-action" disabled={!canUnlockD400(state)}>EXTEND D-400 · {D400_EXTENSION_COST}</ActionButton>);
-    }
-  }
-  if (run.depth.unlocked.includes('D-400') && !run.depth.unlocked.includes('D-650')) {
-    controls.push(<ActionButton key="d650" command={{ type: 'build-d650' }} className="depth-action" disabled={!canStartD650Construction(state)}>SHAFT EXTENSION D-650 · {D650_SHAFT_COST}</ActionButton>);
   }
   return <>{controls}</>;
 }

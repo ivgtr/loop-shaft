@@ -44,7 +44,6 @@ import {
   selectArchive,
   selectCoreChamber,
   selectCoreConsole,
-  selectElevator,
   selectNode,
   selectResearchTerminal,
   selectScanner,
@@ -64,11 +63,12 @@ import {
   upgradePack,
   upgradeTool,
 } from '../game/simulation';
-import type { GameState, MinerPriority, PorterPriority } from '../game/types';
+import type { DepthId, GameState, MinerPriority, PorterPriority } from '../game/types';
 import { GameRenderer } from '../render/gameRenderer';
 import type { InteractionTarget, Point } from '../render/interactionTargets';
 import type { GameCommand } from './commands';
 import { MiningInput } from './MiningInput';
+import { elevatorItems, selectedElevatorItem, type ElevatorTab, type ElevatorUiState } from '../game/elevatorUi';
 import { nextWorkshopUpgrade, selectedWorkshopItem, workshopItems, type WorkshopState } from '../game/workshop';
 
 const FIXED_STEP = 1 / 60;
@@ -82,6 +82,8 @@ export interface GameSnapshot {
   readonly revision: number;
   readonly state: GameState;
   readonly workshop: WorkshopState | null;
+  readonly elevatorUi: ElevatorUiState | null;
+  readonly helpOpen: boolean;
 }
 
 type Listener = () => void;
@@ -106,6 +108,10 @@ export class GameRuntime {
   private pointerWorld: Point | null = null;
   private hoveredKey: string | null = null;
   private workshop: WorkshopState | null = null;
+  private elevatorUi: ElevatorUiState | null = null;
+  private helpOpen = false;
+
+  private get windowOpen(): boolean { return this.workshop !== null || this.elevatorUi !== null || this.helpOpen; }
 
   constructor(private readonly state: GameState) {
     // Held directional input must never continue after reloading a save.
@@ -172,7 +178,7 @@ export class GameRuntime {
   focusCanvas(): void { this.canvas?.focus({ preventScroll: true }); }
 
   setPointerMovement(direction: -1 | 0 | 1): void {
-    if (this.workshop) return;
+    if (this.windowOpen) return;
     this.pointerDirection = direction;
     this.synchronizeMovement();
   }
@@ -196,7 +202,7 @@ export class GameRuntime {
   getHoveredTargetKey(): string | null { return this.hoveredKey; }
 
   selectCanvasTarget(clientX: number, clientY: number): void {
-    if (this.workshop) return;
+    if (this.windowOpen) return;
     const point = this.renderer?.clientToWorld(clientX, clientY);
     const target = point ? this.renderer?.resolveTarget(point, this.state) : null;
     if (!target) {
@@ -233,8 +239,9 @@ export class GameRuntime {
     else if (ref.type === 'bore-console') this.state.selection = { type: 'bore-console', id: ref.id };
     else if (ref.type === 'crew-board') selectCrewBoard(this.state);
     else if (ref.type === 'elevator') {
-      selectElevator(this.state);
-      if (this.state.run.character.carried.length > 0 && !['RETURNING', 'LOADING'].includes(this.state.run.character.state)) requestPlayerReturn(this.state);
+      // Cargo clicks retain the established return action. The explicit LIFT control opens the console.
+      if (this.state.run.character.carried.length > 0) requestPlayerReturn(this.state);
+      else this.openElevator();
     } else if (ref.type === 'workbench') this.openWorkshop();
     else if (ref.type === 'scanner') selectScanner(this.state);
     else if (ref.type === 'archive') selectArchive(this.state);
@@ -244,7 +251,7 @@ export class GameRuntime {
   }
 
   openWorkshop(): void {
-    if (this.workshop || this.state.run.elevator.travel) return;
+    if (this.windowOpen || this.state.run.elevator.travel) return;
     this.releaseInputs();
     this.clearPointer();
     // Cancel only the player's instruction, retaining cargo and the selected vein.
@@ -281,13 +288,71 @@ export class GameRuntime {
     this.publish();
   }
 
+  openElevator(tab: ElevatorTab = 'dispatch'): void {
+    if (this.windowOpen || this.state.run.elevator.travel) return;
+    this.releaseInputs(); this.clearPointer(); cancelPlayerAction(this.state);
+    const items = elevatorItems(this.state, tab);
+    this.elevatorUi = { tab, selectedId: (items.find((item) => !item.complete) ?? items[0]!).id,
+      notice: null, runIndex: this.state.meta.runIndex, depth: this.state.run.depth.current };
+    this.publish();
+  }
+
+  closeElevator(): void {
+    if (!this.elevatorUi) return;
+    this.releaseInputs(); this.elevatorUi = null; this.publish(); this.focusCanvas();
+  }
+
+  selectElevatorTab(tab: ElevatorTab): void {
+    if (!this.elevatorUi) return;
+    const items = elevatorItems(this.state, tab);
+    this.elevatorUi = { ...this.elevatorUi, tab, selectedId: (items.find((item) => !item.complete) ?? items[0]!).id, notice: null };
+    this.publish();
+  }
+
+  selectElevatorItem(id: string): void {
+    if (!this.elevatorUi || !elevatorItems(this.state, this.elevatorUi.tab).some((item) => item.id === id)) return;
+    this.elevatorUi = { ...this.elevatorUi, selectedId: id, notice: null }; this.publish();
+  }
+
+  activateElevatorItem(): void {
+    if (!this.elevatorUi) return;
+    const item = selectedElevatorItem(this.state, this.elevatorUi);
+    if (!item.command) return;
+    this.dispatch(item.command);
+    if (!this.elevatorUi) return;
+    this.elevatorUi = { ...this.elevatorUi, notice: item.command.type === 'send' ? 'Shipment sent. Payment happens at Surface.'
+      : this.elevatorUi.tab === 'extend' ? `${item.name}: ${this.state.run.depth.unlocked.includes(item.id as DepthId) ? 'connection open. Choose TRAVEL to visit.' : 'construction started.'}`
+      : 'Control updated.' };
+    this.publish();
+  }
+
+  openHelp(): void {
+    if (this.windowOpen) return;
+    this.releaseInputs(); this.clearPointer(); cancelPlayerAction(this.state);
+    this.helpOpen = true; this.publish();
+  }
+
+  closeHelp(): void {
+    if (!this.helpOpen) return;
+    this.releaseInputs(); this.helpOpen = false; this.publish(); this.focusCanvas();
+  }
+
   dispatch(command: GameCommand): void {
+    if (this.helpOpen) { if (command.type === 'cancel') this.closeHelp(); return; }
+    if (this.elevatorUi) {
+      if (command.type === 'cancel') { this.closeElevator(); return; }
+      const allowed = selectedElevatorItem(this.state, this.elevatorUi).command;
+      if (!allowed || JSON.stringify(command) !== JSON.stringify(allowed)) return;
+    }
     if (this.workshop) {
       if (command.type === 'cancel') { this.closeWorkshop(); return; }
       // Only the displayed item's validated command can cross the modal boundary.
       const allowed = selectedWorkshopItem(workshopItems(this.state), this.workshop.selectedId).command;
       if (!allowed || command.type !== allowed.type
         || ('itemId' in allowed && (!('itemId' in command) || command.itemId !== allowed.itemId))) return;
+    }
+    if (command.type === 'interact' && playerInteraction(this.state).type === 'elevator') {
+      this.openElevator(); return;
     }
     if (command.type === 'interact' && playerInteraction(this.state).type === 'workbench') {
       this.openWorkshop(); return;
@@ -337,6 +402,7 @@ export class GameRuntime {
       case 'protocol': purchaseCoreProtocol(this.state, command.protocol); break;
       case 'reboot': armPhase5Reboot(this.state); break;
     }
+    if (this.elevatorUi && this.state.run.elevator.travel) this.closeElevator();
     saveToStorage(this.state);
     this.publish();
   }
@@ -366,6 +432,8 @@ export class GameRuntime {
     }
     if (this.workshop && (this.workshop.runIndex !== this.state.meta.runIndex
       || this.workshop.depth !== this.state.run.depth.current || this.state.run.elevator.travel)) this.closeWorkshop();
+    if (this.elevatorUi && (this.elevatorUi.runIndex !== this.state.meta.runIndex
+      || this.elevatorUi.depth !== this.state.run.depth.current || this.state.run.elevator.travel)) this.closeElevator();
     this.refreshPointerTarget();
     this.renderer?.render(this.state, now, this.hoveredKey);
     if (now - this.lastUiUpdate >= UI_UPDATE_INTERVAL) {
@@ -379,13 +447,13 @@ export class GameRuntime {
     if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
     const canvasFocused = this.canvas !== null && document.activeElement === this.canvas;
     const inGame = canvasFocused || Boolean(this.canvas?.closest('.game-root')?.contains(event.target as Node));
-    if (event.code === 'Escape' && (inGame || this.workshop)) {
+    if (event.code === 'Escape' && (inGame || this.windowOpen)) {
       event.preventDefault();
       if (!event.repeat) { this.dispatch({ type: 'cancel' }); this.focusCanvas(); }
       return;
     }
     // Native UI buttons retain Space/Enter activation; text editing never controls the miner.
-    if (this.workshop || !canvasFocused) return;
+    if (this.windowOpen || !canvasFocused) return;
     if (![...LEFT_KEYS, ...RIGHT_KEYS, 'Space', 'KeyE', 'KeyF'].includes(event.code)) return;
     event.preventDefault();
     if (event.repeat) return;
@@ -446,7 +514,7 @@ export class GameRuntime {
   }
 
   private refreshPointerTarget(): void {
-    if (this.workshop || !this.renderer || !this.pointerClient) {
+    if (this.windowOpen || !this.renderer || !this.pointerClient) {
       this.pointerWorld = null;
       this.setHoveredTarget(null);
       return;
@@ -479,6 +547,7 @@ export class GameRuntime {
 
   private createSnapshot(): GameSnapshot {
     return Object.freeze({ revision: this.revision, state: structuredClone(this.state),
-      workshop: this.workshop ? { ...this.workshop } : null });
+      workshop: this.workshop ? { ...this.workshop } : null,
+      elevatorUi: this.elevatorUi ? { ...this.elevatorUi } : null, helpOpen: this.helpOpen });
   }
 }

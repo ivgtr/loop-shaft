@@ -1,16 +1,14 @@
 import { WORLD } from '../game/config';
-import { playerInteraction } from '../game/playerControls';
-import { canDispatchElevator, cargoWeight } from '../game/simulation';
 import type { GameState } from '../game/types';
-import { selectedWorkshopItem, workshopGuide, workshopItems, type WorkshopIcon, type WorkshopItem, type WorkshopState } from '../game/workshop';
+import { selectedWorkshopItem, workshopItems, type WorkshopIcon, type WorkshopItem, type WorkshopState } from '../game/workshop';
 import type { GameCommand } from '../runtime/commands';
 import type { Rect } from './interactionTargets';
 import { drawPixelText } from './pixelText';
 
 export interface UiViewport { width: number; height: number; world: Rect; }
 export type WorkshopUiAction = { type: 'open' | 'close' | 'buy' } | { type: 'select'; id: string } | { type: 'command'; command: GameCommand };
-export interface UiButton extends Rect {
-  id: string; label: string; text: string; action: WorkshopUiAction;
+export interface UiButton<Action = WorkshopUiAction> extends Rect {
+  id: string; label: string; text: string; action: Action;
   disabled?: boolean; selected?: boolean; icon?: WorkshopIcon; owned?: boolean;
 }
 export interface WorkshopUiLayout {
@@ -20,32 +18,15 @@ export interface WorkshopUiLayout {
   item: WorkshopItem | null;
   itemCount: string;
 }
-const C = { background: '#171519', surface: '#262127', line: '#74604b', light: '#d9c9ac',
+export const C = { background: '#171519', surface: '#262127', line: '#74604b', light: '#d9c9ac',
   text: '#dbd3c6', muted: '#b0a397', gold: '#d5b373', installed: '#a7c3b3', disabled: '#77716c' };
 
 /** One geometry model for the Canvas paint and its semantic input targets. All units are CSS pixels. */
 export function layoutWorkshopUi(state: GameState, workshop: WorkshopState | null, viewport: UiViewport): WorkshopUiLayout {
-  const { width: w, height: h, world } = viewport;
+  const { width: w, height: h } = viewport;
   const compact = w < 640;
   const buttons: UiButton[] = [];
-  if (!workshop) {
-    const send = canDispatchElevator(state);
-    const reason = send ? 'F · SEND' : state.run.elevator.cargo.length === 0 ? 'LIFT EMPTY' : state.run.elevator.state.replaceAll('_', ' ');
-    buttons.push({ id: 'send', label: 'SEND', text: reason, action: { type: 'command', command: { type: 'send' } },
-      x: world.x + world.width / 2 - 51, y: world.y + world.height * .43, width: 102, height: 44, disabled: !send });
-    const interaction = playerInteraction(state);
-    if (interaction.type === 'collect' || interaction.type === 'load' || interaction.type === 'workbench') {
-      const width = compact ? 144 : 168;
-      buttons.push({ id: 'interact', label: interaction.type === 'collect' ? 'Pick up nearby ore' : interaction.type === 'load' ? 'Load carried ore' : 'Open Workshop',
-        text: `E · ${interaction.label}`, action: interaction.type === 'workbench' ? { type: 'open' } : { type: 'command', command: { type: 'interact' } },
-        disabled: interaction.reason !== null, x: clamp(world.x + state.run.character.x / WORLD.width * world.width - width / 2, 8, w - width - 8),
-        y: Math.min(h - 48, world.y + world.height * .87), width, height: 44 });
-    }
-    const guide = workshopGuide(state);
-    if (guide) buttons.push({ id: 'goal', label: 'Inspect next workshop upgrade', text: guide.label, action: { type: 'open' },
-      x: 10, y: 54, width: Math.min(w - 20, 420), height: compact ? 44 : 36, selected: guide.ready });
-    return { buttons, panel: null, compact, item: null, itemCount: '' };
-  }
+  if (!workshop) return { buttons, panel: null, compact, item: null, itemCount: '' };
   const items = workshopItems(state);
   const item = selectedWorkshopItem(items, workshop.selectedId);
   const panel = { x: compact ? 8 : Math.round((w - Math.min(660, w - 32)) / 2),
@@ -121,14 +102,9 @@ export function drawWorkshopUi(ctx: CanvasRenderingContext2D, state: GameState, 
     if (!compact && layout.buttons.some((b) => b.id === 'previous')) text(ctx, layout.itemCount, p.x + 104, p.y + 297, 11, C.muted, 'center');
   }
   for (const button of layout.buttons) drawButton(ctx, button, focused === button.id || hovered === button.id, compact);
-  if (!p) {
-    const send = layout.buttons.find((button) => button.id === 'send');
-    if (send) text(ctx, `${Number(cargoWeight(state.run.elevator.cargo).toFixed(1))}/${state.run.elevator.maxLoad} kg`,
-      send.x + send.width / 2, send.y + send.height + 13, 11, C.light, 'center');
-  }
 }
 
-function drawButton(ctx: CanvasRenderingContext2D, b: UiButton, focused: boolean, compact: boolean): void {
+export function drawButton<Action>(ctx: CanvasRenderingContext2D, b: UiButton<Action>, focused: boolean, compact: boolean): void {
   ctx.fillStyle = b.disabled ? '#19171b' : b.selected ? '#3b3025' : '#282228'; ctx.fillRect(b.x, b.y, b.width, b.height);
   ctx.strokeStyle = focused ? C.light : b.selected ? C.gold : '#594a42'; ctx.lineWidth = focused ? 2 : 1;
   ctx.strokeRect(Math.round(b.x) + .5, Math.round(b.y) + .5, Math.round(b.width) - 1, Math.round(b.height) - 1);
@@ -145,7 +121,7 @@ function drawButton(ctx: CanvasRenderingContext2D, b: UiButton, focused: boolean
   }
 }
 
-function text(ctx: CanvasRenderingContext2D, label: string, x: number, y: number, size: number, color: string = C.text, align: CanvasTextAlign = 'left'): void {
+export function text(ctx: CanvasRenderingContext2D, label: string, x: number, y: number, size: number, color: string = C.text, align: CanvasTextAlign = 'left'): void {
   ctx.font = `${size}px "Cascadia Mono", Consolas, monospace`; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = color;
   ctx.fillText(label, Math.round(x), Math.round(y));
 }
@@ -153,7 +129,7 @@ function pixel(ctx: CanvasRenderingContext2D, label: string, x: number, y: numbe
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(scale, scale); ctx.fillStyle = color;
   drawPixelText(ctx, label, 0, 0, { baseline: 'top' }); ctx.restore();
 }
-function lines(ctx: CanvasRenderingContext2D, label: string, x: number, y: number, width: number, size: number, max: number, color: string = C.text): void {
+export function lines(ctx: CanvasRenderingContext2D, label: string, x: number, y: number, width: number, size: number, max: number, color: string = C.text): void {
   ctx.font = `${size}px "Cascadia Mono", Consolas, monospace`;
   const words = label.split(' '); const output: string[] = []; let line = '';
   for (const word of words) {
@@ -163,7 +139,7 @@ function lines(ctx: CanvasRenderingContext2D, label: string, x: number, y: numbe
   if (line) output.push(line);
   output.slice(0, max).forEach((value, i) => text(ctx, i === max - 1 && output.length > max ? elide(ctx, `${value} …`, width, size) : value, x, y + i * (size + 3), size, color));
 }
-function elide(ctx: CanvasRenderingContext2D, label: string, width: number, size: number): string {
+export function elide(ctx: CanvasRenderingContext2D, label: string, width: number, size: number): string {
   ctx.font = `${size}px "Cascadia Mono", Consolas, monospace`;
   if (ctx.measureText(label).width <= width) return label;
   let result = label;
@@ -187,4 +163,3 @@ function icon(ctx: CanvasRenderingContext2D, kind: WorkshopIcon, x: number, y: n
   } else { ctx.fillRect(4, 1, 6, 3); ctx.fillRect(2, 4, 10, 9); ctx.fillStyle = C.gold; ctx.fillRect(5, 6, 4, 5); }
   ctx.restore();
 }
-function clamp(value: number, min: number, max: number): number { return Math.max(min, Math.min(max, value)); }

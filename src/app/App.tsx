@@ -1,9 +1,7 @@
 import { useEffect } from 'react';
 import { ContextPanel } from '../components/context/ContextPanel';
 import { GameCanvas } from '../components/game/GameCanvas';
-import { PlayerActions } from '../components/game/PlayerActions';
-import { ResourceHud, RunStatusHud } from '../components/hud/Hud';
-import { WorkshopCanvas } from '../components/workshop/WorkshopCanvas';
+import { GameUiCanvas } from '../components/game/GameUiCanvas';
 import type { GameRuntime } from '../runtime/GameRuntime';
 import { GameProvider, useGameSnapshot } from './GameProvider';
 
@@ -19,9 +17,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
         <div>
           <div className="game-shell">
             <GameCanvas />
-            <ResourceHud />
-            <RunStatusHud />
-            <WorkshopCanvas />
+            <GameUiCanvas />
           </div>
           <LegacyControls />
         </div>
@@ -30,17 +26,13 @@ export function App({ runtime }: { runtime: GameRuntime }) {
   );
 }
 
-/** Later UI stages migrate these controls; the workshop does not duplicate them. */
+/** Research, crew and deep logistics are the remaining third-stage UI. */
 function LegacyControls() {
-  const { workshop } = useGameSnapshot();
+  const { workshop, elevatorUi, helpOpen } = useGameSnapshot();
   return (
-    <div className="legacy-controls" inert={workshop !== null}>
-      <PlayerActions />
+    <div className="legacy-controls" inert={workshop !== null || elevatorUi !== null || helpOpen}>
       <ContextPanel />
-      <div className="help-line" id="player-control-help">
-        <span><kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd> walk · <kbd>Space</kbd> mine · <kbd>E</kbd> interact · <kbd>F</kbd> send · <kbd>Esc</kbd> stop / close. Click floor to walk.</span>
-        <span>Cargo stays physical. Choose when to pick up and return; payment happens at Surface.</span>
-      </div>
+
     </div>
   );
 }

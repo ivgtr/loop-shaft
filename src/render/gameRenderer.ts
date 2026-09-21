@@ -4,7 +4,7 @@ import { cargoWeight } from '../game/simulation';
 import type { GameEvent, GameState, LootStack } from '../game/types';
 import { Phase5Renderer } from './phase5Renderer';
 import { drawInteractionOverlay } from './interactionOverlay';
-import { drawDeliveryNotice, drawInitialLogisticsGuide, initialGuideTargetKey } from './initialGuideOverlay';
+import { drawDeliveryNotice, initialGuideTargetKey } from './initialGuideOverlay';
 import {
   clientToWorldPoint,
   deriveInteractionTargets,
@@ -74,7 +74,7 @@ export class GameRenderer {
     const guide = deriveInitialLogisticsGuide(state);
     const guideTargetKey = initialGuideTargetKey(guide, targets);
     drawInteractionOverlay(this.ctx, targets, state.selection, hoveredKey, guideTargetKey);
-    if (guide) drawInitialLogisticsGuide(this.ctx, guide, targets, state);
+    // The shared Canvas HUD owns instructions; world overlay only marks the target.
     if (this.deliveryNotice && now < this.deliveryNotice.expiresAt) {
       drawDeliveryNotice(this.ctx, this.deliveryNotice.amount);
     } else if (this.deliveryNotice) this.deliveryNotice = null;

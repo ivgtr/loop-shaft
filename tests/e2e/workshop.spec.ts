@@ -47,12 +47,12 @@ test('first delivery funds an in-world purchase without using the outside contro
   const state = atVein(); state.run.floors['D-001'].loot.push(ore('gold-a', 82), ore('gold-b', 82));
   await seed(page, state); await page.goto('/');
   const canvas = page.locator('.game-canvas');
-  await expect(page.locator('.hud-left strong').first()).toHaveText('SCRAP 0');
+  await expect(page.getByTestId('resource-status')).toContainText('SCRAP 0 ·');
   await ui(page, 'interact').click();
   await expect(canvas).toHaveAttribute('data-carried-weight', '1.60');
   await clickWorld(page, 240, 213);
   await expect(ui(page, 'send')).toBeEnabled({ timeout: 10_000 });
-  await expect(page.locator('.hud-left strong').first()).toHaveText('SCRAP 0');
+  await expect(page.getByTestId('resource-status')).toContainText('SCRAP 0 ·');
   await ui(page, 'send').click();
   await expect(canvas).toHaveAttribute('data-elevator-state', 'ASCENDING');
   await expect(ui(page, 'goal')).toHaveAttribute('aria-pressed', 'true', { timeout: 15_000 });
@@ -79,7 +79,7 @@ test('first delivery funds an in-world purchase without using the outside contro
   await page.keyboard.press('Space');
   await expect(canvas).toHaveAttribute('data-swing', 'active');
   await expect(canvas).toHaveAttribute('data-swing', 'ready');
-  await expect(page.locator('.context-meta')).toContainText('HP 14/30');
+  await expect(page.getByTestId('scene-detail')).toContainText('HP 14/30');
   await page.reload();
   await expect(dialog(page)).toHaveCount(0);
   expect((await saved(page)).run.tool.level).toBe(2);
@@ -91,7 +91,7 @@ test('keeps locked items inspectable, focus trapped, and all world inputs blocke
   const canvas = page.locator('.game-canvas');
   // Selection is deliberately not restored by save loading; establish it through the real UI.
   await clickWorld(page, 118, 214);
-  await expect(page.getByRole('heading', { name: 'Scrap Ledge', exact: true })).toBeVisible();
+  await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
   await canvas.focus(); await page.keyboard.down('KeyD');
   await expect(canvas).toHaveAttribute('data-player-state', 'MOVING_TO_POINT');
   await ui(page, 'goal').click();
@@ -113,7 +113,7 @@ test('keeps locked items inspectable, focus trapped, and all world inputs blocke
   await page.keyboard.press('Escape');
   await expect(canvas).toBeFocused();
   await expect(dialog(page)).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Scrap Ledge', exact: true })).toBeVisible();
+  await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
   await page.keyboard.down('KeyA');
   await expect(canvas).toHaveAttribute('data-player-state', 'MOVING_TO_POINT');
   await page.keyboard.up('KeyA');
@@ -124,7 +124,7 @@ test('purchasing Auto Swing neither repeats on held Enter nor starts a hidden mi
   state.run.boots.level = 2; state.run.stats.manualSwings = 6;
   await seed(page, state); await page.goto('/');
   await clickWorld(page, 118, 214);
-  await expect(page.locator('.context-meta')).toContainText('HP 30/30');
+  await expect(page.getByTestId('scene-detail')).toContainText('HP 30/30');
   await ui(page, 'goal').click();
   await expect(dialog(page)).toContainText('Manual swings → repeated swings');
   await ui(page, 'buy').focus(); await page.keyboard.down('Enter');
@@ -137,7 +137,7 @@ test('purchasing Auto Swing neither repeats on held Enter nor starts a hidden mi
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-player-state', 'IDLE');
   expect((await saved(page)).run.scrap).toBe(820);
   await ui(page, 'close').click();
-  await expect(page.locator('.context-meta')).toContainText('HP 30/30');
+  await expect(page.getByTestId('scene-detail')).toContainText('HP 30/30');
 });
 
 test('keeps an ascending shipment running and reflects funds while inspecting the workshop', async ({ page }) => {
