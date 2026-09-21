@@ -1,4 +1,4 @@
-import { PLAYER_PACK_CAPACITY, PLAYER_TOOL_DAMAGE, UPGRADE_COSTS } from './config';
+import { D030_EXTENSION_COST, PLAYER_PACK_CAPACITY, PLAYER_TOOL_DAMAGE, UPGRADE_COSTS } from './config';
 import { getModifiers } from './modifiers';
 import { upgradeBlockReason, type UpgradeAction } from './playerControls';
 import type { GameState } from './types';
@@ -84,7 +84,7 @@ export function workshopGuide(state: GameState): WorkshopGuide | null {
   const { run, meta } = state;
   if (meta.runIndex !== 1 || run.depth.current !== 'D-001' || run.depth.unlocked.length > 1 || meta.bestDepth !== 'D-001') return null;
   if (run.stats.elevatorTrips === 0 && run.scrap === 0) return null;
-  if (run.scrap >= 1200) return null;
+  if (run.scrap >= D030_EXTENSION_COST) return null;
   const next = nextWorkshopUpgrade(state);
   if (!next) return null;
   return { ready: next.command !== null,

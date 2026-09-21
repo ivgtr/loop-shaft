@@ -2,18 +2,21 @@ import { expect, test, type Page } from '@playwright/test';
 import { createGameState } from '../../src/game/createGame';
 import { SAVE_KEY, serializeGameState } from '../../src/game/save';
 import type { GameState, LootStack } from '../../src/game/types';
+import { createD001Nodes } from '../../src/game/config';
+const SCRAP_X = createD001Nodes()[0]!.x;
+
 
 async function seed(page: Page, state: GameState): Promise<void> {
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: SAVE_KEY, value: serializeGameState(state) });
 }
 function atVein(): GameState {
   const state = createGameState(52001);
-  state.run.character.x = 131;
+  state.run.character.x = (SCRAP_X + 13);
   state.run.character.state = 'MINING';
   state.run.character.targetNodeId = 'scrap-ledge';
   return state;
 }
-function iron(id = 'held', x = 118, weight = 2): LootStack {
+function iron(id = 'held', x = SCRAP_X, weight = 2): LootStack {
   return { id, x, y: 206, weight, kind: 'IRON', name: 'Iron', category: 'ORE', rarity: 'COMMON', value: 12, dataValue: 0, coreValue: 0 };
 }
 async function x(page: Page): Promise<number> { return Number(await page.getByLabel('LOOP SHAFT mining floor').getAttribute('data-player-x')); }
@@ -30,7 +33,7 @@ test('completes the first physical delivery using only keyboard controls', async
   const canvas = page.getByLabel('LOOP SHAFT mining floor');
   await canvas.focus();
   await page.keyboard.down('KeyA');
-  await expect.poll(() => x(page)).toBeLessThan(140);
+  await expect.poll(() => x(page)).toBeLessThan(SCRAP_X + 20);
   await page.keyboard.up('KeyA');
   await expect(canvas).toHaveAttribute('data-player-state', 'IDLE');
   for (let i = 0; i < 3; i += 1) await swing(page);
@@ -107,8 +110,8 @@ test('native button focus keeps Space activation without also mining', async ({ 
   await page.mouse.click(box.x + box.width * 200 / 480, box.y + box.height * 209 / 270);
   const dialog = page.getByRole('dialog', { name: 'Workshop' });
   await dialog.getByRole('button', { name: 'Runner Boots', exact: true }).click();
-  await expect(dialog).toContainText('REQUIRES STEEL PICK');
-  await expect(dialog.getByRole('button', { name: /Buy Runner Boots/ })).toBeDisabled();
+  await expect(dialog).toContainText('Walk speed');
+  await expect(dialog.getByRole('button', { name: /Buy Runner Boots/ })).toBeEnabled();
   const steel = dialog.getByRole('button', { name: 'Steel Pick', exact: true });
   await steel.click();
   await dialog.getByRole('button', { name: /Buy Steel Pick/ }).focus();
@@ -126,7 +129,7 @@ test('native button focus keeps Space activation without also mining', async ({ 
 
 test('a full pack still allows movement and mining while pickup explains the limit', async ({ page }) => {
   const state = atVein();
-  state.run.character.carried = [iron('full-pack', 118, 8)];
+  state.run.character.carried = [iron('full-pack', SCRAP_X, 8)];
   state.run.floors['D-001'].loot.push(iron('extra'));
   await seed(page, state);
   await page.goto('/');

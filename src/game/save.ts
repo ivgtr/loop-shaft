@@ -568,7 +568,7 @@ function normalizeNode(value: unknown, fallback: MiningNode): MiningNode {
   const fraction = Math.max(0, Math.min(1, numberOr(saved.hp, fallback.maxHp) / Math.max(1, numberOr(saved.maxHp, fallback.maxHp))));
   return {
     ...fallback,
-    hp: Math.ceil(fraction * fallback.maxHp),
+    hp: Math.ceil(fraction * fallback.maxHp - 1e-9),
     respawnTimer: Math.min(1, Math.max(0, numberOr(saved.respawnTimer, 0)) / Math.max(0.1, numberOr(saved.respawnDelay, fallback.respawnDelay))) * fallback.respawnDelay,
     minedCount: Math.min(1e9, Math.max(0, Math.floor(numberOr(saved.minedCount, 0)))),
     coreExtracted: Math.min(CORE_RESERVES[fallback.id] ?? 0, Math.max(0, Math.floor(numberOr(saved.coreExtracted, 0)))),

@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createGameState } from '../../src/game/createGame';
 import { SAVE_KEY, serializeGameState } from '../../src/game/save';
+import { createD001Nodes } from '../../src/game/config';
+const SCRAP_X = createD001Nodes()[0]!.x;
+
 
 async function clickWorld(page: Page, x: number, y: number): Promise<void> {
   const box = await page.getByLabel('LOOP SHAFT mining floor').boundingBox();
@@ -20,7 +23,7 @@ test('guides a new game through optional pickup, return, and first physical deli
   await page.goto('/');
   await expect(page.getByTestId('scene-detail')).toContainText('Scrap Ledge · click or tap');
   const canvas = page.getByLabel('LOOP SHAFT mining floor');
-  await clickWorld(page, 118, 214);
+  await clickWorld(page, SCRAP_X, 214);
   await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
   await expect(canvas).toHaveAttribute('data-player-state', 'MINING', { timeout: 10_000 });
   await expect(page.getByTestId('scene-detail')).toContainText('clicking / tapping the vein again, pressing Space, or using MINE');
@@ -47,14 +50,14 @@ test('selects, moves to, and mines a visible node through the Canvas controls', 
   page.on('pageerror', (error) => pageErrors.push(error));
   await page.goto('/');
   await expect(page.getByTestId('scene-title')).toHaveText('D-001 · SHAFT');
-  await clickWorld(page, 118, 214);
+  await clickWorld(page, SCRAP_X, 214);
   await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
   const canvas = page.getByLabel('LOOP SHAFT mining floor');
   await expect(canvas).toHaveAttribute('data-player-state', 'MINING', { timeout: 10_000 });
   await swing(page);
   await expect(page.getByTestId('scene-detail')).toContainText('HP 20/30');
   await page.reload();
-  await clickWorld(page, 118, 214);
+  await clickWorld(page, SCRAP_X, 214);
   await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
   await expect(page.getByTestId('scene-detail')).toContainText('HP 20/30');
   expect(pageErrors).toEqual([]);
@@ -68,7 +71,7 @@ test('uses a pointer cursor only on targets and selects the hovered target', asy
   await page.mouse.move(box!.x + box!.width * 20 / 480, box!.y + box!.height * 100 / 270);
   await expect(canvas).toHaveCSS('cursor', 'default');
   await expect(canvas).not.toHaveAttribute('data-interaction-target');
-  const x = box!.x + box!.width * 118 / 480;
+  const x = box!.x + box!.width * SCRAP_X / 480;
   const y = box!.y + box!.height * 214 / 270;
   await page.mouse.move(x, y);
   await expect(canvas).toHaveCSS('cursor', 'pointer');
@@ -90,7 +93,7 @@ test('keeps D-001 operable when individual image targets fail to load', async ({
     await page.route(`**/${file}`, (route) => route.abort());
   }
   await page.goto('/');
-  await clickWorld(page, 118, 214);
+  await clickWorld(page, SCRAP_X, 214);
   await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
   await expect(page.getByRole('button', { name: 'MINE', exact: true })).toBeEnabled({ timeout: 10_000 });
   expect(pageErrors).toEqual([]);
@@ -109,7 +112,7 @@ test('keeps NPC and Cargo paths operable when their image groups fail independen
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
   await page.goto('/');
-  await clickWorld(page, 118, 214);
+  await clickWorld(page, SCRAP_X, 214);
   await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
   await expect(page.getByRole('button', { name: 'MINE', exact: true })).toBeEnabled({ timeout: 10_000 });
   expect(pageErrors).toEqual([]);
@@ -144,7 +147,7 @@ test.describe('touch selection', () => {
     const canvas = page.getByLabel('LOOP SHAFT mining floor');
     const box = await canvas.boundingBox();
     expect(box).not.toBeNull();
-    const position = { x: box!.width * 118 / 480, y: box!.height * 214 / 270 };
+    const position = { x: box!.width * SCRAP_X / 480, y: box!.height * 214 / 270 };
     await canvas.tap({ position });
     await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
     await expect(page.getByTestId('scene-detail')).toContainText(/Moving to Scrap Ledge|Mine by clicking/);

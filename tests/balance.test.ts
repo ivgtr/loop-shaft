@@ -11,7 +11,7 @@ import { elevatorItems } from '../src/game/elevatorUi';
 import type { DepthId, GameState, LootKind, LootStack } from '../src/game/types';
 
 const sink = () => undefined;
-function physical(kind: LootKind, id = kind): LootStack {
+function physical(kind: LootKind, id: string = kind): LootStack {
   const d = LOOT[kind];
   return { id, kind, name: d.name, category: d.category, rarity: d.rarity, weight: d.weight, value: d.value,
     dataValue: d.dataValue ?? 0, coreValue: d.coreValue ?? 0, x: 240, y: 210, originDepth: 'D-001' };

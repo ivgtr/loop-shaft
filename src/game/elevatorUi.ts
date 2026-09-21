@@ -97,7 +97,6 @@ export function selectedElevatorItem(state: GameState, ui: ElevatorUiState): Ele
 
 function extensionItems(state: GameState): ElevatorItem[] {
   const { run, meta } = state;
-  const blueprint = meta.protocols.includes('SHAFT_BLUEPRINT');
   type Check = readonly [boolean, string];
   const definitions: { depth: DepthId; cost: number; command: GameCommand; ready: boolean; checks: Check[] }[] = [
     { depth: 'D-030', cost: d030ExtensionCost(state), command: { type: 'extend-d030' }, ready: canExtendD030(state), checks: [

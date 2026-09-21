@@ -1,5 +1,5 @@
 import { createGameState } from '../../src/game/createGame';
-import { LOOT, PLAYER_PACK_CAPACITY, PLAYER_TOOL_DAMAGE } from '../../src/game/config';
+import { LOOT, D030_EXTENSION_COST, D060_EXTENSION_COST, D100_EXTENSION_COST, PLAYER_PACK_CAPACITY, PLAYER_TOOL_DAMAGE } from '../../src/game/config';
 import { nodeTripEstimate, visibleSeams } from '../../src/game/mining';
 import { atPlayerLoadingPoint, cancelPlayerAction, movePlayerTo, nearbyPlayerLoot, playerInteraction } from '../../src/game/playerControls';
 import {
@@ -120,14 +120,14 @@ export function runFirstCoreScenario(seed: number, exploreEarly: boolean, capSec
     }
     let transition = false;
     let destination: 'D-030' | 'D-060' | 'D-100' | null = null;
-    if (run.depth.current === 'D-001' && (exploreEarly || run.automation.autoDispatch.unlocked) && run.scrap >= 1200) {
+    if (run.depth.current === 'D-001' && (exploreEarly || run.automation.autoDispatch.unlocked) && run.scrap >= D030_EXTENSION_COST) {
       transition = true; destination = 'D-030';
       if (canExtendD030(state)) unlockD030(state);
-    } else if (run.depth.current === 'D-030' && run.scrap >= 4800 && run.porter.enabled && run.automation.autoDispatch.unlocked
+    } else if (run.depth.current === 'D-030' && run.scrap >= D060_EXTENSION_COST && run.porter.enabled && run.automation.autoDispatch.unlocked
       && state.meta.passives.unlocked.length > 0 && state.meta.collection.entries.some((entry) => entry.discovered)) {
       transition = true; destination = 'D-060';
       if (canExtendD060(state)) unlockD060(state);
-    } else if (run.depth.current === 'D-060' && run.scrap >= 6000 && run.research.completed.includes('CORE_RESONANCE')) {
+    } else if (run.depth.current === 'D-060' && run.scrap >= D100_EXTENSION_COST && run.research.completed.includes('CORE_RESONANCE')) {
       transition = true; destination = 'D-100';
       if (canExtendD100(state)) unlockD100(state);
     }

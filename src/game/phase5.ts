@@ -3,7 +3,7 @@ import { canPlayerAccessNode, localCargoDropX, processDeepEvents, updateDeepGame
 import { depthDistance } from './depth';
 import { getModifiers } from './modifiers';
 import { finishingDamage, rollMiningLoot, nodeTripEstimate, treasureCategoryChance, visibleSeams, coreReserveRemaining } from './mining';
-import { hashSeed, nextRandom, pick } from './rng';
+import { hashSeed, nextRandom } from './rng';
 import { armReboot, canTravelToDepth, cargoWeight, drainEvents, requestFloorTravel, sendElevator, updateGame } from './simulation';
 import type { CargoRoutingPriority, CrewMember, CrewRole, EquipmentAffix, EquipmentAffixId, EquipmentItem, EquipmentRarity, EquipmentSlot, FloorState, GameEvent, GameEventType, GameState, LootKind, LootStack, MinerPriority, MiningNode, OfflineReport, Phase5DepthId, PorterPriority, Rarity, WorkerBody } from './types';
 

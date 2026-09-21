@@ -4,6 +4,9 @@ import { createGameState } from '../src/game/createGame';
 import { serializeGameState } from '../src/game/save';
 import { updateGame } from '../src/game/simulation';
 import { GameRuntime } from '../src/runtime/GameRuntime';
+import { createD001Nodes } from '../src/game/config';
+const SCRAP_X = createD001Nodes()[0]!.x;
+
 
 describe('GameRuntime', () => {
   beforeEach(() => {
@@ -41,7 +44,7 @@ describe('GameRuntime', () => {
     const listener = vi.fn();
     runtime.subscribe(listener);
 
-    runtime.updateCanvasPointer(118, 201);
+    runtime.updateCanvasPointer(SCRAP_X, 201);
 
     expect(runtime.getHoveredTargetKey()).toBe('node:scrap-ledge');
     expect(canvas.style.cursor).toBe('pointer');
@@ -60,10 +63,10 @@ describe('GameRuntime', () => {
     const runtime = new GameRuntime(state);
     const canvas = fakeCanvas();
     runtime.attachCanvas(canvas);
-    runtime.updateCanvasPointer(118, 201);
+    runtime.updateCanvasPointer(SCRAP_X, 201);
     const hovered = runtime.getHoveredTargetKey();
 
-    runtime.selectCanvasTarget(118, 201);
+    runtime.selectCanvasTarget(SCRAP_X, 201);
     expect(hovered).toBe('node:scrap-ledge');
     expect(state.selection).toEqual({ type: 'node', id: 'scrap-ledge' });
 
@@ -75,12 +78,12 @@ describe('GameRuntime', () => {
     const state = createGameState(7004);
     const runtime = new GameRuntime(state);
     runtime.attachCanvas(fakeCanvas());
-    runtime.selectCanvasTarget(118, 201);
+    runtime.selectCanvasTarget(SCRAP_X, 201);
     expect(state.run.character.state).toBe('MOVING_TO_NODE');
 
     for (let index = 0; index < 300 && state.run.character.state !== 'MINING'; index += 1) updateGame(state, 1 / 60);
     expect(state.run.character.state).toBe('MINING');
-    runtime.selectCanvasTarget(118, 201);
+    runtime.selectCanvasTarget(SCRAP_X, 201);
     expect(state.run.character.swing).not.toBeNull();
   });
 });

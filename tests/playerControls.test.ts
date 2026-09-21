@@ -15,6 +15,9 @@ import { deriveInteractionTargets, resolveInteractionTarget, INTERACTION_LAYOUT 
 import { characterClip, deriveSemanticRenderState, D001_VISUAL_GROUND_OFFSET, D001_WORKBENCH_FALLBACK_OFFSET, d001ElevatorVisualY } from '../src/render/semanticRenderState';
 import { GameRuntime } from '../src/runtime/GameRuntime';
 import { MiningInput } from '../src/runtime/MiningInput';
+import { createD001Nodes } from '../src/game/config';
+const SCRAP_X = createD001Nodes()[0]!.x;
+
 
 beforeEach(() => vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => undefined }));
 afterEach(() => vi.unstubAllGlobals());
@@ -31,7 +34,7 @@ function atVein(): GameState {
   state.selection = { type: 'node', id: node.id };
   return state;
 }
-function iron(id = 'iron', x = 118, weight = 2): LootStack {
+function iron(id = 'iron', x = SCRAP_X, weight = 2): LootStack {
   return { id, x, y: 206, weight, kind: 'IRON', name: 'Iron', rarity: 'COMMON', category: 'ORE', value: 12, dataValue: 0, coreValue: 0 };
 }
 function ownership(state: GameState): string[] {
@@ -55,7 +58,7 @@ describe('manual work without forced cargo jobs', () => {
   it('batch-picks nearby ore without a selected node and can mine while carrying', () => {
     const state = atVein();
     cancelPlayerAction(state);
-    currentFloor(state).loot.push(iron('a'), iron('b', 123));
+    currentFloor(state).loot.push(iron('a'), iron('b', SCRAP_X + 5));
     expect(requestPlayerInteraction(state)).toBe(true);
     ticks(state, 30);
     expect(state.run.character.carried.map((item) => item.id)).toEqual(['a', 'b']);
@@ -116,7 +119,7 @@ describe('manual work without forced cargo jobs', () => {
   it('partial unloading leaves remaining items usable rather than entering a forced wait', () => {
     const state = createGameState(42003);
     state.run.elevator.cargo.push(iron('existing', 240, 19));
-    state.run.character.carried.push(iron('too-large'), iron('fits', 118, 0.8));
+    state.run.character.carried.push(iron('too-large'), iron('fits', SCRAP_X, 0.8));
     expect(requestPlayerInteraction(state)).toBe(true);
     ticks(state, 45);
     expect(state.run.character.state).toBe('IDLE');
@@ -158,7 +161,7 @@ describe('manual work without forced cargo jobs', () => {
   it('allows manual pickup with a Porter, without double ownership when both collect', () => {
     const state = atVein();
     currentFloor(state).loot.push(iron());
-    Object.assign(state.run.porter, { enabled: true, state: 'COLLECTING', x: 118, targetLootId: 'iron', collectTimer: 0 });
+    Object.assign(state.run.porter, { enabled: true, state: 'COLLECTING', x: SCRAP_X, targetLootId: 'iron', collectTimer: 0 });
     expect(requestPlayerInteraction(state)).toBe(true);
     ticks(state, 30);
     expect(ownership(state)).toEqual(['iron']);
@@ -216,10 +219,10 @@ describe('one target-bound manual mining input', () => {
       getContext: () => ({ imageSmoothingEnabled: false }),
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 480, height: 270 }),
     } as unknown as HTMLCanvasElement);
-    runtime.selectCanvasTarget(118, 214);
+    runtime.selectCanvasTarget(SCRAP_X, 214);
     const current = state.run.character.swing;
     ticks(state, 5);
-    runtime.selectCanvasTarget(118, 214);
+    runtime.selectCanvasTarget(SCRAP_X, 214);
     expect(state.run.character.swing).toBe(current);
     ticks(state, 10);
     expect(miningTarget(state)!.hp).toBe(20);
@@ -279,7 +282,7 @@ describe('shared availability and matching visual interaction geometry', () => {
   it.each(upgrades)('%s agrees with its UI prerequisite reason', (action, purchase) => {
     const state = createGameState(42007);
     state.run.scrap = 10_000;
-    state.run.stats.manualSwings = 6;
+    state.run.stats.manualSwings = 6; state.run.stats.playerDeposits = 1; state.run.stats.elevatorTrips = 1;
     const available = upgradeBlockReason(state, action) === null;
     expect(purchase(state)).toBe(available);
     if (!available) expect(state.run.scrap).toBe(10_000);
@@ -288,7 +291,7 @@ describe('shared availability and matching visual interaction geometry', () => {
     const state = createGameState(42008);
     expect(upgradeBlockReason(state, 'upgrade-tool')).toBe('NEED 90 MORE SCRAP');
     state.run.scrap = 10_000;
-    state.run.stats.manualSwings = 6;
+    state.run.stats.manualSwings = 6; state.run.stats.playerDeposits = 1; state.run.stats.elevatorTrips = 1;
     for (const [action, purchase] of upgrades) {
       expect(upgradeBlockReason(state, action)).toBeNull();
       expect(purchase(state)).toBe(true);

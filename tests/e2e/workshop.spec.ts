@@ -2,6 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 import { createGameState } from '../../src/game/createGame';
 import { SAVE_KEY, serializeGameState } from '../../src/game/save';
 import type { GameState, LootStack } from '../../src/game/types';
+import { createD001Nodes } from '../../src/game/config';
+const SCRAP_X = createD001Nodes()[0]!.x;
+
 
 async function seed(page: Page, state: GameState): Promise<void> {
   await page.addInitScript(({ key, value }) => {
@@ -17,13 +20,13 @@ async function saved(page: Page): Promise<GameState> {
 }
 function atVein(): GameState {
   const state = createGameState(9301);
-  state.run.character.x = 131;
+  state.run.character.x = (SCRAP_X + 13);
   state.run.character.state = 'IDLE';
   state.run.character.targetNodeId = null;
   return state;
 }
 function ore(id: string, value: number): LootStack {
-  return { id, x: 131, y: 206, kind: 'GOLD_NUGGET', name: 'Gold Nugget', category: 'VALUABLE', rarity: 'RARE',
+  return { id, x: (SCRAP_X + 13), y: 206, kind: 'GOLD_NUGGET', name: 'Gold Nugget', category: 'VALUABLE', rarity: 'RARE',
     weight: .8, value, dataValue: 0, coreValue: 0, originDepth: 'D-001' };
 }
 const dialog = (page: Page) => page.getByRole('dialog', { name: 'Workshop', exact: true });
@@ -74,7 +77,7 @@ test('first delivery funds an in-world purchase without using the outside contro
   await ui(page, 'close').click();
   await expect(canvas).toBeFocused();
   await expect(ui(page, 'goal')).toHaveAccessibleName('Inspect next workshop upgrade');
-  await clickWorld(page, 118, 214);
+  await clickWorld(page, SCRAP_X, 214);
   await expect(canvas).toHaveAttribute('data-player-state', 'MINING');
   await page.keyboard.press('Space');
   await expect(canvas).toHaveAttribute('data-swing', 'active');
@@ -90,7 +93,7 @@ test('keeps locked items inspectable, focus trapped, and all world inputs blocke
   await seed(page, state); await page.goto('/');
   const canvas = page.locator('.game-canvas');
   // Selection is deliberately not restored by save loading; establish it through the real UI.
-  await clickWorld(page, 118, 214);
+  await clickWorld(page, SCRAP_X, 214);
   await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
   await canvas.focus(); await page.keyboard.down('KeyD');
   await expect(canvas).toHaveAttribute('data-player-state', 'MOVING_TO_POINT');
@@ -99,8 +102,13 @@ test('keeps locked items inspectable, focus trapped, and all world inputs blocke
   const x = await canvas.getAttribute('data-player-x');
   await page.keyboard.up('KeyD');
   await ui(page, 'item-upgrade-boots').click();
+  await expect(ui(page, 'buy')).toBeEnabled();
+  await expect(dialog(page)).toContainText('Walk speed');
+  await ui(page, 'tab-automation').click();
+  await ui(page, 'item-unlock-auto-swing').click();
   await expect(ui(page, 'buy')).toBeDisabled();
-  await expect(dialog(page)).toContainText('REQUIRES STEEL PICK');
+  await expect(dialog(page)).toContainText('MINE 6 MORE TIMES');
+  await ui(page, 'tab-equipment').click();
   await ui(page, 'item-upgrade-tool').click();
   // Backdrop must consume the click without clearing selection or moving to this vein.
   await clickWorld(page, 440, 214);
@@ -123,7 +131,7 @@ test('purchasing Auto Swing neither repeats on held Enter nor starts a hidden mi
   const state = atVein(); state.run.scrap = 1000; state.run.tool.level = 2; state.run.tool.damage = 16;
   state.run.boots.level = 2; state.run.stats.manualSwings = 6;
   await seed(page, state); await page.goto('/');
-  await clickWorld(page, 118, 214);
+  await clickWorld(page, SCRAP_X, 214);
   await expect(page.getByTestId('scene-detail')).toContainText('HP 30/30');
   await ui(page, 'goal').click();
   await expect(dialog(page)).toContainText('Manual swings → repeated swings');
@@ -187,7 +195,8 @@ for (const width of [320, 390]) {
       await ui(page, 'goal').tap();
       await assertContained(page);
       await ui(page, 'next').tap();
-      await expect(dialog(page)).toContainText('REQUIRES STEEL PICK');
+      await expect(dialog(page)).toContainText('Walk speed');
+      await expect(ui(page, 'buy')).toBeEnabled();
       await ui(page, 'previous').tap();
       await ui(page, 'buy').tap();
       await expect(dialog(page).getByRole('status')).toContainText('Steel Pick equipped');

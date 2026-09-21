@@ -191,8 +191,8 @@ export const CORE_PROTOCOLS: Record<CoreProtocolId, ProtocolDefinition> = {
 
 export function createD001Nodes(): MiningNode[] {
   return [
-    node('scrap-ledge', 'Scrap Ledge', 'NEAR', 174, 30, 5, ['STONE', 'IRON'], 0.01, [1, 0, 0, 0, 0, 0], 2, 3, 6),
-    node('copper-pocket', 'Copper Pocket', 'MID', 356, 96, 17, ['IRON', 'COPPER'], 0.04, [1, 0, 0, 0, 0, 0], 4, 6, 16),
+    node('scrap-ledge', 'Scrap Ledge', 'NEAR', 154, 30, 7, ['STONE', 'IRON'], 0.01, [1, 0, 0, 0, 0, 0], 3, 3, 6),
+    node('copper-pocket', 'Copper Pocket', 'MID', 356, 96, 17, ['IRON', 'COPPER'], 0.04, [1, 0, 0, 0, 0, 0], 4, 6, 12),
     node('fossil-crack', 'Fossil Crack', 'FAR', 438, 96, 29, ['STONE', 'COPPER'], 0.22, [0.12, 0.88, 0, 0, 0, 0], 1, 2, 20),
   ];
 }

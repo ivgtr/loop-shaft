@@ -33,7 +33,7 @@ export const CORE_RESERVES: Readonly<Partial<Record<string, number>>> = {
 };
 
 const ORDINARY_WEIGHTS: Readonly<Partial<Record<string, readonly number[]>>> = {
-  'scrap-ledge': [1, 4], 'copper-pocket': [1, 4], 'fossil-crack': [2, 1],
+  'scrap-ledge': [1, 9], 'copper-pocket': [1, 4], 'fossil-crack': [2, 1],
 };
 const KIND_WEIGHTS: Partial<Record<LootKind, number>> = {
   GOLD_NUGGET: 6, OLD_COIN: 3, POCKET_WATCH: 2, NATURAL_GOLD: 2, GEM: 1,
