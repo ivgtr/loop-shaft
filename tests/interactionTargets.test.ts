@@ -7,6 +7,7 @@ import {
   deriveInteractionTargets,
   resolveInteractionTarget,
 } from '../src/render/interactionTargets';
+import { D001_VISUAL_GROUND_OFFSET, D001_WORKBENCH_FALLBACK_OFFSET } from '../src/render/semanticRenderState';
 
 describe('interaction targets', () => {
   it('converts CSS client coordinates to the 480x270 logical canvas', () => {
@@ -15,13 +16,16 @@ describe('interaction targets', () => {
     expect(clientToWorldPoint(0, 0, { left: 0, top: 0, width: 0, height: 270 })).toBeNull();
   });
 
-  it('uses inclusive hit boundaries and padding beyond a node body', () => {
+  it('uses inclusive boundaries centered on the displayed node, with forgiving body padding', () => {
     const state = createGameState(8101);
     const targets = deriveInteractionTargets(state);
-    expect(resolveInteractionTarget({ x: 140, y: 201 }, targets)?.key).toBe('node:scrap-ledge');
-    expect(resolveInteractionTarget({ x: 140.01, y: 201 }, targets)?.key).not.toBe('node:scrap-ledge');
-    // The rendered Scrap Ledge ends around x=131; the logical hit remains forgiving.
-    expect(resolveInteractionTarget({ x: 136, y: 201 }, targets)?.key).toBe('node:scrap-ledge');
+    const centerY = 201 + D001_VISUAL_GROUND_OFFSET;
+    expect(resolveInteractionTarget({ x: 140, y: centerY }, targets)?.key).toBe('node:scrap-ledge');
+    expect(resolveInteractionTarget({ x: 140.01, y: centerY }, targets)?.key).not.toBe('node:scrap-ledge');
+    // The rendered Scrap Ledge ends around x=131; the display-aligned hit remains forgiving.
+    expect(resolveInteractionTarget({ x: 136, y: centerY }, targets)?.key).toBe('node:scrap-ledge');
+    expect(resolveInteractionTarget({ x: 118, y: centerY + 22 }, targets)?.key).toBe('node:scrap-ledge');
+    expect(resolveInteractionTarget({ x: 118, y: centerY + 22.01 }, targets)?.key).not.toBe('node:scrap-ledge');
   });
 
   it('tracks the moving elevator cage while retaining the fixed control panel', () => {
@@ -37,11 +41,13 @@ describe('interaction targets', () => {
     expect(resolveInteractionTarget({ x: WORLD.elevatorX + 29, y: WORLD.floorY - 12 }, [elevator])?.key).toBe('elevator');
   });
 
-  it('moves D-001 Workshop emphasis while retaining its original hit region', () => {
+  it('moves the D-001 Workshop hit region together with its displayed emphasis', () => {
     const state = createGameState(8108);
     const workshop = deriveInteractionTargets(state).find((target) => target.key === 'workbench')!;
     expect(workshop.position.y).toBe(210);
-    expect(resolveInteractionTarget({ x: WORLD.workbenchX, y: WORLD.floorY - 20 }, [workshop])?.key).toBe('workbench');
+    expect(resolveInteractionTarget({ x: WORLD.workbenchX, y: WORLD.floorY - 20 + D001_WORKBENCH_FALLBACK_OFFSET }, [workshop])?.key).toBe('workbench');
+    expect(resolveInteractionTarget({ x: WORLD.workbenchX, y: WORLD.floorY - 20 }, [workshop])).toBeNull();
+    expect(resolveInteractionTarget({ x: WORLD.workbenchX, y: WORLD.floorY + D001_WORKBENCH_FALLBACK_OFFSET }, [workshop])?.key).toBe('workbench');
   });
 
   it('excludes hidden, locked, unbuilt, and not-yet-selectable targets', () => {
@@ -80,7 +86,7 @@ describe('interaction targets', () => {
     const state = createGameState(8106);
     const [first, second] = state.run.floors['D-001'].nodes;
     second!.x = first!.x;
-    expect(resolveInteractionTarget({ x: first!.x, y: first!.y - 9 }, deriveInteractionTargets(state))?.key)
+    expect(resolveInteractionTarget({ x: first!.x, y: first!.y - 9 + D001_VISUAL_GROUND_OFFSET }, deriveInteractionTargets(state))?.key)
       .toBe(`node:${first!.id}`);
   });
 
