@@ -6,7 +6,6 @@ permissions:
   contents: write
 jobs:
   apply-reviewed-changes:
-    if: github.event.head_commit.message == 'chore: stage verified Canvas workshop change set'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
