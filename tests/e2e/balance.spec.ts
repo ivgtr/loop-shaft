@@ -52,13 +52,16 @@ for (const width of [390, 1280]) test(`selects the real priority policy and ship
   state.run.elevator.cargo.push(item);
   await seed(page, state); await page.goto('/'); await ui(page, 'lift-open').click();
   for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
-  await expect(ui(page, 'lift-item-dispatch-PRIORITY')).toHaveAttribute('aria-pressed', 'true');
+  const priorityControl = ui(page, width < 680 ? 'lift-selected' : 'lift-item-dispatch-PRIORITY');
+  await expect(priorityControl).toHaveAttribute('aria-pressed', 'true');
+  await expect(priorityControl).toHaveAccessibleName('PRIORITY shipments');
   await expect(ui(page, 'lift-activate')).toHaveAccessibleName('USE PRIORITY');
   await ui(page, 'lift-activate').click();
   expect((await saved(page)).run.automation.dispatchPolicy).toBe('PRIORITY');
   await info.attach(`shipment-policy-${width}`, { body: await page.screenshot(), contentType: 'image/png' });
   for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowLeft');
-  await expect(ui(page, 'lift-item-relay')).toHaveAttribute('aria-pressed', 'true');
+  await expect(ui(page, width < 680 ? 'lift-selected' : 'lift-item-relay')).toHaveAttribute('aria-pressed', 'true');
+  await expect(ui(page, 'lift-activate')).toHaveAccessibleName('ENABLE RELAY');
   await ui(page, 'lift-activate').click();
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-elevator-state', 'ASCENDING');
   expect((await saved(page)).run.data).toBe(0);

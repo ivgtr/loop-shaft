@@ -78,11 +78,10 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
   if (guide) buttons.push({ id: 'goal', label: 'Inspect next workshop upgrade', text: guide.label, action: { type: 'open' },
     x: 10, y: compact ? 56 : 46, width: Math.min(w - 100, 420), height: 44, selected: guide.ready });
   else if (state.run.depth.current === 'D-001' && state.run.stats.elevatorTrips > 0) {
-    const relay = true; // D-030 exploration no longer requires the full automation chain.
     const connected = state.run.depth.unlocked.includes('D-030');
     buttons.push({ id: 'shaft-goal', label: 'Inspect the next shaft connection',
-      text: !relay ? 'LIFT · FIT AUTO RELAY' : connected ? 'LIFT · TRAVEL TO D-030' : 'LIFT · OPEN D-030 CONNECTION',
-      action: { type: 'lift-open', tab: !relay ? 'dispatch' : connected ? 'travel' : 'extend', id: !relay ? 'relay' : 'D-030' },
+      text: connected ? 'LIFT · TRAVEL TO D-030' : 'LIFT · OPEN D-030 CONNECTION',
+      action: { type: 'lift-open', tab: connected ? 'travel' : 'extend', id: 'D-030' },
       x: 10, y: compact ? 56 : 46, width: Math.min(w - 100, 360), height: 44 });
   }
   buttons.push({ id: 'base', label: 'Open base facilities', text: 'BASE', action: { type: 'station-open', request: { station: 'facilities' } },
