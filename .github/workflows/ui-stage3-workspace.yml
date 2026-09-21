@@ -1,0 +1,19 @@
+name: UI stage 3 workspace
+on:
+  push:
+    branches: [codex/canvas-management]
+    paths: [.github/workflows/ui-stage3-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Export tracked workspace for UI implementation
+        run: git archive --format=tar.gz HEAD -o /tmp/loop-shaft-workspace.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-stage3-workspace
+          path: /tmp/loop-shaft-workspace.tar.gz
+          retention-days: 1
