@@ -1,4 +1,6 @@
-import { drawCargoMark, drawDiscoveryCues } from './discoveryCues';
+import { visibleCargo } from './discoveryVisuals';
+import { gameAssets } from './assets/gameAssets';
+import { drawCargoMark } from './discoveryCues';
 import { CARGO_HUB_X, RAIL_STOP_X, WORLD } from '../game/config';
 import { deriveInitialLogisticsGuide, isFirstLiveScrapGain } from '../game/initialLogisticsGuide';
 import { cargoWeight } from '../game/simulation';
@@ -14,7 +16,7 @@ import {
   type Point,
 } from './interactionTargets';
 import { AssetStore } from './assets/assetStore';
-import { d001AssetUrls, type D001AssetKey } from './assets/d001Manifest';
+import { type D001AssetKey } from './assets/d001Manifest';
 import { drawD001ActorShadow, drawD001Cargo, drawD001Engineer } from './d001ImageRenderer';
 import { drawD001ElevatorFrontLayer } from './entities';
 import { D001_VISUAL_GROUND_OFFSET, deriveSemanticRenderState } from './semanticRenderState';
@@ -29,8 +31,7 @@ export class GameRenderer {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
-    this.assets = new AssetStore(d001AssetUrls());
-    this.assets.preload();
+    this.assets = gameAssets();
     this.base = new Phase5Renderer(canvas, this.assets);
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D context is required.');
@@ -71,7 +72,6 @@ export class GameRenderer {
       this.ctx.restore();
     }
     if (depth === 'D-001') drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets);
-    drawDiscoveryCues(this.ctx, state, semantic);
     const targets = deriveInteractionTargets(state);
     const guide = deriveInitialLogisticsGuide(state);
     const guideTargetKey = initialGuideTargetKey(guide, targets);
@@ -188,7 +188,7 @@ function drawTransportLine(ctx: CanvasRenderingContext2D, state: GameState, asse
   ctx.fillRect(RAIL_STOP_X - 13, y - 15, 26, 17);
   ctx.fillStyle = '#242522';
   ctx.fillRect(RAIL_STOP_X - 9, y - 11, 18, 9);
-  cargoPips(ctx, line.inputBuffer, RAIL_STOP_X - 10, y - 18, state, assets);
+  cargoPips(ctx, line.inputBuffer, RAIL_STOP_X, y - 4, assets);
   const hub = state.run.logistics.cargoHubs.find((candidate) => candidate.depth === depth);
   if (hub) {
     const ratio = Math.min(1, cargoWeight(hub.buffer) / Math.max(1, hub.maxWeight));
@@ -196,7 +196,7 @@ function drawTransportLine(ctx: CanvasRenderingContext2D, state: GameState, asse
     ctx.fillRect(CARGO_HUB_X - 16, y - 20, 32, 22);
     ctx.fillStyle = '#232422';
     ctx.fillRect(CARGO_HUB_X - 11, y - 15, 22, 12);
-    cargoPips(ctx, hub.buffer, CARGO_HUB_X - 13, y - 24, state, assets);
+    cargoPips(ctx, hub.buffer, CARGO_HUB_X, y - 5, assets);
   }
   const cart = state.run.logistics.railCarts.find((candidate) => candidate.lineId === line.id);
   if (cart) {
@@ -207,7 +207,7 @@ function drawTransportLine(ctx: CanvasRenderingContext2D, state: GameState, asse
     ctx.fillRect(x - 7, y - 10, 14, 4);
     ctx.fillRect(x - 7, y + 1, 4, 3);
     ctx.fillRect(x + 4, y + 1, 4, 3);
-    cargoPips(ctx, cart.cargo, x - 6, y - 13, state, assets);
+    cargoPips(ctx, cart.cargo, x, y - 7, assets, 2);
   }
 }
 
@@ -225,7 +225,7 @@ function drawFreightCage(ctx: CanvasRenderingContext2D, state: GameState, assets
   ctx.strokeRect(x - 9.5, y - 19.5, 20, 20);
   ctx.fillStyle = '#4b4944';
   ctx.fillRect(x - 7, y - 17, 16, 15);
-  cargoPips(ctx, cage.cargo, x - 6, y - 15, state, assets);
+  cargoPips(ctx, cage.cargo, x, y - 3, assets, 2);
 }
 
 function drawBores(ctx: CanvasRenderingContext2D, state: GameState, now: number, assets: AssetStore<D001AssetKey>): void {
@@ -247,7 +247,7 @@ function drawBores(ctx: CanvasRenderingContext2D, state: GameState, now: number,
       ctx.fillStyle = '#93866f';
       ctx.fillRect(x - 3 + offset, y + 10, 6, 2);
     }
-    cargoPips(ctx, bore.outputBuffer, x - 9, y - 28, state, assets);
+    cargoPips(ctx, bore.outputBuffer, x, y - 25, assets, 2);
   }
 }
 
@@ -275,17 +275,17 @@ function cargoPips(
   items: readonly LootStack[],
   x: number,
   y: number,
-  state: GameState,
   assets: AssetStore<D001AssetKey>,
+  columns: 2 | 3 = 3,
 ): void {
-  const visible = items.slice(0, 6);
-  for (let index = 0; index < visible.length; index += 1) {
+  const visible = visibleCargo(items, columns * 2);
+  for (let index = visible.length - 1; index >= 0; index -= 1) {
     const item = visible[index]!;
-    const anchorX = x + 3 + (index % 3) * 5;
-    const anchorY = y + 3 - Math.floor(index / 3) * 4;
-    if (state.run.depth.current === 'D-001' && drawD001Cargo(ctx, item, anchorX, anchorY, assets)) continue;
+    const anchorX = Math.round(x - (columns - 1) * 4.5 + (index % columns) * 9);
+    const anchorY = y - Math.floor(index / columns) * 7;
+    if (drawD001Cargo(ctx, item, anchorX, anchorY, assets)) continue;
     ctx.fillStyle = '#8a7150';
-    ctx.fillRect(x + (index % 3) * 5, y - Math.floor(index / 3) * 4, 4, 3);
+    ctx.fillRect(anchorX - 2, anchorY - 3, 4, 3);
     drawCargoMark(ctx, item, anchorX, anchorY);
   }
 }

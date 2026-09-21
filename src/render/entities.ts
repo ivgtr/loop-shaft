@@ -1,4 +1,5 @@
-import { drawCargoMark } from './discoveryCues';
+import { visibleCargo } from './discoveryVisuals';
+import { drawCargoMark, drawDiscoveryCues } from './discoveryCues';
 import { WORLD } from '../game/config';
 import { currentFloor } from '../game/simulation';
 import type { DepthId, GameState, LootKind, LootStack, MiningNode, Rarity } from '../game/types';
@@ -37,6 +38,7 @@ export function drawEntities(
   assets?: D001AssetStore,
 ): void {
   drawNodes(ctx, state, semantic, assets);
+  if (semantic) drawDiscoveryCues(ctx, state, semantic, assets);
   drawWorkbench(ctx, state, assets);
   if (state.run.depth.current === 'D-030') drawScanner(ctx, state, now);
   const elevatorImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets
@@ -52,17 +54,20 @@ export function drawEntities(
     }
     const porterImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets && drawD001Porter(ctx, semantic, assets));
     if (!porterImage) drawWithD001GroundOffset(ctx, state.run.depth.current, () => drawPorter(ctx, state, now));
-    else if (semantic?.porter && assets && !drawD001CarriedCargo(ctx, semantic.porter, assets)) drawFallbackCarriedCargo(ctx, semantic.porter);
+    if (semantic?.porter && assets && !drawD001CarriedCargo(ctx, semantic.porter, assets)) drawFallbackCarriedCargo(ctx, semantic.porter);
   }
   const playerImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets && canDrawD001Player(assets));
   if (playerImage) {
     drawD001ActorShadow(ctx, semantic!.character);
     drawD001Player(ctx, semantic!, assets!);
     if (!drawD001CarriedCargo(ctx, semantic!.character, assets!)) drawFallbackCarriedCargo(ctx, semantic!.character);
-  } else drawWithD001GroundOffset(ctx, state.run.depth.current, () => drawCharacter(ctx, state, now));
+  } else {
+    drawWithD001GroundOffset(ctx, state.run.depth.current, () => drawCharacter(ctx, state, now));
+    if (semantic && assets && !drawD001CarriedCargo(ctx, semantic.character, assets)) drawFallbackCarriedCargo(ctx, semantic.character);
+  }
   drawLoot(ctx, state, now, assets);
   if (!d001) {
-    drawElevator(ctx, state, now);
+    drawElevator(ctx, state, now, assets);
     drawLiftControl(ctx, state, false);
   }
 }
@@ -133,14 +138,14 @@ function drawNode(ctx: CanvasRenderingContext2D, node: MiningNode, depth: DepthI
 }
 
 function drawLoot(ctx: CanvasRenderingContext2D, state: GameState, now: number, assets?: D001AssetStore): void {
-  for (const item of currentFloor(state).loot) {
+  for (const item of visibleCargo(currentFloor(state).loot, currentFloor(state).loot.length).reverse()) {
     const special = rarityRank(item.rarity) >= 2;
     const bob = special && Math.floor(now / 180) % 2 === 0 ? -1 : 0;
     const anchorY = state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_Y : item.y + 1;
     if (state.run.depth.current === 'D-001' && assets?.ready('cargoItems')) {
       drawD001CargoShadow(ctx, item.x, anchorY);
     }
-    const cargoImage = Boolean(state.run.depth.current === 'D-001' && assets && drawD001Cargo(ctx, item, item.x, anchorY + bob, assets));
+    const cargoImage = Boolean(assets && drawD001Cargo(ctx, item, item.x, anchorY + bob, assets));
     if (!cargoImage) {
       ctx.fillStyle = lootColor(item.kind);
       ctx.fillRect(Math.round(item.x) - 2, Math.round(anchorY) - 4 + bob, 5, 4);
@@ -189,7 +194,7 @@ function drawCharacter(ctx: CanvasRenderingContext2D, state: GameState, now: num
   ctx.fillStyle = '#6a4935'; ctx.fillRect(x - 3, y - 7, 7, 7); ctx.fillStyle = PALETTE.helmet; ctx.fillRect(x - 4, y - 9, 8, 3); ctx.fillStyle = PALETTE.worker; ctx.fillRect(x - 3, y - 4, 7, 6);
   ctx.fillStyle = run.boots.level === 1 ? '#4a5660' : '#87979d'; ctx.fillRect(x - 3, y + 2, 2, 4 + step); ctx.fillRect(x + 2, y + 2, 2, 5 - step);
   if (c.carried.length > 0 || run.pack.level === 2) { const w = run.pack.level === 1 ? 5 : 7; const h = run.pack.level === 1 ? 7 : 9; ctx.fillStyle = run.pack.level === 1 ? '#685642' : '#846c47'; ctx.fillRect(x - dir * (run.pack.level === 1 ? 6 : 7) - (dir > 0 ? w : 0), y - 5, w, h); }
-  if (c.carried[0]) drawCargoMark(ctx, c.carried[0], x - dir * 7, y + 3);
+
   drawPickaxe(ctx, state, x, y, dir);
 }
 
@@ -197,7 +202,7 @@ function drawPorter(ctx: CanvasRenderingContext2D, state: GameState, now: number
   const p = state.run.porter; const walking = p.state === 'MOVING_TO_LOOT' || p.state === 'RETURNING_TO_ELEVATOR'; const step = walking && Math.floor(now / 135) % 2 === 0 ? 1 : 0;
   const x = Math.round(p.x); const y = Math.round(p.y) - step; const dir = p.facing;
   ctx.fillStyle = '#5b4537'; ctx.fillRect(x - 3, y - 7, 7, 7); ctx.fillStyle = PALETTE.cyan; ctx.fillRect(x - 4, y - 9, 8, 3); ctx.fillStyle = '#8f8b72'; ctx.fillRect(x - 3, y - 4, 7, 6); ctx.fillStyle = '#46535a'; ctx.fillRect(x - 3, y + 2, 2, 4 + step); ctx.fillRect(x + 2, y + 2, 2, 5 - step);
-  if (p.carried.length > 0) { ctx.fillStyle = '#705a3d'; ctx.fillRect(x - dir * 7 - (dir > 0 ? 6 : 0), y - 5, 6, 8); drawCargoMark(ctx, p.carried[0]!, x - dir * 7, y + 3); }
+  if (p.carried.length > 0) { ctx.fillStyle = '#705a3d'; ctx.fillRect(x - dir * 7 - (dir > 0 ? 6 : 0), y - 5, 6, 8); }
 }
 
 function drawPickaxe(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number, dir: -1 | 1): void {
@@ -207,14 +212,21 @@ function drawPickaxe(ctx: CanvasRenderingContext2D, state: GameState, x: number,
   ctx.beginPath(); ctx.moveTo(x + dir * 2, y - 3); ctx.lineTo(headX, headY); ctx.stroke(); ctx.fillStyle = metal; ctx.fillRect(headX - (dir < 0 ? 4 : 0), headY - 1, 5, 2);
 }
 
-function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
+function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: number, assets?: D001AssetStore): void {
   const e = state.run.elevator;
   const y = state.run.depth.current === 'D-001' ? d001ElevatorVisualY(e.position) : elevatorY(state);
   const half = state.run.anomaly.selected === 'EMPTY_SHAFT' ? 15 : 20;
   ctx.fillStyle = '#22262b'; ctx.fillRect(WORLD.elevatorX - half, y - 16, half * 2 + 1, 35); ctx.fillStyle = PALETTE.metal; ctx.fillRect(WORLD.elevatorX - half, y - 16, half * 2 + 1, 3); ctx.fillRect(WORLD.elevatorX - half, y + 16, half * 2 + 1, 3); ctx.fillRect(WORLD.elevatorX - half, y - 16, 3, 35); ctx.fillRect(WORLD.elevatorX + half - 2, y - 16, 3, 35);
   const closed = e.state === 'ASCENDING' || e.state === 'DESCENDING' || e.state === 'TRAVELING';
   if (closed) { ctx.fillStyle = '#3d4448'; ctx.fillRect(WORLD.elevatorX - half + 5, y - 11, half - 5, 25); ctx.fillRect(WORLD.elevatorX + 1, y - 11, half - 5, 25); }
-  else { const count = Math.min(9, e.cargo.length); for (let i = 0; i < count; i += 1) { const row = Math.floor(i / 3); const col = i % 3; ctx.fillStyle = lootColor(e.cargo[i]!.kind); ctx.fillRect(WORLD.elevatorX - 12 + col * 9, y + 8 - row * 6, 7, 5); drawCargoMark(ctx, e.cargo[i]!, WORLD.elevatorX - 8 + col * 9, y + 13 - row * 6); } }
+  const visible = visibleCargo(e.cargo, 9);
+  for (let i = visible.length - 1; i >= 0; i--) {
+    const item = visible[i]!; const row = Math.floor(i / 3); const col = i % 3;
+    const ax = WORLD.elevatorX - 8 + col * 9; const ay = y + 13 - row * 6;
+    if (assets && drawD001Cargo(ctx, item, ax, ay, assets)) continue;
+    ctx.fillStyle = lootColor(item.kind); ctx.fillRect(ax - 4, ay - 5, 7, 5); drawCargoMark(ctx, item, ax, ay);
+  }
+  if (closed) { ctx.fillStyle = PALETTE.metal; for (const x of [-12, 0, 12]) ctx.fillRect(WORLD.elevatorX + x, y - 10, 1, 25); }
   ctx.fillStyle = e.state !== 'IDLE_BOTTOM' || e.cargo.length > 0 ? depthAccent(state.run.depth.current) : '#47413a'; ctx.fillRect(WORLD.elevatorX + Math.max(8, half - 7), y - 12, 3, 3);
   if (e.state === 'IDLE_BOTTOM' && e.cargo.length > 0 && !state.run.automation.autoDispatch.enabled && Math.floor(now / 500) % 2 === 0) {
     ctx.fillStyle = PALETTE.lamp;

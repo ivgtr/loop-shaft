@@ -1,3 +1,4 @@
+import { cargoSpriteFrame, DISCOVERY_ATLAS, visibleCargo } from './discoveryVisuals';
 import { drawCargoMark } from './discoveryCues';
 import { WORLD } from '../game/config';
 import type { GameState, LootKind, LootStack, MiningNode } from '../game/types';
@@ -165,6 +166,13 @@ export function drawD001Cargo(
   anchorY: number,
   assets: D001AssetStore,
 ): boolean {
+  const sprite = assets.ready('discoveryCargo');
+  if (sprite) {
+    const frame = cargoSpriteFrame(item); const cell = DISCOVERY_ATLAS.cargo;
+    ctx.drawImage(sprite, frame % cell.columns * cell.width, Math.floor(frame / cell.columns) * cell.height,
+      cell.width, cell.height, Math.round(anchorX) - cell.anchorX, Math.round(anchorY) - cell.anchorY, cell.width, cell.height);
+    return true;
+  }
   const image = assets.ready('cargoItems');
   if (!image) return false;
   const frame = CARGO_FRAME[cargoVisualClass(item)];
@@ -178,11 +186,12 @@ export function drawD001CarriedCargo(
   actor: ActorRenderState<string>,
   assets: D001AssetStore,
 ): boolean {
-  if (actor.carried.length === 0 || !assets.ready('cargoItems')) return false;
-  const visible = actor.carried.slice(0, 3);
-  visible.forEach((item, index) => {
-    const forward = actor.worldAnchor.x + actor.facing * (8 + index * 2);
-    drawD001Cargo(ctx, item, forward, actor.worldAnchor.y - 7 - index * 3, assets);
+  if (actor.carried.length === 0 || !(assets.ready('discoveryCargo') || assets.ready('cargoItems'))) return false;
+  const visible = visibleCargo(actor.carried, 3);
+  visible.slice().reverse().forEach((item, reversed) => {
+    const index = visible.length - reversed - 1;
+    const forward = actor.worldAnchor.x + actor.facing * (8 + index * 4);
+    drawD001Cargo(ctx, item, forward, actor.worldAnchor.y - 7 - index * 5, assets);
   });
   return true;
 }
@@ -232,12 +241,13 @@ export function drawD001ElevatorCargo(
   semantic: SemanticRenderState,
   assets: D001AssetStore,
 ): boolean {
-  if (!assets.ready('cargoItems')) return false;
-  const count = Math.min(9, state.run.elevator.cargo.length);
+  if (!(assets.ready('discoveryCargo') || assets.ready('cargoItems'))) return false;
+  const visible = visibleCargo(state.run.elevator.cargo, 9);
+  const count = visible.length;
   for (let index = count - 1; index >= 0; index -= 1) {
     const row = Math.floor(index / 3);
     const column = index % 3;
-    const item = state.run.elevator.cargo[index]!;
+    const item = visible[index]!;
     if (!drawD001Cargo(ctx, item, WORLD.elevatorX - 8 + column * 9,
       Math.round(semantic.elevator.y) + 13 - row * 6, assets)) {
       ctx.fillStyle = lootColor(item.kind);
@@ -260,7 +270,11 @@ export function drawD001ElevatorFront(
   const y = Math.round(semantic.elevator.y) - 20;
   const variant = narrow ? 1 : 0;
   ctx.drawImage(image, (2 + variant) * 56, 0, 56, 44, x, y, 56, 44);
-  if (semantic.elevator.door === 'closed') ctx.drawImage(image, variant * 56, 44, 56, 44, x, y, 56, 44);
+  if (semantic.elevator.door === 'closed') {
+    const gate = assets.ready('discoveryGate');
+    if (gate) ctx.drawImage(gate, variant * 56, 0, 56, 44, x, y, 56, 44);
+    else ctx.drawImage(image, variant * 56, 44, 56, 44, x, y, 56, 44);
+  }
   ctx.drawImage(image, 2 * 56, 44, 56, 44, 269 - 28, 198 - 20, 56, 44);
 
   ctx.fillStyle = state.run.elevator.state !== 'IDLE_BOTTOM' || state.run.elevator.cargo.length > 0 ? '#e6a02b' : '#564537';

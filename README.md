@@ -6,6 +6,8 @@ Phase 1 establishes the fully manual chain: choose a vein, walk, swing, collect,
 
 ## Discoveries
 
+D-001 uses authored pixel sheets for deposit layers, persistent extraction sockets and quality-specific cargo. The same cargo art follows physical transport; Archive displays identified and restored specimens. See [asset inventory and acceptance criteria](docs/discovery-art.md).
+
 Ordinary ore sometimes has **Fine (1.5×)** or **Pure (3×)** appraisal quality without extra weight. D-030 yields single-affix field tools during the first Run. Random fossils stay unidentified until physical delivery; the Surface Analyzer appraises them automatically. **Archive → RECENT** retains important results, and missing fossil records can be restored from five delivered same-family duplicates with explicit confirmation.
 
 Mining uncovers two finite traces per eligible floor. Metal flecks, fossil outlines and crystal layers mark the target; their shapes change as they are exposed and extracted. They never expire and do not reduce normal production. **LIFT → SHIP → Porter pickup hold** finishes carried cargo and stops new pickups so a floor trip need not wait for every loose ore. Pickup work resumes after travel or on explicit RESUME.

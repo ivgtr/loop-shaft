@@ -1,3 +1,4 @@
+import { collectionSpriteFrame } from './discoveryVisuals';
 import { rewardNotice, RewardNoticeQueue } from '../game/rewardFeedback';
 import { WORLD } from '../game/config';
 import { currentFloor } from '../game/simulation';
@@ -96,10 +97,16 @@ export class CanvasRenderer {
       const accent = notice.priority >= 4 ? '#dcc79f' : PALETTE.rare;
       this.ctx.fillStyle = '#111014'; this.ctx.fillRect(87, 53, 306, 26);
       this.ctx.strokeStyle = accent; this.ctx.strokeRect(87.5, 53.5, 305, 25);
+      const image = notice.specimen && this.assets.ready('discoveryCollection');
+      if (image && notice.specimen) {
+        const frame = collectionSpriteFrame({ kind: notice.specimen.kind, discovered: true, count: 1, bestSpecimenGrade: notice.specimen.grade });
+        this.ctx.drawImage(image, frame % 5 * 24, Math.floor(frame / 5) * 24, 24, 24, 90, 54, 24, 24);
+      }
+      const center = image ? 254 : 240; const limit = image ? 43 : 48;
       this.ctx.fillStyle = accent;
-      drawPixelText(this.ctx, notice.detail.toUpperCase().slice(0, 48), 240, 64, { font: 'standard', align: 'center', baseline: 'bottom' });
+      drawPixelText(this.ctx, notice.detail.toUpperCase().slice(0, limit), center, 64, { font: 'standard', align: 'center', baseline: 'bottom' });
       this.ctx.fillStyle = PALETTE.white;
-      drawPixelText(this.ctx, notice.label.toUpperCase().slice(0, 48), 240, 75, { font: 'standard', align: 'center', baseline: 'bottom' });
+      drawPixelText(this.ctx, notice.label.toUpperCase().slice(0, limit), center, 75, { font: 'standard', align: 'center', baseline: 'bottom' });
     }
     if (this.gain && now - this.gain.startedAt < 1200) {
       this.ctx.fillStyle = '#101214e8'; this.ctx.fillRect(147, 9, 186, 16);

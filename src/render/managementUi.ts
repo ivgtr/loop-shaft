@@ -1,3 +1,5 @@
+import type { D001AssetStore } from './d001ImageRenderer';
+import { collectionSpriteFrame, DISCOVERY_ATLAS } from './discoveryVisuals';
 import { stationView, type ManagementState, type StationItem, type StationRequest } from '../game/management';
 import { number, type RouteStop, type StationView } from '../game/management/types';
 import type { GameState } from '../game/types';
@@ -250,7 +252,7 @@ function effectNames(values: string[]): string {
   return values.slice(0, 2).map((value) => value.split(':')[0]).join(', ') + (values.length > 2 ? ` +${values.length - 2} more` : '');
 }
 
-export function drawManagementUi(ctx: CanvasRenderingContext2D, viewport: UiViewport, layout: ManagementLayout, focused: string | null, hovered: string | null): void {
+export function drawManagementUi(ctx: CanvasRenderingContext2D, viewport: UiViewport, layout: ManagementLayout, focused: string | null, hovered: string | null, assets?: D001AssetStore): void {
   const { panel: p } = layout;
   ctx.clearRect(0, 0, viewport.width, viewport.height);
   ctx.fillStyle = '#08080b88'; ctx.fillRect(0, 0, viewport.width, viewport.height);
@@ -290,21 +292,27 @@ export function drawManagementUi(ctx: CanvasRenderingContext2D, viewport: UiView
   }
   for (const button of layout.buttons) {
     const entry = layout.gallery.get(button.id);
-    if (entry?.discovery) drawDiscovery(ctx, button, entry, focused === button.id || hovered === button.id);
+    if (entry?.discovery) drawDiscovery(ctx, button, entry, focused === button.id || hovered === button.id, assets);
     else drawButton(ctx, button, focused === button.id, layout.compact, hovered === button.id);
   }
 }
-function drawDiscovery(ctx: CanvasRenderingContext2D, button: UiButton<ManagementUiAction>, item: StationItem, focused: boolean): void {
+function drawDiscovery(ctx: CanvasRenderingContext2D, button: UiButton<ManagementUiAction>, item: StationItem, focused: boolean, assets?: D001AssetStore): void {
   const { x, y, width, height } = button; const found = item.discovery!.discovered;
   ctx.fillStyle = button.selected ? '#3b3025' : C.surface; ctx.fillRect(x, y, width, height);
   ctx.strokeStyle = focused ? C.light : button.selected ? C.gold : C.line; ctx.lineWidth = focused ? 2 : 1; ctx.strokeRect(x + .5, y + .5, width - 1, height - 1);
   const cx = Math.round(x + width / 2); ctx.fillStyle = found ? C.gold : '#51494b';
-  if (item.discovery!.category === 'FOSSIL') {
+  const image = assets?.ready('discoveryCollection');
+  if (image) {
+    const frame = collectionSpriteFrame(item.discovery!); const a = DISCOVERY_ATLAS.collection;
+    // Fixed integer 24px artwork, not scaled according to value or rarity.
+    ctx.drawImage(image, frame % a.columns * a.width, Math.floor(frame / a.columns) * a.height,
+      a.width, a.height, cx - a.anchorX, Math.round(y) + 11, a.width, a.height);
+  } else if (item.discovery!.category === 'FOSSIL') {
     ctx.fillRect(cx - 10, y + 19, 20, 5); ctx.fillRect(cx - 12, y + 15, 5, 13); ctx.fillRect(cx + 7, y + 15, 5, 13);
   } else if (['RESEARCH', 'RELIC'].includes(item.discovery!.category)) {
     ctx.fillRect(cx - 8, y + 10, 16, 24); ctx.fillStyle = found ? C.background : '#342f33'; ctx.fillRect(cx - 4, y + 16, 8, 3); ctx.fillRect(cx - 4, y + 24, 8, 3);
   } else { ctx.fillRect(cx - 6, y + 9, 12, 25); ctx.fillRect(cx - 11, y + 15, 22, 13); }
-  if (!found) text(ctx, '?', cx, y + 28, 17, C.muted, 'center');
+  if (!found && !image) text(ctx, '?', cx, y + 28, 17, C.muted, 'center');
   text(ctx, elide(ctx, item.name, width - 10, 11), cx, y + height - 8, 11, C.text, 'center');
   if (found) text(ctx, item.badge ?? '', x + width - 5, y + 13, 11, C.installed, 'right');
 }

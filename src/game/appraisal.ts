@@ -29,6 +29,8 @@ export function appraisePhysicalCargo(state: GameState, cargo: readonly LootStac
       depth: item.originDepth ?? state.run.depth.current, value, via });
     if (['FOSSIL', 'RELIC', 'ANOMALY'].includes(item.category)) {
       registerCollection(state, item, sink, Boolean(physical.specimen));
+      const entry = state.meta.collection.entries.find((candidate) => candidate.kind === item.kind)!;
+      if (physical.specimen && entry.bestSpecimenGrade !== 'PRISTINE') entry.bestSpecimenGrade = physical.specimen.grade;
       if (first || physical.specimen?.grade === 'PRISTINE') rememberFind(state, { id: item.id, name: item.name,
         depth: item.originDepth ?? state.run.depth.current, value, reason: first ? 'NEW' : 'PRISTINE' });
     }

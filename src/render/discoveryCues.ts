@@ -1,14 +1,24 @@
+import type { D001AssetStore } from './d001ImageRenderer';
+import { discoveryHostFrame, DISCOVERY_ATLAS } from './discoveryVisuals';
 import type { GameState, LootStack } from '../game/types';
 import type { SemanticRenderState } from './semanticRenderState';
 import { D001_VISUAL_GROUND_OFFSET } from './semanticRenderState';
 
-/** Semantic, non-animated markings. Atlas art may replace these exact signal/stage pairs. */
-export function drawDiscoveryCues(ctx: CanvasRenderingContext2D, state: GameState, semantic: SemanticRenderState): void {
+/** Persistent host rocks are painted before actors. Original markings are load-error fallbacks only. */
+export function drawDiscoveryCues(ctx: CanvasRenderingContext2D, state: GameState, semantic: SemanticRenderState, assets?: D001AssetStore): void {
   const floor = state.run.floors[state.run.depth.current];
   ctx.save();
   for (const node of floor.nodes) {
     const cue = semantic.discoveries.get(node.id);
     if (!cue) continue;
+    const image = assets?.ready('discoveryHost');
+    if (image) {
+      const cell = DISCOVERY_ATLAS.host; const frame = discoveryHostFrame(cue);
+      const offset = floor.id === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0;
+      ctx.drawImage(image, frame % cell.columns * cell.width, Math.floor(frame / cell.columns) * cell.height,
+        cell.width, cell.height, Math.round(node.x) - cell.anchorX, Math.round(node.y) + offset - cell.anchorY, cell.width, cell.height);
+      continue;
+    }
     const x = Math.round(node.x - 4);
     const y = Math.round(node.y - 23 + (floor.id === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0));
     // Keep the landmark visible while ordinary rock regenerates. Spent clues cannot look active.

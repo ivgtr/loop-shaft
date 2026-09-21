@@ -122,7 +122,7 @@ export function deriveSemanticRenderState(state: Readonly<GameState>, animationT
       row: CLIP_ROW[clip],
       frame: characterFrame(state, clip, animationTimeMs),
       facing: state.run.character.facing,
-      worldAnchor: { x: Math.round(state.run.character.x), y: Math.round(state.run.character.y) + 8 + D001_VISUAL_GROUND_OFFSET },
+      worldAnchor: { x: Math.round(state.run.character.x), y: Math.round(state.run.character.y) + 8 + (state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) },
       toolBank: state.run.tool.level - 1 as 0 | 1,
       packBank: state.run.pack.level - 1 as 0 | 1,
       bootsBank: state.run.boots.level - 1 as 0 | 1,
@@ -173,7 +173,7 @@ export function derivePorterRenderState(state: Readonly<GameState>, now: number)
       : loopFrame(now, clip === 'walk' || clip === 'carry-walk' ? 135 : 500, clip === 'walk' || clip === 'carry-walk' ? 4 : 2);
   return {
     clip, row: PORTER_ROW[clip], frame, facing: porter.facing,
-    worldAnchor: { x: Math.round(porter.x), y: Math.round(porter.y) + 8 + D001_VISUAL_GROUND_OFFSET }, carried: porter.carried,
+    worldAnchor: { x: Math.round(porter.x), y: Math.round(porter.y) + 8 + (state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) }, carried: porter.carried,
   };
 }
 
@@ -210,7 +210,7 @@ export function deriveCrewRenderState(state: Readonly<GameState>, member: Readon
     row: CLIP_ROW[clip as CharacterClip],
     frame,
     facing: member.body.facing,
-    worldAnchor: { x: Math.round(member.body.x), y: Math.round(member.body.y) + 8 + D001_VISUAL_GROUND_OFFSET },
+    worldAnchor: { x: Math.round(member.body.x), y: Math.round(member.body.y) + 8 + (state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) },
     carried: member.body.carried,
     toolBank: equipmentBank(equipped?.rarity),
     visible: member.assignedDepth === state.run.depth.current && member.state !== 'TRAVELING',

@@ -1,3 +1,4 @@
+import { visibleCargo } from './discoveryVisuals';
 import { drawCargoMark } from './discoveryCues';
 import { WORLD } from '../game/config';
 import { canShowCrewBoard, phase5Floor } from '../game/phase5';
@@ -91,14 +92,15 @@ function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, asse
   ctx.fillStyle = '#3a3935'; ctx.fillRect(x, y, 38, 4);
   ctx.fillStyle = '#67635c'; ctx.fillRect(x + 2, y - 3, 34, 3);
   ctx.fillStyle = '#272724'; ctx.fillRect(x + 4, y + 4, 3, 5); ctx.fillRect(x + 30, y + 4, 3, 5);
-  const count = Math.min(8, floor.cargo.length);
+  const visible = visibleCargo(floor.cargo, 8);
+  const count = visible.length;
   for (let index = count - 1; index >= 0; index -= 1) {
     const row = Math.floor(index / 4); const col = index % 4;
-    const item = floor.cargo[index]!;
+    const item = visible[index]!;
     if (state.run.depth.current === 'D-001' && assets.ready('cargoItems')) {
       drawD001CargoShadow(ctx, x + 7 + col * 8, y - 4 - row * 5);
     }
-    const cargoImage = state.run.depth.current === 'D-001' && drawD001Cargo(ctx, item, x + 7 + col * 8, y - 4 - row * 5, assets);
+    const cargoImage = drawD001Cargo(ctx, item, x + 7 + col * 8, y - 4 - row * 5, assets);
     if (!cargoImage) {
       ctx.fillStyle = item.equipmentSeed !== undefined ? '#8b795f' : item.category === 'CORE' ? '#9e8067' : item.category === 'RESEARCH' ? '#718e96' : '#755f43';
       ctx.fillRect(x + 4 + col * 8, y - 8 - row * 5, 6, 4);
@@ -130,7 +132,7 @@ function drawCrew(
       drawCrewMember(ctx, state, member, now);
       ctx.restore();
     }
-    else if (actor && !drawD001CarriedCargo(ctx, actor, assets) && actor.carried.length > 0) {
+    if (actor && !drawD001CarriedCargo(ctx, actor, assets) && actor.carried.length > 0) {
       ctx.fillStyle = '#735e43';
       ctx.fillRect(actor.worldAnchor.x + actor.facing * 6 - (actor.facing > 0 ? 0 : 6), actor.worldAnchor.y - 12, 6, 8);
       drawCargoMark(ctx, actor.carried[0]!, actor.worldAnchor.x + actor.facing * 8, actor.worldAnchor.y - 4);
@@ -147,7 +149,7 @@ function drawCrewMember(ctx: CanvasRenderingContext2D, state: GameState, member:
   ctx.fillStyle = member.role === 'MINER' ? '#a6906d' : '#8b8c79'; ctx.fillRect(x - 3, y - 4, 7, 6);
   ctx.fillStyle = '#49545a'; ctx.fillRect(x - 3, y + 2, 2, 4 + step); ctx.fillRect(x + 2, y + 2, 2, 5 - step);
   if (member.role === 'MINER') drawCrewPick(ctx, state, member, x, y, dir);
-  if (member.body.carried.length > 0) { ctx.fillStyle = '#735e43'; ctx.fillRect(x - dir * 7 - (dir > 0 ? 6 : 0), y - 5, 6, 8); drawCargoMark(ctx, member.body.carried[0]!, x - dir * 7, y + 3); }
+  if (member.body.carried.length > 0) { ctx.fillStyle = '#735e43'; ctx.fillRect(x - dir * 7 - (dir > 0 ? 6 : 0), y - 5, 6, 8); }
   if (member.pendingDepth) { ctx.fillStyle = '#a98e62'; ctx.fillRect(x - 1, y - 13, 3, 2); }
 }
 
