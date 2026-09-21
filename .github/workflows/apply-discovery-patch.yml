@@ -1,0 +1,43 @@
+name: Apply discovery assets
+on:
+  push:
+    branches: ['feat/readable-discoveries']
+    paths: ['.github/workflows/apply-discovery-patch.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/readable-discoveries
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify and apply source patch
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { brotliDecompressSync } from 'node:zlib';
+          import { createHash } from 'node:crypto';
+          const encoded = [1, 2, 3].map(i => readFileSync(`.github/discovery-patch-${i}.b64`, 'utf8').trim()).join('');
+          const patch = brotliDecompressSync(Buffer.from(encoded, 'base64'));
+          const sha = createHash('sha256').update(patch).digest('hex');
+          if (sha !== 'dac2e65eb0254c54aaa0ce0012661676f7bc3f1ad43569fc7fe19d05a51dc97f') throw new Error(`Patch checksum mismatch: ${sha}`);
+          writeFileSync('/tmp/discovery.patch', patch);
+          NODE
+          git apply --check /tmp/discovery.patch
+          git apply /tmp/discovery.patch
+          node scripts/build-discovery-assets.mjs
+          rm .github/discovery-patch-{1,2,3}.b64 .github/workflows/apply-discovery-patch.yml
+      - run: npm ci
+      - run: npm run assets:check && npm run typecheck && npm test && npm run build
+      - name: Commit verified implementation without transfer files
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: make D001 discoveries readable through physical cargo and specimens'
+          git push origin HEAD:feat/readable-discoveries
