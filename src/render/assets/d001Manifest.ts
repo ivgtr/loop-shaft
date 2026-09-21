@@ -3,7 +3,7 @@ export type D001AssetKey = keyof typeof D001_ASSET_FILES;
 // Public runtime PNGs keep stable filenames for the fallback manifest. Bump this
 // value whenever those files change so a deployed browser cannot reuse an older
 // atlas from its HTTP cache.
-export const D001_ASSET_VERSION = '020e172-walk-side-2';
+export const D001_ASSET_VERSION = 'd001-chambers-1';
 
 export const D001_ASSET_FILES = {
   backgroundRock: 'background-rock-base.png',

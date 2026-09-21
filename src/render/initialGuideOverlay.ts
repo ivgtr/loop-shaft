@@ -5,8 +5,8 @@ import { sameInteractionTarget, type InteractionTarget, type Point } from './int
 import { drawPixelText, fitPixelFont, measurePixelText } from './pixelText';
 
 const BACKGROUND = '#0b0b0df0';
-const BORDER = '#d0aa5f';
-const TEXT = '#fff0cf';
+const BORDER = '#916a4e';
+const TEXT = '#d8d2c8';
 
 export function initialGuideTargetKey(
   guide: InitialLogisticsGuide | null,
@@ -17,12 +17,33 @@ export function initialGuideTargetKey(
   return targets.find((target) => sameInteractionTarget(target.ref, ref))?.key ?? null;
 }
 
+/** The context panel keeps every instruction; world labels ask for an action or
+ * explain a blockage instead of narrating work that is already visible. */
+export function initialGuideLabel(guide: InitialLogisticsGuide): string | null {
+  switch (guide.step) {
+    case 'moving-to-vein':
+    case 'mining':
+    case 'collecting':
+    case 'returning':
+    case 'loading-lift':
+    case 'to-surface':
+    case 'appraising':
+      return null;
+    case 'choose-vein':
+      return 'SELECT VEIN';
+    default:
+      return guide.label;
+  }
+}
+
 export function drawInitialLogisticsGuide(
   ctx: CanvasRenderingContext2D,
   guide: InitialLogisticsGuide,
   targets: readonly InteractionTarget[],
   state: GameState,
 ): void {
+  const label = initialGuideLabel(guide);
+  if (!label) return;
   let anchor: Point | undefined;
   if (guide.target.kind === 'character') {
     anchor = { x: Math.round(state.run.character.x), y: Math.round(state.run.character.y) + 8 - 32 };
@@ -31,7 +52,7 @@ export function drawInitialLogisticsGuide(
     anchor = targets.find((target) => sameInteractionTarget(target.ref, ref))?.labelAnchor;
   }
   if (!anchor) return;
-  drawGuideLabel(ctx, guide.label, anchor);
+  drawGuideLabel(ctx, label, anchor);
 }
 
 export function drawDeliveryNotice(ctx: CanvasRenderingContext2D, amount: number): void {
@@ -49,8 +70,8 @@ function drawGuideLabel(ctx: CanvasRenderingContext2D, text: string, anchor: Poi
   if (y + height > WORLD.height - 2) y = WORLD.height - height - 2;
   ctx.fillStyle = BACKGROUND;
   ctx.fillRect(x, y, width, height);
-  ctx.strokeStyle = BORDER;
-  ctx.strokeRect(x + 0.5, y + 0.5, width, height);
+  ctx.fillStyle = BORDER;
+  ctx.fillRect(x, y + height - 1, width, 1);
   ctx.fillStyle = TEXT;
   drawPixelText(ctx, text, x + 4, y + 8, { font, baseline: 'bottom' });
   ctx.restore();

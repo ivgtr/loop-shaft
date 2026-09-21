@@ -30,14 +30,17 @@ export function RunStatusHud() {
   const run = state.run;
   const freight = run.logistics.freightCage;
   const engineer = run.engineer;
+  const shallow = run.depth.current === 'D-001';
+  const showResearch = !shallow || run.depth.unlocked.includes('D-060')
+    || run.research.active !== null || run.research.completed.length > 0;
 
   return (
-    <div className="hud hud-right">
-      <strong>RUN {String(state.meta.runIndex).padStart(2, '0')} · {run.depth.current}</strong><br />
-      <span className="muted">RESEARCH</span> {run.research.active ? RESEARCH[run.research.active.id].name : `${run.research.completed.length}/${Object.keys(RESEARCH).length}`}<br />
-      <span className="muted">ENGINEER</span> {engineer.unlocked ? formatState(engineer.state) : 'LOCKED'}<br />
-      <span className="muted">FREIGHT</span> {formatState(freight.state)}{freight.cargo.length > 0 && ` · ${fmt(cargoWeight(freight.cargo))}kg`}<br />
-      <span className="muted">BEST</span> {state.meta.bestDepth}
+    <div className="hud hud-right" data-depth={run.depth.current}>
+      <strong>RUN {String(state.meta.runIndex).padStart(2, '0')} · {run.depth.current}</strong>
+      {showResearch && <><br /><span className="muted">RESEARCH</span> {run.research.active ? RESEARCH[run.research.active.id].name : `${run.research.completed.length}/${Object.keys(RESEARCH).length}`}</>}
+      {(!shallow || engineer.unlocked) && <><br /><span className="muted">ENGINEER</span> {engineer.unlocked ? formatState(engineer.state) : 'LOCKED'}</>}
+      {(!shallow || freight.state !== 'UNBUILT') && <><br /><span className="muted">FREIGHT</span> {formatState(freight.state)}{freight.cargo.length > 0 && ` · ${fmt(cargoWeight(freight.cargo))}kg`}</>}
+      {(!shallow || state.meta.bestDepth !== run.depth.current) && <><br /><span className="muted">BEST</span> {state.meta.bestDepth}</>}
     </div>
   );
 }
