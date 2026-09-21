@@ -113,7 +113,7 @@ export interface SemanticRenderState {
 }
 
 export function deriveSemanticRenderState(state: Readonly<GameState>, animationTimeMs: number): SemanticRenderState {
-  const clip = characterClip(state.run.character.state, Boolean(state.run.character.swing));
+  const clip = characterClip(state.run.character.state, Boolean(state.run.character.swing), state.run.character.carried.length > 0);
   return {
     character: {
       clip,
@@ -273,14 +273,14 @@ export function cargoVisualClass(item: Pick<LootStack, 'kind' | 'category' | 'eq
   return byKind;
 }
 
-export function characterClip(state: CharacterState, hasSwing: boolean): CharacterClip {
-  if (state === 'MOVING_TO_NODE') return 'walk';
+export function characterClip(state: CharacterState, hasSwing: boolean, hasCargo = false): CharacterClip {
+  if (state === 'MOVING_TO_NODE' || state === 'MOVING_TO_POINT') return hasCargo ? 'carry-walk' : 'walk';
   if (state === 'MINING') return hasSwing ? 'mine-swing' : 'mine-ready';
   if (state === 'COLLECTING') return 'collect';
   if (state === 'RETURNING') return 'carry-walk';
   if (state === 'WAITING_FOR_ELEVATOR') return 'carry-idle';
   if (state === 'LOADING') return 'load';
-  return 'idle';
+  return hasCargo ? 'carry-idle' : 'idle';
 }
 
 export function nodeVisualState(node: Pick<MiningNode, 'hp' | 'maxHp'>): NodeVisualState {

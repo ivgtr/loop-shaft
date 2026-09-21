@@ -14,4 +14,4 @@
 .game-canvas { touch-action:manipulation; }
 .player-actions button:focus-visible,.lift-action button:focus-visible { outline:2px solid #d6bc89; outline-offset:2px; }
 @media (pointer:coarse) { .player-buttons .action,.lift-action .action { min-height:44px; min-width:44px; } }
-@media (max-width:680px) { .player-actions { padding:7px 8px; border-left:0; border-right:0; } .player-buttons .action { flex:0 1 auto; min-height:44px; } .player-buttons .walk-control { min-width:44px; } .player-readout { gap:2px 10px; } .lift-action { top:43%; } .lift-action .action { min-height:36px; } .player-prompt { display:none; } .upgrade-option { max-width:100%; } }
+@media (max-width:680px) { .player-actions { padding:7px 8px; border-left:0; border-right:0; } .player-buttons .action { flex:0 1 auto; min-height:44px; } .player-buttons .walk-control { min-width:44px; } .player-readout { gap:2px 10px; } .lift-action { top:43%; } .lift-action .action { min-height:44px; } .player-prompt { display:none; } .upgrade-option { max-width:100%; } }
