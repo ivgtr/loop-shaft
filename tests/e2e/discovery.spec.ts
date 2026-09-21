@@ -118,7 +118,8 @@ test('a visible persistent trace changes from sealed to exposed to spent through
   await expect(page.getByTestId('scene-detail')).toContainText('1 breaks to extract');
   // Resume using the ordinary action; the clue does not expire during rock regeneration.
   await expect.poll(async () => (await saved(page)).run.floors['D-001'].nodes.find((n) => n.id === node.id)!.hp, { timeout: 30000 }).toBe(node.maxHp);
-  await selectNode(page, state, node.id);
+  // The restored job is already selected; clicking it again would count as the first mining swing.
+  await expect(page.locator('.game-canvas')).toHaveAttribute('data-player-state', 'MINING');
   for (let i = 0; i < Math.ceil(node.maxHp / 10); i++) {
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-swing', 'ready'); await page.keyboard.press('Space');
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-swing', 'active');

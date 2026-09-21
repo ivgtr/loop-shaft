@@ -225,6 +225,8 @@ export class GameRuntime {
         this.openManagement({ station: 'logistics', tab: 'bore', selectedId: ref.id });
       } else if (this.state.run.character.targetNodeId === ref.id
         && ['MINING', 'MOVING_TO_NODE'].includes(this.state.run.character.state)) {
+        // Restore inspection independently of the mining request (including depleted jobs after reload).
+        this.state.selection = ref;
         // Busy same-node clicks are mining requests, never movement/cancel commands.
         this.miningInput.request(ref.id);
       } else {
