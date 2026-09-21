@@ -18,6 +18,7 @@ export const LOAD_DURATION = 0.68;
 export const PORTER_LOAD_DURATION = 0.52;
 export const UNLOAD_DURATION = 0.95;
 export const SAVE_INTERVAL = 5;
+export const PLAYER_TOOL_DAMAGE = { 1: 10, 2: 16 } as const;
 export const PLAYER_MOVE_SPEED = { 1: 42, 2: 66 } as const;
 export const PLAYER_PACK_CAPACITY = { 1: 8, 2: 15 } as const;
 export const PORTER_MOVE_SPEED = 36;
@@ -36,6 +37,7 @@ export const D250_EXTENSION_COST = 12000;
 export const D400_EXTENSION_COST = 18000;
 export const D650_SHAFT_COST = 28000;
 export const CREW_BOARD_COST = 1800;
+export const CREW_HIRE_COSTS = { MINER: 2600, PORTER: 2200 } as const;
 export const CREW_SLOT_COSTS = [0, 0, 3200, 5200] as const;
 export const CREW_TRAVEL_DURATION = 3.4;
 export const CARGO_ROUTE_DURATION = 2.4;
@@ -158,15 +160,15 @@ export const RESEARCH: Record<ResearchId, ResearchDefinition> = {
   MULTI_STOP_RELAY: { name: 'Multi-Stop Relay', description: 'Unlock direct underground floor-to-floor travel.', dataCost: 6, duration: 32, prerequisite: 'DEEP_SURVEY' },
   STRATA_SCANNER: { name: 'Strata Scanner', description: 'Reveal detailed node tendencies before mining.', dataCost: 6, duration: 30, prerequisite: 'DEEP_SURVEY' },
   CORE_RESONANCE: { name: 'Core Resonance', description: 'Decode the Core Shell and authorize the D-100 extension.', dataCost: 14, duration: 40, prerequisite: 'DEEP_SURVEY' },
-  CREW_ROUTING: { name: 'Crew Routing', description: 'Turn the old Porter workflow into assignable Miner / Porter shifts.', dataCost: 8, duration: 34, prerequisite: 'DEEP_SURVEY' },
-  CARGO_SCHEDULER: { name: 'Cargo Scheduler', description: 'Let the one Central Elevator service Floor Cargo queues from several depths.', dataCost: 9, duration: 36, prerequisite: 'CREW_ROUTING' },
+  CREW_ROUTING: { name: 'Crew Routing', description: 'Assign Miners and Porters to different floors.', dataCost: 8, duration: 34, prerequisite: 'DEEP_SURVEY' },
+  CARGO_SCHEDULER: { name: 'Cargo Scheduler', description: 'Collect waiting cargo from several floors with the Central Elevator.', dataCost: 9, duration: 36, prerequisite: 'CREW_ROUTING' },
   ANCIENT_SURVEY: { name: 'Ancient Survey', description: 'Decode the signal below D-100 and authorize a shaft push toward D-180.', dataCost: 12, duration: 42, prerequisite: 'CORE_RESONANCE' },
   SALVAGE_ANALYSIS: { name: 'Salvage Analysis', description: 'Expose more information about sealed equipment before appraisal.', dataCost: 8, duration: 30, prerequisite: 'ANCIENT_SURVEY' },
   LOST_SURVEY: { name: 'Lost Survey', description: 'Analyze the Lost Signal Sample and plot a safe route into The Lost.', dataCost: 14, duration: 44, prerequisite: 'ANCIENT_SURVEY' },
   RAIL_LOGISTICS: { name: 'Rail Logistics', description: 'Restore old horizontal rail and authorize Minecart cargo service.', dataCost: 15, duration: 46, prerequisite: 'LOST_SURVEY' },
   FREIGHT_ARCHITECTURE: { name: 'Freight Architecture', description: 'Authorize a cargo-only vertical Freight Cage for hub traffic.', dataCost: 18, duration: 50, prerequisite: 'RAIL_LOGISTICS' },
   NULL_GEOMETRY: { name: 'Null Geometry', description: 'Map disconnected platforms and inaccessible sites below The Lost.', dataCost: 19, duration: 54, prerequisite: 'FREIGHT_ARCHITECTURE' },
-  REMOTE_BORE_CONTROL: { name: 'Remote Bore Control', description: 'Operate a Bore against MiningNode targets that cannot be reached on foot.', dataCost: 20, duration: 58, prerequisite: 'NULL_GEOMETRY' },
+  REMOTE_BORE_CONTROL: { name: 'Remote Bore Control', description: 'Mine unreachable veins with a remote Bore.', dataCost: 20, duration: 58, prerequisite: 'NULL_GEOMETRY' },
   DEEP_SHAFT_GEOMETRY: { name: 'Deep Shaft Geometry', description: 'Turn recovered Deep Components into a construction plan for D-650.', dataCost: 24, duration: 64, prerequisite: 'REMOTE_BORE_CONTROL' },
 };
 
@@ -179,7 +181,7 @@ export const CORE_PROTOCOLS: Record<CoreProtocolId, ProtocolDefinition> = {
   SURVEY_ARCHIVE: { name: 'Survey Archive', description: 'Deep Survey begins completed from archived field notes.', cost: 2 },
   CREW_MANIFEST: { name: 'Crew Manifest', description: 'Begin the next Run with the first Miner already on the shift board.', cost: 4 },
   FREIGHT_MEMORY: { name: 'Freight Memory', description: 'Begin the next Run with Cargo Scheduler routing available.', cost: 4 },
-  LEGACY_LOCKER: { name: 'Legacy Locker', description: 'Carry one appraised Equipment instance into the next Run.', cost: 5 },
+  LEGACY_LOCKER: { name: 'Legacy Locker', description: 'Keep one recovered piece of equipment for the next Run.', cost: 5 },
   RAIL_BLUEPRINT: { name: 'Rail Blueprint', description: 'Retain the restored Rail plan so its blueprint step is skipped next Run.', cost: 4 },
   FREIGHT_CHARTER: { name: 'Freight Charter', description: 'Retain Freight Cage authorization and skip its blueprint stage next Run.', cost: 5 },
   ENGINEER_LICENSE: { name: 'Engineer License', description: 'Begin future Runs with Engineer service already licensed.', cost: 4 },

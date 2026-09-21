@@ -5,6 +5,8 @@ import type {
   DepthId,
   FreightPriority,
   PassiveId,
+  MinerPriority,
+  PorterPriority,
   RailPriority,
   ResearchId,
 } from '../game/types';
@@ -41,8 +43,8 @@ export type GameCommand =
   | { type: 'expand-crew' }
   | { type: 'hire-crew'; role: 'MINER' | 'PORTER' }
   | { type: 'assign-crew'; crewId: string; depth: DepthId }
-  | { type: 'cycle-miner-priority'; crewId: string }
-  | { type: 'cycle-porter-priority'; crewId: string }
+  | { type: 'miner-priority'; crewId: string; priority: MinerPriority }
+  | { type: 'porter-priority'; crewId: string; priority: PorterPriority }
   | { type: 'cargo-priority'; priority: CargoRoutingPriority }
   | { type: 'equip-item'; itemId: string }
   | { type: 'equip-crew-item'; itemId: string; crewId: string }

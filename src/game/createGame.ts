@@ -17,6 +17,7 @@ import {
   LOOT,
   PLAYER_MOVE_SPEED,
   PLAYER_PACK_CAPACITY,
+  PLAYER_TOOL_DAMAGE,
   PORTER_CAPACITY,
   PORTER_MOVE_SPEED,
   WORLD,
@@ -134,8 +135,8 @@ export function createNewRun(meta: MetaProgression): RunState {
       travel: null,
     },
     tool: experienced
-      ? { id: 'player-tool', slot: 'TOOL', level: 2, name: 'Steel Pickaxe', damage: 16 }
-      : { id: 'player-tool', slot: 'TOOL', level: 1, name: 'Rusty Pickaxe', damage: 10 },
+      ? { id: 'player-tool', slot: 'TOOL', level: 2, name: 'Steel Pickaxe', damage: PLAYER_TOOL_DAMAGE[2] }
+      : { id: 'player-tool', slot: 'TOOL', level: 1, name: 'Rusty Pickaxe', damage: PLAYER_TOOL_DAMAGE[1] },
     boots: { id: 'player-boots', slot: 'BOOTS', level: 1, name: 'Work Boots' },
     pack: { id: 'player-pack', slot: 'PACK', level: 1, name: 'Canvas Pack' },
     automation: {

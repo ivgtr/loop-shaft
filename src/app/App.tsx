@@ -1,8 +1,6 @@
 import { useEffect } from 'react';
-import { ContextPanel } from '../components/context/ContextPanel';
 import { GameCanvas } from '../components/game/GameCanvas';
-import { PlayerActions, WorldControls } from '../components/game/PlayerActions';
-import { ResourceHud, RunStatusHud } from '../components/hud/Hud';
+import { GameUiCanvas } from '../components/game/GameUiCanvas';
 import type { GameRuntime } from '../runtime/GameRuntime';
 import { GameProvider } from './GameProvider';
 
@@ -18,15 +16,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
         <div>
           <div className="game-shell">
             <GameCanvas />
-            <ResourceHud />
-            <RunStatusHud />
-            <WorldControls />
-          </div>
-          <PlayerActions />
-          <ContextPanel />
-          <div className="help-line" id="player-control-help">
-            <span><kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd> walk · <kbd>Space</kbd> mine · <kbd>E</kbd> interact · <kbd>F</kbd> send · <kbd>Esc</kbd> stop / close. Click floor to walk.</span>
-            <span>Cargo stays physical. Choose when to pick up and return; payment happens at Surface.</span>
+            <GameUiCanvas />
           </div>
         </div>
       </div>

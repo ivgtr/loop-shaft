@@ -4,6 +4,7 @@ import {
   COLLECT_DURATION,
   CORE_KINDS,
   CREW_BOARD_COST,
+  CREW_HIRE_COSTS,
   CREW_MINER_MOVE_SPEED,
   CREW_PORTER_CAPACITY,
   CREW_PORTER_MOVE_SPEED,
@@ -132,7 +133,7 @@ export function expandCrewSlots(state: GameState): boolean {
 export function hireCrew(state: GameState, role: CrewRole): boolean {
   const crew = state.run.phase5.crew;
   if (!crew.unlocked || crew.members.length >= crew.slots) return false;
-  const cost = role === 'MINER' ? 2600 : 2200;
+  const cost = CREW_HIRE_COSTS[role];
   if (state.run.scrap < cost) return false;
   state.run.scrap -= cost;
   const member = createCrewMember(state, role, state.run.depth.current);
@@ -171,11 +172,19 @@ function createCrewMember(state: GameState, role: CrewRole, depth: Phase5DepthId
   };
 }
 
-export function assignCrew(state: GameState, crewId: string, depth: Phase5DepthId): boolean {
+export function crewAssignmentBlockReason(state: GameState, crewId: string, depth: Phase5DepthId): string | null {
   const member = state.run.phase5.crew.members.find((candidate) => candidate.id === crewId);
-  if (!member || !state.run.phase5.crew.unlocked) return false;
-  if (!unlockedPhase5Depths(state).includes(depth) || member.assignedDepth === depth || member.pendingDepth) return false;
-  if (member.body.carried.length > 0 || member.state === 'DEPOSITING' || member.state === 'TRAVELING') return false;
+  if (!member || !state.run.phase5.crew.unlocked) return 'Worker is not available.';
+  if (!unlockedPhase5Depths(state).includes(depth)) return 'Connect this floor first.';
+  if (member.assignedDepth === depth) return 'Already assigned here.';
+  if (member.pendingDepth || member.state === 'TRAVELING') return 'Wait for the current transfer to finish.';
+  if (member.body.carried.length || member.state === 'DEPOSITING') return 'Wait for this worker to unload carried cargo.';
+  return null;
+}
+
+export function assignCrew(state: GameState, crewId: string, depth: Phase5DepthId): boolean {
+  if (crewAssignmentBlockReason(state, crewId, depth)) return false;
+  const member = state.run.phase5.crew.members.find((candidate) => candidate.id === crewId)!;
   member.pendingDepth = depth;
   member.targetNodeId = null;
   member.targetLootId = null;
@@ -241,7 +250,7 @@ function updateCrew(state: GameState, dt: number): void {
   }
 }
 
-function updateCrewMovementParameters(state: GameState, member: CrewMember): void {
+export function crewMoveSpeed(state: GameState, member: CrewMember): number {
   let speed = member.role === 'MINER' ? CREW_MINER_MOVE_SPEED : CREW_PORTER_MOVE_SPEED;
   if (state.run.anomaly.selected === 'HEAVY_WORLD') speed *= member.role === 'MINER' ? 0.72 : 0.58;
   const tool = member.equipment.TOOL ? state.run.phase5.equipment.inventory.find((item) => item.id === member.equipment.TOOL) : undefined;
@@ -249,7 +258,11 @@ function updateCrewMovementParameters(state: GameState, member: CrewMember): voi
     const light = tool.affixes.find((affix) => affix.id === 'LIGHT_FRAME' || affix.id === 'COURIER_BOOTS');
     if (light) speed *= 1 + light.value;
   }
-  member.body.moveSpeed = speed;
+  return speed;
+}
+
+function updateCrewMovementParameters(state: GameState, member: CrewMember): void {
+  member.body.moveSpeed = crewMoveSpeed(state, member);
 }
 
 function updateCrewTravel(state: GameState, member: CrewMember, dt: number): void {
@@ -364,9 +377,7 @@ function findCrewNode(member: CrewMember, floor: FloorState): MiningNode | undef
 }
 
 function applyCrewMiningHit(state: GameState, member: CrewMember, floor: FloorState, node: MiningNode): void {
-  const modifiers = getModifiers(state);
-  let damage = 11 * modifiers.miningDamageMultiplier * crewToolMultiplier(state, member, node);
-  damage = Math.max(1, Math.round(damage));
+  const damage = crewMiningDamage(state, member, node);
   emit(state, 'MINER_SWING_HIT', { crewId: member.id, nodeId: node.id, depth: member.assignedDepth, damage });
   node.hp = Math.max(0, node.hp - damage);
   emit(state, 'NODE_DAMAGE', { crewId: member.id, nodeId: node.id, depth: member.assignedDepth, hp: node.hp, maxHp: node.maxHp });
@@ -374,6 +385,10 @@ function applyCrewMiningHit(state: GameState, member: CrewMember, floor: FloorSt
   node.respawnTimer = node.respawnDelay;
   emit(state, 'NODE_BREAK', { crewId: member.id, nodeId: node.id, depth: member.assignedDepth });
   spawnCrewLoot(state, member, floor, node);
+}
+
+export function crewMiningDamage(state: GameState, member: CrewMember, node: MiningNode): number {
+  return Math.max(1, Math.round(11 * getModifiers(state).miningDamageMultiplier * crewToolMultiplier(state, member, node)));
 }
 
 function crewToolMultiplier(state: GameState, member: CrewMember, node: MiningNode): number {
@@ -886,16 +901,25 @@ export function playerHasEquipmentAffix(state: GameState, id: EquipmentAffixId):
   return Object.values(state.run.phase5.equipment.equippedPlayer).some((itemId) => state.run.phase5.equipment.inventory.find((item) => item.id === itemId)?.affixes.some((affix) => affix.id === id));
 }
 
-export function prepareLegacyEquipmentForReboot(state: GameState): void {
-  if (!state.meta.protocols.includes('LEGACY_LOCKER')) {
-    state.meta.legacyEquipment = null;
-    return;
-  }
+/** Shared by the actual reset and its UI preview, without altering the live meta. */
+export function legacyEquipmentForReboot(state: GameState): EquipmentItem | null {
+  if (!state.meta.protocols.includes('LEGACY_LOCKER')) return null;
   const inventory = state.run.phase5.equipment.inventory;
   const equippedTool = state.run.phase5.equipment.equippedPlayer.TOOL;
   const chosen = inventory.find((item) => item.id === equippedTool)
     ?? [...inventory].sort((a, b) => EQUIPMENT_RARITY_RANK[b.rarity] - EQUIPMENT_RARITY_RANK[a.rarity] || b.level - a.level || a.id.localeCompare(b.id))[0];
-  state.meta.legacyEquipment = chosen ? { ...chosen, affixes: chosen.affixes.map((affix) => ({ ...affix })) } : null;
+  return chosen ? { ...chosen, affixes: chosen.affixes.map((affix) => ({ ...affix })) } : null;
+}
+
+export function prepareLegacyEquipmentForReboot(state: GameState): void {
+  state.meta.legacyEquipment = legacyEquipmentForReboot(state);
+}
+
+/** Called only after an explicit, transient UI confirmation. */
+export function confirmPhase5Reboot(state: GameState): boolean {
+  if (state.selection?.type !== 'core-chamber' || !state.run.coreChamber.rebootAvailable || state.run.pendingCore <= 0) return false;
+  state.run.coreChamber.rebootArmed = true;
+  return armPhase5Reboot(state);
 }
 
 export function armPhase5Reboot(state: GameState): boolean {

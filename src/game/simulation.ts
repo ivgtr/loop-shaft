@@ -14,6 +14,7 @@ import {
   LOAD_DURATION,
   LOOT,
   PLAYER_PACK_CAPACITY,
+  PLAYER_TOOL_DAMAGE,
   PORTER_COLLECT_DURATION,
   PORTER_LOAD_DURATION,
   RESEARCH,
@@ -151,7 +152,7 @@ export function sendElevator(state: GameState): boolean {
 export function upgradeTool(state: GameState): boolean {
   const run = state.run;
   if (upgradeBlockReason(state, 'upgrade-tool') || !spendScrap(state, UPGRADE_COSTS.tool)) return false;
-  run.tool = { id: 'player-tool', slot: 'TOOL', level: 2, name: 'Steel Pickaxe', damage: 16 };
+  run.tool = { id: 'player-tool', slot: 'TOOL', level: 2, name: 'Steel Pickaxe', damage: PLAYER_TOOL_DAMAGE[2] };
   emit(state, 'EQUIPMENT_CHANGED', { slot: 'TOOL', name: run.tool.name, level: 2, damage: run.tool.damage });
   return true;
 }
@@ -333,12 +334,20 @@ export function togglePassive(state: GameState, passive: PassiveId): boolean {
   return true;
 }
 
-export function canStartResearch(state: GameState, id: ResearchId): boolean {
+export function researchBlockReason(state: GameState, id: ResearchId): string | null {
   const run = state.run;
   const definition = RESEARCH[id];
-  if (!run.depth.unlocked.includes('D-060') || run.research.active || run.research.completed.includes(id)) return false;
-  if (definition.prerequisite && !run.research.completed.includes(definition.prerequisite)) return false;
-  return run.data >= definition.dataCost;
+  if (run.research.completed.includes(id)) return 'Research complete.';
+  if (!run.depth.unlocked.includes('D-060')) return 'Connect D-060 to use the Surface Analyzer.';
+  if (run.research.active?.id === id) return `Research running: ${Math.ceil(run.research.active.remaining)}s remaining.`;
+  if (run.research.active) return `Finish ${RESEARCH[run.research.active.id].name} first.`;
+  if (definition.prerequisite && !run.research.completed.includes(definition.prerequisite)) return `Requires ${RESEARCH[definition.prerequisite].name}.`;
+  if (run.data < definition.dataCost) return `Need ${definition.dataCost - run.data} more Data.`;
+  return null;
+}
+
+export function canStartResearch(state: GameState, id: ResearchId): boolean {
+  return researchBlockReason(state, id) === null;
 }
 
 export function startResearch(state: GameState, id: ResearchId): boolean {
@@ -498,7 +507,7 @@ function generateAnomalyOptions(runSeed: number, floorSeed: number): AnomalyId[]
 function applyProtocolToCurrentRun(state: GameState, id: CoreProtocolId): void {
   const run = state.run;
   if (id === 'EXPERIENCED_HANDS') {
-    run.tool = { id: 'player-tool', slot: 'TOOL', level: 2, name: 'Steel Pickaxe', damage: 16 };
+    run.tool = { id: 'player-tool', slot: 'TOOL', level: 2, name: 'Steel Pickaxe', damage: PLAYER_TOOL_DAMAGE[2] };
     run.automation.autoSwing = { unlocked: true, enabled: true };
   } else if (id === 'CARGO_MEMORY') {
     run.porter.enabled = true;

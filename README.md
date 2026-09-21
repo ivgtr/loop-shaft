@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-React owns the HUD and contextual controls. The deterministic simulation, fixed-step loop, Canvas renderer, audio, and persistence remain in the external game runtime under `src/runtime`.
+All visible gameplay UI, including equipment, research, crew, Collection, Anomaly, Core / Reboot and deep logistics, is painted on the shared Canvas layer inside the game viewport. React supplies matching native input semantics; no external management panels are required. The deterministic simulation, fixed-step loop, Canvas renderer, audio, and persistence remain in the external game runtime under `src/runtime`.
 
 ## Controls
 
@@ -22,13 +22,32 @@ React owns the HUD and contextual controls. The deterministic simulation, fixed-
 | Pick up / load / nearby equipment | E | Use the displayed interaction button |
 | Return and unload when possible | Walk to the lift, then E | RETURN or click the lift while carrying |
 | Send loaded cargo | F | SEND beside the shaft, without changing selection |
-| Stop / close context | Esc | STOP |
+| Stop / close a window | Esc | STOP / X |
+| Elevator console | E near an empty lift; arrows browse, Tab / Enter select | LIFT or click the empty lift; SHIP / TRAVEL / EXTEND |
+| Base facilities | Tab to BASE and Enter; arrows browse | BASE or the device in the world |
+| Facility details | Page Up / Down | Detail page arrows |
+| Controls help | Tab to ? and Enter | ? |
+| Workshop | E near the bench; arrows browse, Tab / Enter select | Click the bench; choose an item and BUY; close with X / Esc |
 
 Click or Tab to the game canvas for gameplay shortcuts. Focused UI buttons retain normal Space/Enter activation. Mining accepts one buffered input within 150ms of recovery or arrival; holding Space does not replace Auto Swing.
 
 Pickup and return are voluntary. Carrying cargo, a full pack, or an unavailable lift never prevents walking or mining. Uncollected ore stays on the floor. Ore is not currency until a Character or Porter carries it into the elevator and the elevator unloads it at the surface.
 
-Click the tool bench to progress Tool → Boots → Auto Swing → Pack → Porter. Inspect the lift to fit/toggle Auto Dispatch. Locked upgrades show their missing prerequisite or Scrap requirement.
+The workshop keeps Tool / Boots / Pack slots after purchase and shows current → upgraded effects, prerequisites and Scrap shortfalls. Its optional first-delivery guide leads to Tool → Boots → Auto Swing → Pack → Porter. FINDS opens the full slot-filtered inventory with real before/after comparisons and ownership-transfer confirmation. Inspect the lift to fit/toggle Auto Dispatch.
+
+All window input stays inside the active window; closing restores the game focus and selected vein. Cargo is retained and autonomous transport / research continue. Window state is not saved. Transparent native buttons share the painted Canvas layout for keyboard, touch and screen-reader access. The world scale is independent of depth. Small screens reserve fixed HUD / control bands instead of moving or resizing the world when a window opens.
+
+The dock shows backpack capacity once; the shaft shows lift load and shipment status. SHIP sends cargo or changes the automatic relay / routing policy, TRAVEL visits connected floors, and EXTEND opens new connections (or starts D-650 construction). Opening a connection never automatically travels there. Unavailable destinations remain inspectable with the blocking reason; their permissions and fees come from the existing simulation.
+
+Facilities share focus, close and execution rules while using task-specific layouts. Locked entries can still be inspected. Crew destinations and priorities are explicit choices, not cycling buttons. Long detail text is paged rather than discarded at small widths. Collection preserves discovery records and separates the two active passive slots.
+
+Anomaly choices, equipment transfers, and Reboot consequences require an explicit review before confirmation. Reboot shows the actual Core reward, permanent records, retained Legacy Locker item and reset resources / cargo / equipment. Escape first cancels confirmation, then closes the window. Confirmation is never restored from a save.
+
+### Facility controls
+
+Equipment compares current gear with a candidate; **EFFECTS & STATS** opens the full comparison. The shift board shows workers and their floor/task/priority beside the selected worker's controls. Research progress stays visible while inspecting plans, and Collection uses discovery tiles. Rail/Freight settings belong to the selected route: choosing a priority does not apply it until confirmed. Equipped/active/current badges remain independent of the inspected item.
+
+Reboot and equipment transfers pin their consequences beside the final action. **KEEP MINING** cancels Reboot and returns to the mine. Extra explanations are optional; Page Up/Down opens and pages them. The portrait stage uses available height without stretching the world or resizing it when a facility opens.
 
 ## Checks
 
@@ -40,7 +59,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The tests cover input buffering, cargo ownership and cancellation, upgrade prerequisites, visual hit targets, keyboard-only first delivery, focus changes, and touch controls. Progression timing and subjective game feel still require human playtesting; see sections 30 and 38 of the requirements.
+The tests cover input buffering, cargo ownership and cancellation, upgrade prerequisites, visual hit targets, keyboard-only first delivery, focus changes, touch controls, workshop comparisons / purchases, modal input isolation, stable viewport geometry, save compatibility, separate opening / travel actions, cargo-blocked travel, floor-independent scale, keyboard paging through every destination, all recovered instances, research transitions, crew assignment / equipment, passives, protocols, reset previews and confirmation invalidation. Progression timing and subjective game feel still require human playtesting; see sections 30 and 38 of the requirements.
 
 ## GitHub Pages
 
