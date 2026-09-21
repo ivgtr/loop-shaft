@@ -1,3 +1,4 @@
+import { drawCargoMark, drawDiscoveryCues } from './discoveryCues';
 import { CARGO_HUB_X, RAIL_STOP_X, WORLD } from '../game/config';
 import { deriveInitialLogisticsGuide, isFirstLiveScrapGain } from '../game/initialLogisticsGuide';
 import { cargoWeight } from '../game/simulation';
@@ -70,6 +71,7 @@ export class GameRenderer {
       this.ctx.restore();
     }
     if (depth === 'D-001') drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets);
+    drawDiscoveryCues(this.ctx, state, semantic);
     const targets = deriveInteractionTargets(state);
     const guide = deriveInitialLogisticsGuide(state);
     const guideTargetKey = initialGuideTargetKey(guide, targets);
@@ -284,6 +286,7 @@ function cargoPips(
     if (state.run.depth.current === 'D-001' && drawD001Cargo(ctx, item, anchorX, anchorY, assets)) continue;
     ctx.fillStyle = '#8a7150';
     ctx.fillRect(x + (index % 3) * 5, y - Math.floor(index / 3) * 4, 4, 3);
+    drawCargoMark(ctx, item, anchorX, anchorY);
   }
 }
 

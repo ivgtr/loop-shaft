@@ -1,3 +1,4 @@
+import { nodeDiscoveryCue } from '../game/prospecting';
 import {
   COLLECT_DURATION,
   LOAD_DURATION,
@@ -104,6 +105,7 @@ export interface SemanticRenderState {
   readonly crew: ReadonlyMap<string, CrewRenderState>;
   readonly engineer: EngineerRenderState | null;
   readonly nodes: ReadonlyMap<string, NodeVisualState>;
+  readonly discoveries: ReadonlyMap<string, NonNullable<ReturnType<typeof nodeDiscoveryCue>>>;
   readonly elevator: {
     readonly width: 'normal' | 'narrow';
     readonly door: 'open' | 'closed';
@@ -130,6 +132,10 @@ export function deriveSemanticRenderState(state: Readonly<GameState>, animationT
     crew: new Map(state.run.phase5.crew.members.map((member) => [member.id, deriveCrewRenderState(state, member, animationTimeMs)])),
     engineer: state.run.engineer.unlocked ? deriveEngineerRenderState(state, animationTimeMs) : null,
     nodes: new Map(state.run.floors[state.run.depth.current].nodes.map((node) => [node.id, nodeVisualState(node)])),
+    discoveries: new Map(state.run.floors[state.run.depth.current].nodes.flatMap((node) => {
+      const cue = nodeDiscoveryCue(state.run.floors[state.run.depth.current], node);
+      return cue ? [[node.id, cue] as const] : [];
+    })),
     elevator: {
       width: state.run.anomaly.selected === 'EMPTY_SHAFT' ? 'narrow' : 'normal',
       door: ['ASCENDING', 'DESCENDING', 'TRAVELING'].includes(state.run.elevator.state) ? 'closed' : 'open',

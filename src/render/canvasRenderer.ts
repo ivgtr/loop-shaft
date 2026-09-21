@@ -1,6 +1,7 @@
+import { rewardNotice, RewardNoticeQueue } from '../game/rewardFeedback';
 import { WORLD } from '../game/config';
 import { currentFloor } from '../game/simulation';
-import type { GameEvent, GameState, Rarity } from '../game/types';
+import type { GameEvent, GameState } from '../game/types';
 import { drawD001ElevatorFrontLayer, drawEntities } from './entities';
 import { drawEnvironment } from './environment';
 import { PALETTE } from './palette';
@@ -9,7 +10,6 @@ import { deriveSemanticRenderState } from './semanticRenderState';
 import { drawPixelText } from './pixelText';
 
 type DebrisFx = { x: number; y: number; startedAt: number };
-type BannerFx = { label: string; sub: string; rarity: Rarity; startedAt: number };
 type GainFx = { label: string; startedAt: number };
 
 export class CanvasRenderer {
@@ -17,7 +17,7 @@ export class CanvasRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private shakeUntil = 0;
   private debris: DebrisFx[] = [];
-  private banner: BannerFx | null = null;
+  private readonly notices = new RewardNoticeQueue();
   private gain: GainFx | null = null;
 
   constructor(canvas: HTMLCanvasElement, private readonly assets: D001AssetStore) {
@@ -36,14 +36,9 @@ export class CanvasRenderer {
       if (node) this.debris.push({ x: node.x, y: node.y - 8, startedAt: now });
       this.shakeUntil = Math.max(this.shakeUntil, now + 110);
     }
-    if (event.type === 'DISCOVERY_FOUND') {
-      this.banner = {
-        label: String(event.data?.name ?? 'Unknown find'),
-        sub: `${String(event.data?.rarity ?? 'RARE')} · ${String(event.data?.category ?? '')}`,
-        rarity: String(event.data?.rarity ?? 'RARE') as Rarity,
-        startedAt: now,
-      };
-    }
+    if (event.type === 'REBOOT_COMMITTED') this.notices.clear();
+    const notice = rewardNotice(event);
+    if (notice) this.notices.push(notice, now);
     if (event.type === 'RESEARCH_COMPLETED') this.gain = { label: `RESEARCH COMPLETE · ${String(event.data?.research ?? '')}`, startedAt: now };
     if (event.type === 'CORE_CHARGE_GAINED') this.gain = { label: `CORE CHARGE +${Number(event.data?.amount ?? 0)}`, startedAt: now };
     if (event.type === 'DATA_GAIN') this.gain = { label: `DATA +${Number(event.data?.amount ?? 0)}`, startedAt: now };
@@ -96,28 +91,20 @@ export class CanvasRenderer {
         this.ctx.fillRect(Math.round(fx.x + dx), Math.round(fx.y + dy + index % 2), 2, 2);
       });
     }
-    if (this.banner && now - this.banner.startedAt < 1200) {
-      this.ctx.fillStyle = '#111014'; this.ctx.fillRect(157, 53, 166, 23);
-      this.ctx.strokeStyle = rarityColor(this.banner.rarity); this.ctx.strokeRect(157.5, 53.5, 165, 22);
-      this.ctx.fillStyle = rarityColor(this.banner.rarity);
-      drawPixelText(this.ctx, this.banner.sub.toUpperCase(), 240, 62, { font: 'standard', align: 'center', baseline: 'bottom' });
+    const notice = this.notices.at(now);
+    if (notice) {
+      const accent = notice.priority >= 4 ? '#dcc79f' : PALETTE.rare;
+      this.ctx.fillStyle = '#111014'; this.ctx.fillRect(87, 53, 306, 26);
+      this.ctx.strokeStyle = accent; this.ctx.strokeRect(87.5, 53.5, 305, 25);
+      this.ctx.fillStyle = accent;
+      drawPixelText(this.ctx, notice.detail.toUpperCase().slice(0, 48), 240, 64, { font: 'standard', align: 'center', baseline: 'bottom' });
       this.ctx.fillStyle = PALETTE.white;
-      drawPixelText(this.ctx, this.banner.label.toUpperCase(), 240, 72, { font: 'standard', align: 'center', baseline: 'bottom' });
-    } else if (this.banner) this.banner = null;
+      drawPixelText(this.ctx, notice.label.toUpperCase().slice(0, 48), 240, 75, { font: 'standard', align: 'center', baseline: 'bottom' });
+    }
     if (this.gain && now - this.gain.startedAt < 1200) {
       this.ctx.fillStyle = '#101214e8'; this.ctx.fillRect(147, 9, 186, 16);
       this.ctx.fillStyle = PALETTE.d060Lamp;
       drawPixelText(this.ctx, this.gain.label, 240, 19, { font: 'standard', align: 'center', baseline: 'bottom' });
     } else if (this.gain) this.gain = null;
-  }
-}
-
-function rarityColor(rarity: Rarity): string {
-  switch (rarity) {
-    case 'ANOMALY': return '#a392aa';
-    case 'RELIC': return '#c6a36b';
-    case 'EPIC': return '#a991bc';
-    case 'RARE': return PALETTE.rare;
-    default: return PALETTE.white;
   }
 }

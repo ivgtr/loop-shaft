@@ -2,6 +2,7 @@ import { COLLECTIBLE_KINDS, LOOT, PLAYER_PACK_CAPACITY } from './config';
 import { createGameState, createStateFromMeta } from './createGame';
 import { DEPTH_ORDER } from './depth';
 import { CORE_RESERVES } from './mining';
+import { applyOreQuality, createProspectingState, FIELD_GEAR_PITY, ORE_QUALITY, QUALITY_PITY, specimenContents } from './prospecting';
 import { DISPATCH_POLICIES, type DispatchPolicy } from './dispatch';
 import { getModifiers } from './modifiers';
 import type {
@@ -28,6 +29,9 @@ import type {
   MinerPriority,
   MiningNode,
   OfflineReport,
+  OreQuality,
+  ProspectingState,
+  FindReceipt,
   PorterPriority,
   RailCartState,
   RailPriority,
@@ -125,7 +129,7 @@ function restoreStructured(raw: Record<string, unknown>, hasPhase5: boolean, has
   const character = asRecord(rawRun.character);
   if (character) run.character = { ...run.character, ...(character as Partial<typeof run.character>), carried: normalizeLootArray(character.carried) };
   const porter = asRecord(rawRun.porter);
-  if (porter) run.porter = { ...run.porter, ...(porter as Partial<typeof run.porter>), carried: normalizeLootArray(porter.carried) };
+  if (porter) run.porter = { ...run.porter, ...(porter as Partial<typeof run.porter>), carried: normalizeLootArray(porter.carried), holdForTravel: porter.holdForTravel === true };
   const elevator = asRecord(rawRun.elevator);
   if (elevator) {
     const travel = asRecord(elevator.travel);
@@ -176,6 +180,7 @@ function restoreStructured(raw: Record<string, unknown>, hasPhase5: boolean, has
   }
   const chamber = asRecord(rawRun.coreChamber); if (chamber) run.coreChamber = { ...run.coreChamber, ...(chamber as Partial<typeof run.coreChamber>) };
   const discovery = asRecord(rawRun.discovery); if (discovery) run.discovery = { ...run.discovery, ...(discovery as Partial<typeof run.discovery>) };
+  run.discovery.recentFinds = normalizeFindReceipts(discovery?.recentFinds);
   run.discovery.categoriesFound = normalizeStringArray(discovery?.categoriesFound, ['VALUABLE', 'FOSSIL', 'RELIC', 'ANOMALY', 'RESEARCH', 'CORE'] as const);
   if (!discovery?.categoriesFound) {
     if (run.data > 0 || run.research.completed.length) run.discovery.categoriesFound.push('RESEARCH');
@@ -557,11 +562,35 @@ function migrateLegacy(raw: Record<string, unknown>): GameState | null {
   return state;
 }
 
+function normalizeProspecting(value: unknown): ProspectingState {
+  const raw = asRecord(value);
+  const base = createProspectingState();
+  if (!raw) return base;
+  const integer = (key: string, max: number) => Math.min(max, Math.max(0, Math.floor(numberOr(raw[key], 0))));
+  return { breaks: integer('breaks', 1e9), qualityMisses: integer('qualityMisses', QUALITY_PITY),
+    gearMisses: integer('gearMisses', FIELD_GEAR_PITY), gearFound: integer('gearFound', 1e9),
+    prospectWork: [0, 1].map((i) => Math.min(2 + i, Math.max(-1, Math.floor(numberOr(Array.isArray(raw.prospectWork) ? raw.prospectWork[i] : -1, -1))))) };
+}
+
+function normalizeFindReceipts(value: unknown): FindReceipt[] {
+  if (!Array.isArray(value)) return [];
+  const receipts: FindReceipt[] = [];
+  for (const entry of value.slice(0, 12)) {
+    const raw = asRecord(entry);
+    if (!raw || typeof raw.id !== 'string' || typeof raw.name !== 'string' || receipts.some((item) => item.id === raw.id)) continue;
+    if (!['NEW', 'PRISTINE', 'PURE', 'GEAR', 'RESTORED'].includes(String(raw.reason))) continue;
+    receipts.push({ id: raw.id, name: raw.name.slice(0, 80), reason: raw.reason as FindReceipt['reason'],
+      depth: normalizeDepth(raw.depth, 'D-001'), value: Math.max(0, Math.floor(numberOr(raw.value, 0))), at: Math.max(0, numberOr(raw.at, 0)) });
+  }
+  return receipts;
+}
+
 function normalizeFloor(saved: Record<string, unknown>, fallback: FloorState): FloorState {
   const savedNodes = Array.isArray(saved.nodes) ? saved.nodes : [];
   return {
     id: fallback.id,
     seed: numberOr(saved.seed, fallback.seed),
+    prospecting: normalizeProspecting(saved.prospecting),
     nodes: fallback.nodes.map((node) => normalizeNode(savedNodes.find((candidate) => asRecord(candidate)?.id === node.id), node)),
     loot: normalizeLootArray(saved.loot),
     cargo: normalizeLootArray(saved.cargo),
@@ -577,6 +606,7 @@ function normalizeNode(value: unknown, fallback: MiningNode): MiningNode {
     hp: Math.ceil(fraction * fallback.maxHp - 1e-9),
     respawnTimer: Math.min(1, Math.max(0, numberOr(saved.respawnTimer, 0)) / Math.max(0.1, numberOr(saved.respawnDelay, fallback.respawnDelay))) * fallback.respawnDelay,
     minedCount: Math.min(1e9, Math.max(0, Math.floor(numberOr(saved.minedCount, 0)))),
+    fossilMisses: Math.min(7, Math.max(0, Math.floor(numberOr(saved.fossilMisses, 0)))),
     coreExtracted: Math.min(CORE_RESERVES[fallback.id] ?? 0, Math.max(0, Math.floor(numberOr(saved.coreExtracted, 0)))),
   };
 }
@@ -619,7 +649,7 @@ function normalizeLootArray(value: unknown): LootStack[] {
     if (!kind) return [];
     const definition = LOOT[kind];
     const originDepth = saved.originDepth ? normalizeDepth(saved.originDepth, 'D-001') : undefined;
-    return [{
+    const item: LootStack = {
       id: typeof saved.id === 'string' ? saved.id : 'loot-migrated',
       kind,
       name: definition.name,
@@ -634,7 +664,14 @@ function normalizeLootArray(value: unknown): LootStack[] {
       ...(originDepth ? { originDepth } : {}),
       ...(typeof saved.sourceCrewId === 'string' ? { sourceCrewId: saved.sourceCrewId } : {}),
       ...(typeof saved.equipmentSeed === 'number' ? { equipmentSeed: saved.equipmentSeed >>> 0 } : {}),
-    } satisfies LootStack];
+    };
+    if (item.category === 'ORE' && typeof saved.quality === 'string' && Object.hasOwn(ORE_QUALITY, saved.quality)) {
+      applyOreQuality(item, saved.quality as OreQuality);
+    }
+    const specimen = specimenContents(saved.specimen, kind);
+    if (specimen) { item.specimen = specimen; item.name = 'Unidentified fossil'; item.rarity = 'RARE'; item.value = 42; }
+    if (item.equipmentSeed !== undefined && originDepth === 'D-030') { item.name = 'Recovered field tool'; item.rarity = 'RARE'; }
+    return [item];
   });
 }
 
@@ -656,6 +693,8 @@ function normalizeCollection(value: unknown, fallback: CollectionState): Collect
         ...base,
         discovered: typeof match.discovered === 'boolean' ? match.discovered : numberOr(match.count, 0) > 0,
         count: Math.max(0, Math.floor(numberOr(match.count, 0))),
+        restorationSpent: Math.min(Math.max(0, Math.floor(numberOr(match.count, 0)) - 1), Math.max(0, Math.floor(numberOr(match.restorationSpent, 0)))),
+        restored: Boolean(match.restored),
       } : base;
     }),
   };

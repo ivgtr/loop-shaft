@@ -1,4 +1,4 @@
-import { ANOMALIES, CORE_PROTOCOLS, PASSIVES, RESEARCH } from '../config';
+import { ANOMALIES, CORE_PROTOCOLS, LOOT, PASSIVES, RESEARCH } from '../config';
 import type { GameState } from '../types';
 import type { GameCommand } from '../../runtime/commands';
 
@@ -12,6 +12,7 @@ export function managementFeedback(state: GameState, command: GameCommand): stri
       const item = state.run.phase5.equipment.inventory.find((candidate) => candidate.id === command.itemId);
       return `${item?.name ?? 'Equipment'} equipped by ${crew?.name ?? 'Player'}.`;
     }
+    case 'restore-fossil': return state.meta.collection.entries.some((entry) => entry.kind === command.kind && entry.restored) ? `${LOOT[command.kind].name} restored for the collection.` : 'Restoration is not available.';
     case 'research': return `${RESEARCH[command.research].name} started.`;
     case 'protocol': return `${CORE_PROTOCOLS[command.protocol].name} installed permanently.`;
     case 'toggle-passive': return `${PASSIVES[command.passive].name} ${state.meta.passives.active.includes(command.passive) ? 'activated' : 'deactivated'}.`;

@@ -22,7 +22,7 @@ export interface EffectiveModifiers {
   respawnSpeedMultiplier: number;
 }
 
-export function getModifiers(state: GameState): EffectiveModifiers {
+export function getModifiers(state: GameState, carrying = state.run.character.carried.length > 0): EffectiveModifiers {
   const run = state.run;
   let playerMoveSpeed = PLAYER_MOVE_SPEED[run.boots.level];
   let porterMoveSpeed = PORTER_MOVE_SPEED;
@@ -38,7 +38,7 @@ export function getModifiers(state: GameState): EffectiveModifiers {
   let researchWeightMultiplier = 1;
   let respawnSpeedMultiplier = 1;
 
-  if (state.meta.passives.active.includes('LONG_STRIDE') && run.character.carried.length === 0) playerMoveSpeed *= 1.65;
+  if (state.meta.passives.active.includes('LONG_STRIDE') && !carrying) playerMoveSpeed *= 1.65;
   if (state.meta.passives.active.includes('FOSSIL_HUNTER')) fossilWeightMultiplier *= 2.35;
   if (run.elevator.rhythmBoostTrips > 0) elevatorSpeed *= 1.65;
 
@@ -84,7 +84,7 @@ export function getModifiers(state: GameState): EffectiveModifiers {
           researchWeightMultiplier *= 1 + affix.value;
           break;
         case 'LIGHT_FRAME':
-          playerMoveSpeed *= 1 + affix.value;
+          if (carrying) playerMoveSpeed *= 1 + affix.value;
           break;
         case 'SURVEY_LAMP':
           treasureChanceMultiplier *= 1 + affix.value * 0.25;

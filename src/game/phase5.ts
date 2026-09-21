@@ -1,6 +1,8 @@
 import { CARGO_ROUTE_DURATION, COLLECT_DURATION, CREW_BOARD_COST, CREW_HIRE_COSTS, CREW_MINER_MOVE_SPEED, CREW_PORTER_CAPACITY, CREW_PORTER_MOVE_SPEED, CREW_SLOT_COSTS, CREW_TRAVEL_DURATION, D180_EXTENSION_COST, LOOT, OFFLINE_CAP_SECONDS, OFFLINE_STEP_SECONDS, PLAYER_PACK_CAPACITY, PORTER_COLLECT_DURATION, SWING, WORLD } from './config';
 import { canPlayerAccessNode, localCargoDropX, processDeepEvents, updateDeepGame } from './deepGame';
 import { depthDistance } from './depth';
+import { rememberFind } from './appraisal';
+import { activeProspect, prospectPriorityValue } from './prospecting';
 import { getModifiers } from './modifiers';
 import { finishingDamage, rollMiningLoot, nodeTripEstimate, treasureChance, treasureCategoryChance, visibleSeams, coreReserveRemaining } from './mining';
 import { hashSeed, nextRandom } from './rng';
@@ -306,11 +308,13 @@ function chooseMinerNode(state: GameState, member: CrewMember, floor: FloorState
     const seam = visibleSeams(floor, node)[0];
     const bonus = seam ? LOOT[seam.kind] : null;
     const bonusRate = seam ? 1 / Math.max(1, seam.at - (node.minedCount ?? 0)) : 0;
+    const prospect = activeProspect(floor, node);
+    const prospectRate = prospect ? 1 / (prospect.required - prospect.work) : 0;
     if (member.minerPriority === 'RESEARCH') return (treasureCategoryChance(state, node, 'RESEARCH') * 5
-      + (bonus?.dataValue ?? 0) * bonusRate) / Math.max(1, travel + work + haul);
-    if (member.minerPriority === 'RARE') return (treasureChance(state, node) + bonusRate + (coreReserveRemaining(node) > 0 ? node.coreWeight : 0))
+      + (bonus?.dataValue ?? 0) * bonusRate + (prospect?.signal === 'RESEARCH' ? 3 * prospectRate : 0)) / Math.max(1, travel + work + haul);
+    if (member.minerPriority === 'RARE') return (treasureChance(state, node) + bonusRate + prospectRate + (coreReserveRemaining(node) > 0 ? node.coreWeight : 0))
       / Math.max(1, travel + work + haul * 0.5);
-    return (estimate.averageScrap + (bonus?.value ?? 0) * bonusRate) / Math.max(1, travel + work + haul * estimate.averageWeight / CREW_PORTER_CAPACITY);
+    return (estimate.averageScrap + (bonus?.value ?? 0) * bonusRate + prospectPriorityValue(floor, node)) / Math.max(1, travel + work + haul * estimate.averageWeight / CREW_PORTER_CAPACITY);
   };
   return nodes.sort((a, b) => score(b) - score(a) || a.id.localeCompare(b.id))[0];
 }
@@ -635,13 +639,18 @@ function appraiseEquipmentDrop(state: GameState, lootId: string): void {
   if (index < 0) return;
   const drop = drops[index]!;
   const item = generateEquipmentItem(state, drop.seed, drop.baseId, drop.slot);
-  state.run.phase5.equipment.inventory.push(item);
+  const equipment = state.run.phase5.equipment;
+  const current = equipment.inventory.find((candidate) => candidate.id === equipment.equippedPlayer[item.slot]);
+  const first = !equipment.inventory.some((candidate) => candidate.slot === item.slot);
+  const newOption = item.affixes.some((affix) => !current?.affixes.some((old) => old.id === affix.id && old.value >= affix.value));
+  equipment.inventory.push(item);
+  rememberFind(state, { id: item.id, name: item.name, depth: drop.sourceDepth, value: 0, reason: 'GEAR' });
   drops.splice(index, 1);
   if (!state.meta.equipmentDiscoveries.includes(item.baseId)) state.meta.equipmentDiscoveries.push(item.baseId);
   if (item.baseId.startsWith('deep-') && !state.meta.deepDiscoveries.includes(item.baseId)) state.meta.deepDiscoveries.push(item.baseId);
-  if (!state.meta.ancientDiscoveries.includes(item.baseId)) state.meta.ancientDiscoveries.push(item.baseId);
-  if (!state.run.phase5.ancient.discoveries.includes(item.baseId)) state.run.phase5.ancient.discoveries.push(item.baseId);
-  emit(state, 'EQUIPMENT_APPRAISED', { id: item.id, baseId: item.baseId, slot: item.slot, rarity: item.rarity, seed: item.seed });
+  if (drop.sourceDepth !== 'D-030' && !state.meta.ancientDiscoveries.includes(item.baseId)) state.meta.ancientDiscoveries.push(item.baseId);
+  if (drop.sourceDepth !== 'D-030' && !state.run.phase5.ancient.discoveries.includes(item.baseId)) state.run.phase5.ancient.discoveries.push(item.baseId);
+  emit(state, 'EQUIPMENT_APPRAISED', { id: item.id, name: item.name, baseId: item.baseId, slot: item.slot, rarity: item.rarity, seed: item.seed, first, newOption });
 }
 
 export function generateEquipmentItem(state: GameState, seed: number, baseId: string, slot: EquipmentSlot): EquipmentItem {
@@ -651,9 +660,10 @@ export function generateEquipmentItem(state: GameState, seed: number, baseId: st
     return cursor / 0x100000000;
   };
   const rarityRoll = random();
-  const rarity: EquipmentRarity = rarityRoll < 0.04 ? 'ANCIENT' : rarityRoll < 0.2 ? 'EPIC' : rarityRoll < 0.55 ? 'RARE' : 'COMMON';
-  const affixCount = rarity === 'ANCIENT' ? 3 : rarity === 'EPIC' ? 2 : rarity === 'RARE' ? (random() < 0.5 ? 1 : 2) : 1;
-  const pool = affixPool(slot, baseId.startsWith('deep-'));
+  const field = baseId === 'field-pick';
+  const rarity: EquipmentRarity = field ? (rarityRoll < 0.25 ? 'RARE' : 'COMMON') : rarityRoll < 0.04 ? 'ANCIENT' : rarityRoll < 0.2 ? 'EPIC' : rarityRoll < 0.55 ? 'RARE' : 'COMMON';
+  const affixCount = field ? 1 : rarity === 'ANCIENT' ? 3 : rarity === 'EPIC' ? 2 : rarity === 'RARE' ? (random() < 0.5 ? 1 : 2) : 1;
+  const pool: EquipmentAffixId[] = field ? ['FOSSIL_BREAKER', 'LIGHT_FRAME', 'RESEARCH_PRISM'] : affixPool(slot, baseId.startsWith('deep-'));
   const chosen: EquipmentAffix[] = [];
   while (chosen.length < Math.min(affixCount, pool.length)) {
     const id = pool[Math.floor(random() * pool.length)]!;
@@ -664,10 +674,10 @@ export function generateEquipmentItem(state: GameState, seed: number, baseId: st
   return {
     id,
     baseId,
-    name: equipmentName(baseId, rarity),
+    name: field ? (chosen[0]?.id === 'FOSSIL_BREAKER' ? 'Fossil Pick' : chosen[0]?.id === 'LIGHT_FRAME' ? 'Lightweight Pick' : 'Survey Pick') : equipmentName(baseId, rarity),
     slot,
     rarity,
-    level: 1 + EQUIPMENT_RARITY_RANK[rarity],
+    level: field ? 1 : 1 + EQUIPMENT_RARITY_RANK[rarity],
     affixes: chosen,
     seed,
   };
@@ -696,7 +706,7 @@ function makeAffix(id: EquipmentAffixId, rarity: EquipmentRarity, roll: number):
     }
     case 'RESEARCH_PRISM': {
       const value = Number((0.18 * scale * variable).toFixed(3));
-      return { id, name: 'Research Prism', value, description: `Research signal chance +${Math.round(value * 100)}%` };
+      return { id, name: 'Research Prism', value, description: `Research signal weight +${Math.round(value * 100)}%` };
     }
     case 'FOSSIL_BREAKER': {
       const value = Number((0.36 * scale * variable).toFixed(3));
@@ -746,7 +756,7 @@ function makeAffix(id: EquipmentAffixId, rarity: EquipmentRarity, roll: number):
 }
 
 function equipmentName(baseId: string, rarity: EquipmentRarity): string {
-  const base = baseId === 'sealed-cutter' ? 'Ancient Cutter'
+  const base = baseId === 'field-pick' ? 'Field Pick' : baseId === 'sealed-cutter' ? 'Ancient Cutter'
     : baseId === 'workshop-pick' ? 'Workshop Pick'
       : baseId === 'field-frame' ? 'Field Frame Pack'
         : baseId === 'survey-lamp' ? 'Survey Lamp'

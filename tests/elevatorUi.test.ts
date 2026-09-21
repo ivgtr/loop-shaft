@@ -29,7 +29,7 @@ beforeEach(() => {
 describe('elevator presentation follows the simulation', () => {
   it('keeps shipment, destinations, and new connections in separate views', () => {
     const state = ready();
-    expect(elevatorItems(state, 'dispatch').map((i) => i.id)).toEqual(['shipment', 'relay', 'dispatch-BALANCED', 'dispatch-BULK', 'dispatch-PRIORITY']);
+    expect(elevatorItems(state, 'dispatch').map((i) => i.id)).toEqual(['shipment', 'relay', 'dispatch-BALANCED', 'dispatch-BULK', 'dispatch-PRIORITY', 'porter-hold']);
     expect(elevatorItems(state, 'travel').map((i) => i.id)).toEqual(['D-001']);
     expect(elevatorItems(state, 'extend').map((i) => i.id)).toEqual(['D-030']);
     expect(elevatorItems(state, 'extend')[0]!.command).toEqual({ type: 'extend-d030' });

@@ -1,3 +1,5 @@
+import { togglePorterHold } from '../game/simulation';
+import { restoreFossil } from '../game/appraisal';
 import { setDispatchPolicy } from '../game/dispatch';
 import { GameAudio } from '../game/audio';
 import { SAVE_INTERVAL, WORLD } from '../game/config';
@@ -424,7 +426,7 @@ export class GameRuntime {
       const item = selectedStationItem(this.state, this.management);
       if (item.reason || item.action?.type !== 'command' || JSON.stringify(item.action.command) !== JSON.stringify(command)
         || (item.confirmKey && item.confirmKey !== this.management.confirmation)) return;
-    } else if (command.type === 'reboot') return; // A saved or direct command cannot bypass the review screen.
+    } else if (command.type === 'reboot' || command.type === 'restore-fossil') return; // A saved or direct command cannot bypass the review screen.
     if (this.helpOpen) { if (command.type === 'cancel') this.closeHelp(); return; }
     if (this.elevatorUi) {
       if (command.type === 'cancel') { this.closeElevator(); return; }
@@ -489,6 +491,8 @@ export class GameRuntime {
       case 'travel': requestPhase5Travel(this.state, command.depth); break;
       case 'choose-anomaly': chooseAnomaly(this.state, command.anomaly); break;
       case 'toggle-passive': togglePassive(this.state, command.passive); break;
+      case 'toggle-porter-hold': togglePorterHold(this.state); break;
+      case 'restore-fossil': restoreFossil(this.state, command.kind); break;
       case 'research': startResearch(this.state, command.research); break;
       case 'protocol': purchaseCoreProtocol(this.state, command.protocol); break;
       case 'reboot': confirmPhase5Reboot(this.state); break;

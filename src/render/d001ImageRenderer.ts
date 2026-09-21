@@ -1,3 +1,4 @@
+import { drawCargoMark } from './discoveryCues';
 import { WORLD } from '../game/config';
 import type { GameState, LootKind, LootStack, MiningNode } from '../game/types';
 import type { AssetStore } from './assets/assetStore';
@@ -159,7 +160,7 @@ const CARGO_FRAME = {
 
 export function drawD001Cargo(
   ctx: CanvasRenderingContext2D,
-  item: Pick<LootStack, 'kind' | 'category' | 'equipmentSeed'>,
+  item: Pick<LootStack, 'kind' | 'category' | 'equipmentSeed' | 'quality' | 'specimen'>,
   anchorX: number,
   anchorY: number,
   assets: D001AssetStore,
@@ -168,6 +169,7 @@ export function drawD001Cargo(
   if (!image) return false;
   const frame = CARGO_FRAME[cargoVisualClass(item)];
   ctx.drawImage(image, frame * 12, 0, 12, 10, Math.round(anchorX) - 6, Math.round(anchorY) - 10, 12, 10);
+  drawCargoMark(ctx, item, anchorX, anchorY);
   return true;
 }
 

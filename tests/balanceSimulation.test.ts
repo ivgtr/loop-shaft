@@ -1,3 +1,5 @@
+import { createGameState } from '../src/game/createGame';
+import { advanceProspecting, ORE_QUALITY } from '../src/game/prospecting';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -6,11 +8,17 @@ import { mean, percentile, runFirstCoreScenario, runIncomeScenario } from './fix
 
 const seeds = Array.from({ length: 12 }, (_, n) => 1001 + n * 7919);
 
+const progressSeeds = Array.from({ length: 16 }, (_, n) => 1001 + n * 7919);
 const report: Record<string, unknown> = {
   method: 'Deterministic scripted physical delivery, not human play time or an optimality proof.',
-  fixedStepSeconds: 0.1, incomeHorizonSeconds: 360, incomeSeeds: seeds,
+  fixedStepSeconds: 0.1, incomeHorizonSeconds: 360, incomeSeeds: seeds, progressSeeds,
+  progressionPolicy: "Normal commands, equips first delivered field tool, holds new Porter pickups when departing; leaves unclaimed floor cargo in place.",
   configSha256: createHash('sha256').update(readFileSync(new URL('../src/game/config.ts', import.meta.url))).digest('hex'),
   miningSha256: createHash('sha256').update(readFileSync(new URL('../src/game/mining.ts', import.meta.url))).digest('hex'),
+  prospectingSha256: createHash('sha256').update(readFileSync(new URL('../src/game/prospecting.ts', import.meta.url))).digest('hex'),
+  appraisalSha256: createHash('sha256').update(readFileSync(new URL('../src/game/appraisal.ts', import.meta.url))).digest('hex'),
+  phase5Sha256: createHash('sha256').update(readFileSync(new URL('../src/game/phase5.ts', import.meta.url))).digest('hex'),
+  scenarioSha256: createHash('sha256').update(readFileSync(new URL('./fixtures/balanceScenario.ts', import.meta.url))).digest('hex'),
   modifiersSha256: createHash('sha256').update(readFileSync(new URL('../src/game/modifiers.ts', import.meta.url))).digest('hex'),
 };
 afterAll(() => {
@@ -19,9 +27,29 @@ afterAll(() => {
 });
 
 describe('reproducible balance probes (scripted, not human play time)', () => {
+  it('measures the post-safeguard quality distribution and local gear droughts', () => {
+    const samples = [];
+    for (let seed = 1; seed <= 256; seed++) {
+      const state = createGameState(seed); const floor = state.run.floors['D-030'];
+      let firstQuality = 0; let firstGear = 0; let gear = 0; let maxMisses = 0; let multiplier = 0;
+      const counts = { NORMAL: 0, FINE: 0, PURE: 0 };
+      for (let n = 1; n <= 80; n++) {
+        const outcome = advanceProspecting(floor, floor.nodes[0]!);
+        counts[outcome.quality]++; multiplier += ORE_QUALITY[outcome.quality].multiplier;
+        if (outcome.quality !== 'NORMAL') firstQuality ||= n;
+        if (outcome.fieldGearSeed !== null) { firstGear ||= n; gear++; }
+        maxMisses = Math.max(maxMisses, floor.prospecting!.qualityMisses);
+      }
+      expect(firstQuality).toBeLessThanOrEqual(13); expect(firstGear).toBeLessThanOrEqual(6); expect(maxMisses).toBeLessThanOrEqual(12);
+      samples.push({ seed, firstQualityBreak: firstQuality, firstGearBreak: firstGear, maxQualityMisses: maxMisses, gear, counts, meanMultiplier: multiplier / 80 });
+    }
+    report.rewardStream = { method: '256 seeds x 80 D030 break resolutions; no walking or delivery time. Unweighted nominal quality multiplier, including safeguards, before per-item rounding. Not an income estimate.',
+      samples, qualityMeanMultiplier: mean(samples.map((r) => r.meanMultiplier)), firstQualityP90Break: percentile(samples.map((r) => r.firstQualityBreak), 0.9), firstGearP90Break: percentile(samples.map((r) => r.firstGearBreak), 0.9) };
+  });
+
   it('changes the useful income site after investment without requiring a forced rotation', () => {
     const rows = [];
-    for (const upgraded of [false, true]) for (const site of ['scrap-ledge', 'copper-pocket', 'fossil-crack', 'discover']) {
+    for (const upgraded of [false, true]) for (const site of ['scrap-ledge', 'copper-pocket', 'fossil-crack', 'discover', 'prospect']) {
       const outcomes = seeds.map((seed) => runIncomeScenario(seed, site, upgraded));
       rows.push({ upgraded, site, seconds: 360, seeds: seeds.length,
         meanScrap: Number(mean(outcomes.map((row) => row.scrap)).toFixed(1)),
@@ -53,7 +81,7 @@ describe('reproducible balance probes (scripted, not human play time)', () => {
 
   it('reaches the first physically delivered Core through either exploration or automation first', () => {
     const results = [];
-    for (const exploreEarly of [false, true]) for (const seed of seeds.slice(0, 6)) {
+    for (const exploreEarly of [false, true]) for (const seed of progressSeeds) {
       const result = runFirstCoreScenario(seed, exploreEarly);
       results.push({ exploreEarly, ...result });
     }
@@ -64,6 +92,9 @@ describe('reproducible balance probes (scripted, not human play time)', () => {
     });
     console.log('BALANCE_FIRST_CORE ' + JSON.stringify(results));
     for (const result of results) {
+      expect(result.firstGear).not.toBeNull();
+      expect(result.firstGear!).toBeLessThan(result.coreDelivered!);
+      expect(result.firstQuality).not.toBeNull();
       expect(result.firstDelivery, `first delivery seed ${result.seed}`).not.toBeNull();
       expect(result.firstFossil, `first fossil seed ${result.seed}`).not.toBeNull();
       expect(result.d030, `D030 seed ${result.seed}`).not.toBeNull();

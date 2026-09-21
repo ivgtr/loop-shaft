@@ -1,5 +1,6 @@
 import { LOOT, WORLD, SWING, COLLECT_DURATION, LOAD_DURATION, VALUABLE_KINDS, FOSSIL_KINDS, RELIC_KINDS, RESEARCH_KINDS } from './config';
 import { getModifiers } from './modifiers';
+import { advanceProspecting, applyOreQuality, prospectExtraWeight, prospectReward, prospectSurvey, sealSpecimen } from './prospecting';
 import { hashSeed, nextRandom } from './rng';
 import type { DepthId, FloorState, GameEventType, GameState, LootCategory, LootKind, LootStack, MiningNode } from './types';
 
@@ -111,7 +112,8 @@ export function rollMiningLoot(state: GameState, floor: FloorState, node: Mining
   const seams = visibleSeams(floor, node);
   node.minedCount = (node.minedCount ?? 0) + 1;
   const spawned: LootStack[] = [];
-  const add = (requested: LootKind): void => {
+  const rewards = advanceProspecting(floor, node);
+  const add = (requested: LootKind, sealed = false, fieldGearSeed: number | null = null): void => {
     let kind = requested;
     if (LOOT[kind].category === 'CORE') {
       const remaining = coreReserveRemaining(node);
@@ -127,10 +129,20 @@ export function rollMiningLoot(state: GameState, floor: FloorState, node: Mining
       x: node.x + (nextRandom(state) - 0.5) * 14, y: node.y - 4, originDepth: floor.id,
       ...(source.crewId ? { sourceCrewId: source.crewId } : {}),
     };
+    applyOreQuality(item, rewards.quality);
+    if (sealed) sealSpecimen(item, floor, (floor.prospecting?.breaks ?? 0) * 7 + spawned.length);
+    if (fieldGearSeed !== null) {
+      item.equipmentSeed = fieldGearSeed;
+      item.name = 'Recovered field tool';
+      item.rarity = 'RARE';
+      state.run.phase5.equipment.drops.push({ lootId: item.id, seed: fieldGearSeed, baseId: 'field-pick', slot: 'TOOL', sourceDepth: floor.id });
+      emit('EQUIPMENT_DROP', { id: item.id, slot: 'TOOL', seed: fieldGearSeed });
+    }
     spawned.push(item);
     if (item.category !== 'ORE') {
       const categories = state.run.discovery.categoriesFound ??= [];
-      if (!categories.includes(item.category)) categories.push(item.category);
+      // A sealed tool is not a passive relic: do not consume the first-passive safeguard.
+      if (fieldGearSeed === null && !categories.includes(item.category)) categories.push(item.category);
       state.run.discovery.foundThisRun += 1;
       emit('DISCOVERY_FOUND', { id: item.id, name: item.name, rarity: item.rarity, category: item.category });
     }
@@ -166,7 +178,8 @@ export function rollMiningLoot(state: GameState, floor: FloorState, node: Mining
   const research = floor.id === 'D-060' && state.run.data === 0 && !categories.includes('RESEARCH') && discovery.d060NodeBreaks >= discovery.firstResearchBreak;
   // Every finite deep Core reserve makes progress even on an unlucky seed.
   const core = coreReserveRemaining(node) > 0 && node.minedCount % 6 === 0;
-  const safeguard = firstFind || fossil || relic || research || core;
+  const fossilPity = node.fossilWeight >= 0.45 && (node.fossilMisses ?? 0) >= 7;
+  const safeguard = firstFind || fossil || relic || research || core || fossilPity;
   const chance = treasureChance(state, node);
   const roll = nextRandom(state);
   const found = roll < chance || safeguard;
@@ -174,11 +187,34 @@ export function rollMiningLoot(state: GameState, floor: FloorState, node: Mining
   emit('LOOT_ROLL', { roll, chance, rare: found });
   if (found) {
     const weights = categoryWeights(state, node);
-    const category: LootCategory = core ? 'CORE' : research ? 'RESEARCH' : relic ? 'RELIC' : fossil ? 'FOSSIL'
+    const category: LootCategory = core ? 'CORE' : research ? 'RESEARCH' : relic ? 'RELIC' : fossil || fossilPity ? 'FOSSIL'
       : weights.some(([, weight]) => weight > 0) ? weighted(state, weights) : 'VALUABLE';
-    add(treasureKind(state, category, floor.id));
+    add(treasureKind(state, category, floor.id), category === 'FOSSIL');
   }
+  for (const prospect of rewards.prospects) {
+    add(prospectReward(floor, prospect), prospect.signal === 'FOSSIL');
+    emit('PROSPECT_EXTRACTED', { prospectId: prospect.id, signal: prospect.signal });
+  }
+  if (rewards.fieldGearSeed !== null) add('ANCIENT_TOOL_CRATE', false, rewards.fieldGearSeed);
+  for (const prospect of rewards.revealed) emit('PROSPECT_REVEALED', {
+    prospectId: prospect.id, targetNodeId: prospect.nodeId, signal: prospect.signal, required: prospect.required,
+  });
+  if (node.fossilWeight >= 0.45) node.fossilMisses = spawned.some((item) => item.category === 'FOSSIL') ? 0 : (node.fossilMisses ?? 0) + 1;
+  if (rewards.quality !== 'NORMAL') emit('ORE_QUALITY_FOUND', { quality: rewards.quality,
+    value: spawned.filter((item) => item.category === 'ORE').reduce((sum, item) => sum + item.value, 0) });
   return spawned;
+}
+
+export function playerMiningDamage(state: GameState, node: MiningNode): number {
+  let damage = state.run.tool.damage * getModifiers(state).miningDamageMultiplier;
+  const inventory = state.run.phase5.equipment.inventory;
+  for (const id of Object.values(state.run.phase5.equipment.equippedPlayer)) {
+    for (const affix of inventory.find((item) => item.id === id)?.affixes ?? []) {
+      if (affix.id === 'FOSSIL_BREAKER' && node.fossilWeight >= 0.45) damage *= 1 + affix.value;
+      if (affix.id === 'CORE_TUNER' && node.coreWeight > 0) damage *= 1 + affix.value;
+    }
+  }
+  return finishingDamage(state, node, damage);
 }
 
 /** Finish a small remainder instead of inflating an already-lethal damage number. */
@@ -196,7 +232,7 @@ export function maximumMiningDropWeight(state: GameState, floor: FloorState, nod
   const ordinary = count * Math.max(...node.commonKinds.map((kind) => LOOT[kind].weight));
   const seam = visibleSeams(floor, node).filter((entry) => entry.at === (node.minedCount ?? 0) + 1)
     .reduce((sum, entry) => sum + LOOT[entry.kind].weight, 0);
-  return ordinary + seam + 1.7;
+  return ordinary + seam + 1.7 + prospectExtraWeight(floor, node);
 }
 
 export function nodeRole(node: MiningNode): string {
@@ -211,6 +247,8 @@ export function nodeRole(node: MiningNode): string {
 
 export function nodeSurvey(state: GameState, floor: FloorState, node: MiningNode): string {
   const parts = [nodeRole(node)];
+  const prospect = prospectSurvey(floor, node);
+  if (prospect) parts.push(prospect);
   const seam = visibleSeams(floor, node)[0];
   if (floor.id === 'D-180' && (node.minedCount ?? 0) === 0) parts.push('Sealed equipment on first break');
   if (seam) parts.push(`${LOOT[seam.kind].name} in ${seam.at - (node.minedCount ?? 0)} breaks`);
