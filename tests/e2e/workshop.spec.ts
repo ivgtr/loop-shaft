@@ -162,6 +162,9 @@ test('offers all recovered equipment, including items older than the last eight'
   await ui(page, 'station-activate').click();
   expect((await saved(page)).run.phase5.equipment.equippedPlayer.TOOL).toBe('gear-0');
   await ui(page, 'station-previous').click();
+  // Page controls change the visible group; arrow keys still browse single items.
+  await expect(ui(page, 'station-item-gear-8')).toHaveAttribute('aria-pressed', 'true');
+  await ui(page, 'station-item-gear-11').click();
   await expect(ui(page, 'station-item-gear-11')).toHaveAttribute('aria-pressed', 'true');
   await ui(page, 'station-item-gear-11').focus();
   for (let i = 0; i < 5; i++) {
