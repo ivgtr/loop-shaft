@@ -1,0 +1,28 @@
+name: Discovery workspace
+on:
+  push:
+    branches: ['feat/readable-discoveries']
+    paths: ['.github/workflows/discovery-workspace.yml']
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Export tracked workspace and installed dependencies
+        run: |
+          git archive --format=tar HEAD > /tmp/loop-shaft-workspace.tar
+          tar --append --file=/tmp/loop-shaft-workspace.tar node_modules
+          gzip /tmp/loop-shaft-workspace.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: discovery-workspace
+          path: /tmp/loop-shaft-workspace.tar.gz
+          retention-days: 1
