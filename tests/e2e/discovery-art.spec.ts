@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createGameState } from '../../src/game/createGame';
+import { SAVE_INTERVAL } from '../../src/game/config';
 import { appraisePhysicalCargo, restoreFossil } from '../../src/game/appraisal';
 import { advanceProspecting, applyOreQuality, floorProspects } from '../../src/game/prospecting';
 import { SAVE_KEY, serializeGameState } from '../../src/game/save';
@@ -12,6 +13,8 @@ type Paint = { file: string; args: number[]; ui: boolean };
 type Capture = Window & { spritePaint: Paint[] };
 const ui = (page: Page, id: string) => page.locator(`.canvas-hit[data-ui-action="${id}"]`);
 const saved = (page: Page): Promise<GameState> => page.evaluate(key => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);
+// Async pickup/loading finish after the command save; allow the next periodic save.
+const persisted = { timeout: SAVE_INTERVAL * 2000 };
 async function seed(page: Page, state: GameState) {
   await page.addInitScript(({ key, value }) => {
     if (!localStorage.getItem(key)) localStorage.setItem(key, value);
@@ -89,11 +92,12 @@ test('the same Pure ore sprite travels from floor through hands and a closed mov
   state.run.character.x = 120; state.run.floors['D-001'].loot = [item]; await seed(page, state);
   const hasPure = async () => (await paints(page, 'discovery-cargo-atlas.png')).some(p => frame(p, 12, 10, 10) === cargoSpriteFrame(item));
   await expect.poll(hasPure).toBe(true); await ui(page, 'interact').click();
-  await expect.poll(async () => (await saved(page)).run.character.carried.map(i => i.id)).toEqual([item.id]);
+  await expect(page.getByRole('region', { name: 'Mining status' })).toContainText('PACK 2.0/8kg');
+  await expect.poll(async () => (await saved(page)).run.character.carried.map(i => i.id), persisted).toEqual([item.id]);
   await resetPaint(page); await expect.poll(hasPure).toBe(true);
   await info.attach('pure-in-hands', { body: await page.screenshot(), contentType: 'image/png' });
   await ui(page, 'return').click(); await expect(ui(page, 'send')).toBeEnabled({ timeout: 15000 });
-  await expect.poll(async () => (await saved(page)).run.elevator.cargo.map(i => i.id)).toEqual([item.id]);
+  await expect.poll(async () => (await saved(page)).run.elevator.cargo.map(i => i.id), persisted).toEqual([item.id]);
   await resetPaint(page); await expect.poll(hasPure).toBe(true); await ui(page, 'send').click();
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-elevator-state', 'ASCENDING');
   await expect.poll(() => paints(page, 'discovery-lift-gate-atlas.png')).not.toHaveLength(0);
