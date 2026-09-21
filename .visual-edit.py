@@ -1,20 +1,23 @@
 from pathlib import Path
-import base64, hashlib, subprocess, lzma
+import base64, hashlib, re, subprocess, lzma
 
-# Validated source changes only. Fail on concurrent edits before applying the patch.
-entries = [{'path': 'docs/discovery-visuals.md', 'before': None, 'after': '6bea8edc4da5e718e5a8e99dc40b1c90cd3647dfeab29aad0c23690850eb7ee6'}, {'path': 'docs/game-design-requirements.md', 'before': 'b6f61791d29bc721de86557e433067b7ebb7f5b4077bbce72d9b86bc5c084e1e', 'after': '2b59b19bbd1d4cfc15505dd6a119c0abc175841a109e48edfe7f7de26aab8d51'}, {'path': 'package.json', 'before': 'aa671970eb2947ca584aa6bfd40c5d5d27a9b8f7e6d51572216b5a3ccfd742fb', 'after': 'cd50ce971545426a297b53c2bdcf9c3cb672a11b3829d38330dfc6262f3c806b'}, {'path': 'public/assets/d001/runtime/player-recovered-tools-atlas.png', 'before': None, 'after': '63de556b85d0ae052a3877f886922b94a1ff8b66507354b531d1d17d40a98e48'}, {'path': 'scripts/field-tool-assets.mjs', 'before': None, 'after': '276b1dd125ddff6370f597759866403a0e7a9e1a6fc638ff439151030caefb0a'}, {'path': 'src/game/management/equipment.ts', 'before': '2595332b47d98b4f3beba58400dda853b336496504b85ebe2ec6c06c39573e7b', 'after': '6f9a425ac656effc1bfdbc5448251b483597c6a911965f5cdabafea549833e19'}, {'path': 'src/game/management/types.ts', 'before': '4e435ad9c6d8b4727d1d8e211195c54a90d29e6893760425000c70d4aedc89b5', 'after': '99a85431675fd93f37d112db6209689a60eb2ab64be045bac7f297e1956e2e30'}, {'path': 'src/render/assets/d001Manifest.ts', 'before': 'bd7099e303c4e815d2677eab769627e647e148d480d8b4b96eb30df0f6117bbd', 'after': 'd1e1aaa6dcaa23eddfe3c4c943b51c0f872e33360787d6dde67a73d7445aad7b'}, {'path': 'src/render/cargoSprites.ts', 'before': None, 'after': '3050d172ea9e3b626d0543dda7ed3734bd92ee6bede170f4cd8715b8f208430e'}, {'path': 'src/render/d001ImageRenderer.ts', 'before': '6b135ad40d16504ff5e96e375ce88819d1d2ed2e1100d21460ff598fd35f4076', 'after': 'fc8da65381347040c295b61b9e43e2a559534100e932ae586ca7e224ea43706f'}, {'path': 'src/render/discoveryArt.ts', 'before': None, 'after': '0bda937611664aef44d964aeb8f6fd575498e20e6084b8b53325fe09379ae86e'}, {'path': 'src/render/discoveryCues.ts', 'before': '13dbdc64e1de4692ad070644641704880b649235220688695d4630efabad13eb', 'after': 'db1d932101bfa1daa8250aa9c416e9cebf9f72eccd3591a3c97fd6496b3e876f'}, {'path': 'src/render/entities.ts', 'before': 'f286c4549fbc8366abd588ddbefc175ecf853597e328d8b42ddb65d1a503da35', 'after': '337592713513dbb6607e12aface6c5999e1c814ed116f9956b667de13639aa00'}, {'path': 'src/render/equipmentArt.ts', 'before': None, 'after': '69df41c92f0620137f7aa84a5b7d4c6eed3718dc8582eeb0a22d84342f9ae7b2'}, {'path': 'src/render/gameRenderer.ts', 'before': '24f6d3a463657dbc1b6b7106c719787cb04fb9b053b5071281ed413fa27e51fb', 'after': '6bcbe7567bda425d926376e0a67f712f9ea65581df6db64cd3f869d21e09e81d'}, {'path': 'src/render/managementUi.ts', 'before': '2344b7847899975817cc46c6327d4a1f79a6a031d80bbe25aab51751f1874e2e', 'after': '59c357bb0b597b7e1b25da08f5dbaab191d46fc608c1740eb0fe7a1f38df8caa'}, {'path': 'src/render/phase5Renderer.ts', 'before': '210568c3a9a821ccd8e0fbc56093a607c4f5e279ab0cad4acc6496d7f4dd3308', 'after': '3f9198d92c8074b8e1d8aaa111530f1d348cc0b24a0f15b9915e304a17e7ca6d'}, {'path': 'src/render/pixelSprite.ts', 'before': None, 'after': 'dbb245aa246180e1b2f3629a86ad792d2cf4521525f602129eac688914ebe32a'}, {'path': 'src/render/semanticRenderState.ts', 'before': 'fcb945661d5711986ff54e45e50ce2b44f766a30352b68ed1ba1a1e3ad540939', 'after': '926e22a0558da1ec39206cdedac493ece9fd99f5a8f94f979055a3296e0e5891'}, {'path': 'tests/discoveryArt.test.ts', 'before': None, 'after': '7f899fed8c055462d460919407794c2932ad24a6eceae9ea26885e268e6d5256'}, {'path': 'tests/discoveryFeedback.test.ts', 'before': '0d29e40e823ec70b2582eca2ebc22e0978be7e961c70b3efea52020aa6046f20', 'after': '91a806d3c65ee31a74b28e756f679d14b061b72591aae42f9afdc5a303eb5f0e'}, {'path': 'tests/e2e/d001-visual.spec.ts', 'before': '7dad420e76d393b81f0f66cb8a8e1c0e0e0e0ca0948aa341a70c92438af30c9507', 'after': '6d4f562d1e4f380ff75a63665e9e3ece3066a0654d4c70fd41f52880f7090409'}, {'path': 'tests/e2e/discovery-art.spec.ts', 'before': None, 'after': '2733035fdc7b4ec4ec8a55a5eb4f63cbc9a4b41ed3b249aab719ade24ff88c0b'}]
-for entry in entries:
-    path = Path(entry['path'])
-    current = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
-    if current != entry['before']:
-        raise RuntimeError('Source changed: ' + entry['path'])
 parts = [Path('.visual-patch-' + str(i) + '.txt') for i in range(4)]
 patch = lzma.decompress(base64.b64decode(''.join(path.read_text() for path in parts)))
+assert hashlib.sha256(patch).hexdigest() == 'b182a00a3e057bc6cb8d8c4842f154e1a8f7dab30b1f6aa0229ca077909f50d7', 'Transfer mismatch'
+paths = re.findall(rb'^diff --git a/\S+ b/(\S+)$', patch, re.MULTILINE)
+paths = sorted(path.decode() for path in paths)
+assert len(paths) == 23 and all(not p.startswith('.') and '..' not in Path(p).parts for p in paths)
+# Verify source directly against the reviewed base commit, including new-file absence.
+for name in paths:
+    original = subprocess.run(['git', 'show', '879b2b31c814a33b19670e1449ea6801d765dc6f:' + name], capture_output=True)
+    path = Path(name)
+    assert (path.read_bytes() == original.stdout if original.returncode == 0 else not path.exists()), 'Source changed: ' + name
 subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
 subprocess.run(['git', 'apply', '-'], input=patch, check=True)
-for entry in entries:
-    if hashlib.sha256(Path(entry['path']).read_bytes()).hexdigest() != entry['after']:
-        raise RuntimeError('Result mismatch: ' + entry['path'])
-print('Verified', len(entries), 'files')
+hash = hashlib.sha256()
+for name in paths:
+    hash.update(name.encode() + b'\0' + Path(name).read_bytes() + b'\0')
+assert hash.hexdigest() == 'b93d2de5d5269497d5b252e57ddd4e0866bbb61e0f6870cd2ecb175a765b9da9', 'Output mismatch'
+print('Verified', len(paths), 'files against tested source')
 for path in parts:
     path.unlink()
