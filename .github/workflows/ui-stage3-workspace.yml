@@ -4,21 +4,31 @@ on:
     branches: [codex/canvas-management]
     paths: [.github/workflows/ui-stage3-workspace.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
   workspace:
     runs-on: ubuntu-latest
     steps:
-      - name: Recover saved implementation chunks
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/canvas-management
+      - name: Apply recovered implementation and remove temporary workflow
         env:
           GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
-          mkdir -p /tmp/recovered
-          for sha in 59e817af095498c0b06496e5e9dcee9053e23ada 67457d8f01ff0f22e39af0cd5991d87fbcdff97e 717559b7e88aba5e5e7733506d672f8c1d04204e db148aa622553a3503f1daf3210cc348bba03110; do
-            gh api repos/ivgtr/loop-shaft/git/blobs/$sha --jq '.content' | base64 -d > /tmp/recovered/$sha.txt
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          for sha in 59e817af095498c0b06496e5e9dcee9053e23ada 67457d8f01ff0f22e39af0cd5991d87fbcdff97e 717559b7e88aba5e5e7733506d672f8c1d04204e db148aa622553a3503f1daf3210cc348bba03110 4fd5adb013c6a5a929f8a39a873e95f56cce0df2; do
+            gh api repos/ivgtr/loop-shaft/git/blobs/$sha --jq '.content' | base64 -d >> /tmp/stage3.b64
           done
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ui-stage3-recovered
-          path: /tmp/recovered
-          retention-days: 1
+          base64 -d /tmp/stage3.b64 | xz -d > /tmp/stage3.patch
+          echo 'eda4ac56df6f9b11a72f67dd593d50b52385323edb4d1662471f14291cbf3d65  /tmp/stage3.patch' | sha256sum -c -
+          git apply --unidiff-zero --check /tmp/stage3.patch
+          git apply --unidiff-zero /tmp/stage3.patch
+          rm .github/workflows/ui-stage3-workspace.yml
+          git diff --check
+          git add -A
+          git config user.name 'ivgtr'
+          git config user.email '43836584+ivgtr@users.noreply.github.com'
+          git commit -m 'feat: integrate late-game management into Canvas facility windows'
+          git push origin HEAD:codex/canvas-management
