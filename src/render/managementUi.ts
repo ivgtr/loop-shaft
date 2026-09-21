@@ -99,7 +99,8 @@ export function layoutManagementUi(state: GameState, ui: ManagementState, viewpo
     top += 52;
   }
 
-  let contentTop = decision ? p.y + 66 : solo ? top + 14 : top;
+  // Text uses an alphabetic baseline; keep its glyphs below the tabs, not on their edge.
+  let contentTop = decision ? p.y + 66 : solo || (!compact && !view.roster) ? top + 14 : top;
   if (!confirming && (!solo || view.roster)) {
     const groupName = itemGroup(ui, view);
     if (compact || view.roster) {
