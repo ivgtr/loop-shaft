@@ -40,11 +40,11 @@ export function workshopItems(state: GameState): WorkshopItem[] {
       'Spend less time walking to veins and carrying ore back.'),
     upgrade('upgrade-pack', 'equipment', 'Frame Pack', 'pack', run.pack.level === 2, UPGRADE_COSTS.pack,
       `Carry capacity  ${number(run.character.backpackCapacity)}${run.pack.level === 1 ? ` → ${PLAYER_PACK_CAPACITY[2]}` : ''} kg`,
-      'Carry more ore per trip. Pickup and return remain your choice.'),
+      'Carry a full Copper Pocket batch in one trip. Can be bought before Auto Swing.'),
     upgrade('unlock-auto-swing', 'automation', 'Auto Swing', 'swing', run.automation.autoSwing.unlocked, UPGRADE_COSTS.autoSwing,
       run.automation.autoSwing.unlocked ? `Auto Swing  ${run.automation.autoSwing.enabled ? 'ON' : 'OFF'}` : 'Manual swings → repeated swings',
       'Mines the vein you approach. Does not pick up or carry ore.'),
-    upgrade('unlock-porter', 'automation', 'Hire Porter', 'porter', run.porter.enabled, UPGRADE_COSTS.porter,
+    upgrade('unlock-porter', 'automation', 'Hire Porter', 'porter', run.porter.enabled || run.phase5.crew.members.some((member) => member.role === 'PORTER'), UPGRADE_COSTS.porter,
       `Floor ore → lift  ·  ${number(run.porter.capacity)} kg/trip`,
       'A worker picks up and carries ore. You still choose when to send the lift.'),
   ];
@@ -84,6 +84,7 @@ export function workshopGuide(state: GameState): WorkshopGuide | null {
   const { run, meta } = state;
   if (meta.runIndex !== 1 || run.depth.current !== 'D-001' || run.depth.unlocked.length > 1 || meta.bestDepth !== 'D-001') return null;
   if (run.stats.elevatorTrips === 0 && run.scrap === 0) return null;
+  if (run.scrap >= 1200) return null;
   const next = nextWorkshopUpgrade(state);
   if (!next) return null;
   return { ready: next.command !== null,

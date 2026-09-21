@@ -44,29 +44,31 @@ export function getModifiers(state: GameState): EffectiveModifiers {
 
   switch (run.anomaly.selected) {
     case 'GOLD_RUSH':
-      commonYieldMultiplier *= 0.68;
+      commonYieldMultiplier *= 0.85;
       valuableWeightMultiplier *= 3.2;
-      treasureChanceMultiplier *= 1.15;
+      treasureChanceMultiplier *= 1.25;
       break;
     case 'HEAVY_WORLD':
-      playerMoveSpeed *= 0.72;
-      porterMoveSpeed *= 0.58;
+      playerMoveSpeed *= 0.8;
+      porterMoveSpeed *= 0.8;
       break;
     case 'EMPTY_SHAFT':
-      elevatorCapacity *= 0.55;
+      elevatorCapacity *= 0.65;
       elevatorSpeed *= 1.9;
       break;
     case 'FOSSIL_AGE':
       fossilWeightMultiplier *= 3.1;
       break;
     case 'LIVING_ROCK':
-      respawnSpeedMultiplier *= 3.2;
+      respawnSpeedMultiplier *= 2.2;
+      commonYieldMultiplier *= 1.2;
       break;
     case 'FRAGILE_REALITY':
-      miningDamageMultiplier *= 1.8;
-      anomalyWeightMultiplier *= 3.8;
+      miningDamageMultiplier *= 1.6;
+      commonYieldMultiplier *= 0.75;
+      anomalyWeightMultiplier *= 2.5;
       researchWeightMultiplier *= 1.15;
-      treasureChanceMultiplier *= 1.2;
+      treasureChanceMultiplier *= 1.1;
       break;
     case null:
       break;
@@ -119,7 +121,7 @@ function equippedPlayerItems(state: GameState): EquipmentItem[] {
 }
 
 export function appraisalMultiplier(state: GameState, category: LootCategory): number {
-  let value = state.run.anomaly.selected === 'HEAVY_WORLD' ? 1.55 : 1;
+  let value = state.run.anomaly.selected === 'HEAVY_WORLD' ? 1.35 : 1;
   if (state.run.anomaly.selected === 'FOSSIL_AGE' && category === 'ORE') value *= 0.62;
   if (state.meta.passives.active.includes('FOSSIL_HUNTER') && category === 'ORE') value *= 0.78;
   return value;

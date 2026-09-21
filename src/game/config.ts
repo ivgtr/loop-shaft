@@ -29,10 +29,10 @@ export const CREW_PORTER_CAPACITY = 8;
 export const BASE_ELEVATOR_CAPACITY = 20;
 export const BASE_ELEVATOR_SPEED = 0.34;
 export const AUTO_DISPATCH_MIN_WEIGHT = 11;
-export const D030_EXTENSION_COST = 2200;
-export const D060_EXTENSION_COST = 6500;
-export const D100_EXTENSION_COST = 7000;
-export const D180_EXTENSION_COST = 14500;
+export const D030_EXTENSION_COST = 1200;
+export const D060_EXTENSION_COST = 4800;
+export const D100_EXTENSION_COST = 6000;
+export const D180_EXTENSION_COST = 11000;
 export const D250_EXTENSION_COST = 12000;
 export const D400_EXTENSION_COST = 18000;
 export const D650_SHAFT_COST = 28000;
@@ -46,7 +46,7 @@ export const OFFLINE_STEP_SECONDS = 0.1;
 export const FLOOR_TRAVEL_DURATION = 2.8;
 export const FLOOR_TRAVEL_VIA_SURFACE_DURATION = 4.8;
 export const AUTO_SWING_MANUAL_SWINGS_REQUIRED = 6;
-export const UPGRADE_COSTS = { tool: 90, boots: 160, autoSwing: 180, pack: 450, porter: 700, autoDispatch: 1400 } as const;
+export const UPGRADE_COSTS = { tool: 90, boots: 160, autoSwing: 180, pack: 240, porter: 550, autoDispatch: 900 } as const;
 
 export const RAIL_INSTALL_COST = 2600;
 export const RAIL_PARTS_REQUIRED = 2;
@@ -140,8 +140,8 @@ export const ANOMALIES: Record<AnomalyId, { name: string; description: string }>
   HEAVY_WORLD: { name: 'Heavy World', description: 'Workers move slowly, but everything appraises for more.' },
   EMPTY_SHAFT: { name: 'Empty Shaft', description: 'Lift capacity shrinks; ascent and descent become much faster.' },
   FOSSIL_AGE: { name: 'Fossil Age', description: 'Fossils surge while ordinary metal loses appraisal value.' },
-  LIVING_ROCK: { name: 'Living Rock', description: 'Broken nodes knit themselves back together rapidly.' },
-  FRAGILE_REALITY: { name: 'Fragile Reality', description: 'Nodes break faster and anomalous objects surface more often.' },
+  LIVING_ROCK: { name: 'Living Rock', description: 'Nodes recover faster and yield more ordinary ore. Plan enough haul capacity.' },
+  FRAGILE_REALITY: { name: 'Fragile Reality', description: 'Brittle nodes and more anomalous finds, but fewer ordinary ore pieces.' },
 };
 export const ANOMALY_POOL = Object.keys(ANOMALIES) as AnomalyId[];
 
@@ -150,7 +150,7 @@ export const PASSIVES: Record<PassiveId, { name: string; description: string }> 
   ELEVATOR_RHYTHM: { name: 'Elevator Rhythm', description: 'Dispatch at 85%+ load to accelerate that round trip.' },
   FOSSIL_HUNTER: { name: 'Fossil Hunter', description: 'Fossil odds rise sharply, but ordinary ore appraises lower.' },
   LONG_STRIDE: { name: 'Long Stride', description: 'The miner moves much faster while carrying nothing.' },
-  LAST_SWING: { name: 'Last Swing', description: 'Hits against nodes at 10% HP or lower deal heavy finishing damage.' },
+  LAST_SWING: { name: 'Last Swing', description: 'Finish a hit that would leave at most 15% HP, capped at 75% of that hit. Saves a swing on small remnants.' },
 };
 
 export interface ResearchDefinition { name: string; description: string; dataCost: number; duration: number; prerequisite?: ResearchId; }
@@ -191,9 +191,9 @@ export const CORE_PROTOCOLS: Record<CoreProtocolId, ProtocolDefinition> = {
 
 export function createD001Nodes(): MiningNode[] {
   return [
-    node('scrap-ledge', 'Scrap Ledge', 'NEAR', 118, 30, 9, ['STONE', 'IRON'], 0.01, [1, 0, 0, 0, 0, 0], 2, 3, 6),
-    node('copper-pocket', 'Copper Pocket', 'MID', 356, 54, 17, ['IRON', 'COPPER'], 0.04, [1, 0, 0, 0, 0, 0], 3, 4, 9),
-    node('fossil-crack', 'Fossil Crack', 'FAR', 438, 96, 29, ['COPPER', 'IRON'], 0.12, [1, 0, 0, 0, 0, 0], 4, 6, 12),
+    node('scrap-ledge', 'Scrap Ledge', 'NEAR', 174, 30, 5, ['STONE', 'IRON'], 0.01, [1, 0, 0, 0, 0, 0], 2, 3, 6),
+    node('copper-pocket', 'Copper Pocket', 'MID', 356, 96, 17, ['IRON', 'COPPER'], 0.04, [1, 0, 0, 0, 0, 0], 4, 6, 16),
+    node('fossil-crack', 'Fossil Crack', 'FAR', 438, 96, 29, ['STONE', 'COPPER'], 0.22, [0.12, 0.88, 0, 0, 0, 0], 1, 2, 20),
   ];
 }
 
@@ -269,6 +269,6 @@ function node(
   return {
     id, name, profile, x, y: WORLD.floorY, hp, maxHp: hp, distanceMeters, commonKinds, treasureChance,
     valuableWeight: weights[0], fossilWeight: weights[1], relicWeight: weights[2], anomalyWeight: weights[3],
-    researchWeight: weights[4], coreWeight: weights[5], yieldMin, yieldMax, respawnTimer: 0, respawnDelay, access,
+    researchWeight: weights[4], coreWeight: weights[5], yieldMin, yieldMax, respawnTimer: 0, respawnDelay, access, minedCount: 0, coreExtracted: 0,
   };
 }

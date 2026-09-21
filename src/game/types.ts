@@ -149,6 +149,9 @@ export interface MiningNode {
   respawnTimer: number;
   respawnDelay: number;
   access?: SiteAccess;
+  /** Finite deposits consumed this Run; absent only in pre-balance v6 saves. */
+  minedCount?: number;
+  coreExtracted?: number;
 }
 
 export interface SwingState { elapsed: number; hitApplied: boolean; }
@@ -198,6 +201,7 @@ export interface Elevator {
   cargo: LootStack[];
   stateTimer: number;
   rhythmBoostTrips: number;
+  cargoWaitSeconds?: number;
   travel: FloorTravelState | null;
 }
 
@@ -207,7 +211,7 @@ export interface ToolEquipment {
 export interface BootsEquipment { id: 'player-boots'; slot: 'BOOTS'; level: 1 | 2; name: 'Work Boots' | 'Runner Boots'; }
 export interface PackEquipment { id: 'player-pack'; slot: 'PACK'; level: 1 | 2; name: 'Canvas Pack' | 'Frame Pack'; }
 export interface AutomationToggle { unlocked: boolean; enabled: boolean; }
-export interface AutomationState { autoSwing: AutomationToggle; autoDispatch: AutomationToggle; }
+export interface AutomationState { autoSwing: AutomationToggle; autoDispatch: AutomationToggle; dispatchPolicy?: import('./dispatch').DispatchPolicy; }
 export interface ProgressionStats { manualSwings: number; playerDeposits: number; porterDeposits: number; elevatorTrips: number; floorTrips: number; }
 
 export interface FloorState {

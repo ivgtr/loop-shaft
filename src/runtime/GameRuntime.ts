@@ -1,3 +1,4 @@
+import { setDispatchPolicy } from '../game/dispatch';
 import { GameAudio } from '../game/audio';
 import { SAVE_INTERVAL, WORLD } from '../game/config';
 import { createGameState } from '../game/createGame';
@@ -463,6 +464,7 @@ export class GameRuntime {
       case 'unlock-porter': unlockPorter(this.state); break;
       case 'unlock-auto-dispatch': unlockAutoDispatch(this.state); break;
       case 'toggle-auto-dispatch': toggleAutoDispatch(this.state); break;
+      case 'dispatch-policy': setDispatchPolicy(this.state, command.policy); break;
       case 'extend-d030': unlockD030(this.state); break;
       case 'extend-d060': unlockD060(this.state); break;
       case 'extend-d100': unlockD100(this.state); break;

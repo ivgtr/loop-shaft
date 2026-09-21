@@ -1,66 +1,11 @@
-import {
-  ANOMALY_KINDS,
-  CARGO_ROUTE_DURATION,
-  COLLECT_DURATION,
-  CORE_KINDS,
-  CREW_BOARD_COST,
-  CREW_HIRE_COSTS,
-  CREW_MINER_MOVE_SPEED,
-  CREW_PORTER_CAPACITY,
-  CREW_PORTER_MOVE_SPEED,
-  CREW_SLOT_COSTS,
-  CREW_TRAVEL_DURATION,
-  D180_EXTENSION_COST,
-  FOSSIL_KINDS,
-  LOOT,
-  OFFLINE_CAP_SECONDS,
-  OFFLINE_STEP_SECONDS,
-  PLAYER_PACK_CAPACITY,
-  PORTER_COLLECT_DURATION,
-  RESEARCH_KINDS,
-  RELIC_KINDS,
-  SWING,
-  VALUABLE_KINDS,
-  WORLD,
-} from './config';
+import { CARGO_ROUTE_DURATION, COLLECT_DURATION, CREW_BOARD_COST, CREW_HIRE_COSTS, CREW_MINER_MOVE_SPEED, CREW_PORTER_CAPACITY, CREW_PORTER_MOVE_SPEED, CREW_SLOT_COSTS, CREW_TRAVEL_DURATION, D180_EXTENSION_COST, LOOT, OFFLINE_CAP_SECONDS, OFFLINE_STEP_SECONDS, PLAYER_PACK_CAPACITY, PORTER_COLLECT_DURATION, SWING, WORLD } from './config';
 import { canPlayerAccessNode, localCargoDropX, processDeepEvents, updateDeepGame } from './deepGame';
 import { depthDistance } from './depth';
 import { getModifiers } from './modifiers';
+import { finishingDamage, rollMiningLoot, nodeTripEstimate, treasureCategoryChance, visibleSeams, coreReserveRemaining } from './mining';
 import { hashSeed, nextRandom, pick } from './rng';
-import {
-  armReboot,
-  canTravelToDepth,
-  cargoWeight,
-  drainEvents,
-  effectiveTreasureChance,
-  requestFloorTravel,
-  sendElevator,
-  updateGame,
-} from './simulation';
-import type {
-  CargoRoutingPriority,
-  CrewMember,
-  CrewRole,
-  EquipmentAffix,
-  EquipmentAffixId,
-  EquipmentItem,
-  EquipmentRarity,
-  EquipmentSlot,
-  FloorState,
-  GameEvent,
-  GameEventType,
-  GameState,
-  LootCategory,
-  LootKind,
-  LootStack,
-  MinerPriority,
-  MiningNode,
-  OfflineReport,
-  Phase5DepthId,
-  PorterPriority,
-  Rarity,
-  WorkerBody,
-} from './types';
+import { armReboot, canTravelToDepth, cargoWeight, drainEvents, requestFloorTravel, sendElevator, updateGame } from './simulation';
+import type { CargoRoutingPriority, CrewMember, CrewRole, EquipmentAffix, EquipmentAffixId, EquipmentItem, EquipmentRarity, EquipmentSlot, FloorState, GameEvent, GameEventType, GameState, LootKind, LootStack, MinerPriority, MiningNode, OfflineReport, Phase5DepthId, PorterPriority, Rarity, WorkerBody } from './types';
 
 const NODE_STOP_DISTANCE = 13;
 const D180 = 'D-180' as const;
@@ -252,7 +197,7 @@ function updateCrew(state: GameState, dt: number): void {
 
 export function crewMoveSpeed(state: GameState, member: CrewMember): number {
   let speed = member.role === 'MINER' ? CREW_MINER_MOVE_SPEED : CREW_PORTER_MOVE_SPEED;
-  if (state.run.anomaly.selected === 'HEAVY_WORLD') speed *= member.role === 'MINER' ? 0.72 : 0.58;
+  if (state.run.anomaly.selected === 'HEAVY_WORLD') speed *= 0.8;
   const tool = member.equipment.TOOL ? state.run.phase5.equipment.inventory.find((item) => item.id === member.equipment.TOOL) : undefined;
   if (tool) {
     const light = tool.affixes.find((affix) => affix.id === 'LIGHT_FRAME' || affix.id === 'COURIER_BOOTS');
@@ -350,26 +295,24 @@ function updateCrewMiner(state: GameState, member: CrewMember, dt: number): void
   }
 }
 
-function chooseMinerNode(_state: GameState, member: CrewMember, floor: FloorState): MiningNode | undefined {
+function chooseMinerNode(state: GameState, member: CrewMember, floor: FloorState): MiningNode | undefined {
   const nodes = floor.nodes.filter((node) => node.hp > 0 && canPlayerAccessNode(node));
-  if (nodes.length === 0) return undefined;
-  return [...nodes].sort((a, b) => {
-    if (member.minerPriority === 'RESEARCH') {
-      const score = b.researchWeight - a.researchWeight;
-      if (score) return score;
-    } else if (member.minerPriority === 'RARE') {
-      const score = rareNodeScore(b) - rareNodeScore(a);
-      if (score) return score;
-    } else if (member.minerPriority === 'NEAREST') {
-      const distance = Math.abs(a.x - member.body.x) - Math.abs(b.x - member.body.x);
-      if (distance) return distance;
-    }
-    return a.id.localeCompare(b.id);
-  })[0];
-}
-
-function rareNodeScore(node: MiningNode): number {
-  return node.treasureChance + node.relicWeight * 0.45 + node.coreWeight * 0.35;
+  const score = (node: MiningNode): number => {
+    if (member.minerPriority === 'NEAREST') return -Math.abs(node.x - member.body.x);
+    const travel = Math.abs(nodeDestination(node) - member.body.x) / Math.max(1, member.body.moveSpeed);
+    const work = Math.ceil(node.hp / crewMiningDamage(state, member, node)) * SWING.total;
+    const estimate = nodeTripEstimate(state, node);
+    const haul = 2 * Math.abs(node.x - localCargoDropX(state, member.assignedDepth)) / CREW_PORTER_MOVE_SPEED;
+    const seam = visibleSeams(floor, node)[0];
+    const bonus = seam ? LOOT[seam.kind] : null;
+    const bonusRate = seam ? 1 / Math.max(1, seam.at - (node.minedCount ?? 0)) : 0;
+    if (member.minerPriority === 'RESEARCH') return (treasureCategoryChance(state, node, 'RESEARCH') * 5
+      + (bonus?.dataValue ?? 0) * bonusRate) / Math.max(1, travel + work + haul);
+    if (member.minerPriority === 'RARE') return (node.treasureChance + bonusRate + (coreReserveRemaining(node) > 0 ? node.coreWeight : 0))
+      / Math.max(1, travel + work + haul * 0.5);
+    return (estimate.averageScrap + (bonus?.value ?? 0) * bonusRate) / Math.max(1, travel + work + haul * estimate.averageWeight / CREW_PORTER_CAPACITY);
+  };
+  return nodes.sort((a, b) => score(b) - score(a) || a.id.localeCompare(b.id))[0];
 }
 
 function findCrewNode(member: CrewMember, floor: FloorState): MiningNode | undefined {
@@ -388,7 +331,7 @@ function applyCrewMiningHit(state: GameState, member: CrewMember, floor: FloorSt
 }
 
 export function crewMiningDamage(state: GameState, member: CrewMember, node: MiningNode): number {
-  return Math.max(1, Math.round(11 * getModifiers(state).miningDamageMultiplier * crewToolMultiplier(state, member, node)));
+  return finishingDamage(state, node, 11 * getModifiers(state).miningDamageMultiplier * crewToolMultiplier(state, member, node));
 }
 
 function crewToolMultiplier(state: GameState, member: CrewMember, node: MiningNode): number {
@@ -406,58 +349,8 @@ function crewToolMultiplier(state: GameState, member: CrewMember, node: MiningNo
 }
 
 function spawnCrewLoot(state: GameState, member: CrewMember, floor: FloorState, node: MiningNode): void {
-  const modifiers = getModifiers(state);
-  const range = Math.max(1, node.yieldMax - node.yieldMin + 1);
-  const baseCount = node.yieldMin + Math.floor(nextRandom(state) * range);
-  const commonCount = Math.max(1, Math.round(baseCount * modifiers.commonYieldMultiplier));
-  for (let index = 0; index < commonCount; index += 1) {
-    const item = createPhysicalLoot(state, pick(state, node.commonKinds), node.x + (nextRandom(state) - 0.5) * 18, member.assignedDepth, member.id);
-    floor.loot.push(item);
-    emitLootSpawn(state, item, node.id);
-  }
-  const found = nextRandom(state) < effectiveTreasureChance(state, node);
-  emit(state, 'TREASURE_ROLL', { crewId: member.id, nodeId: node.id, depth: member.assignedDepth, found });
-  if (found) {
-    const category = chooseCrewTreasureCategory(state, node);
-    const kind = pickTreasureKind(state, category);
-    const treasure = createPhysicalLoot(state, kind, node.x + (nextRandom(state) - 0.5) * 14, member.assignedDepth, member.id);
-    floor.loot.push(treasure);
-    emit(state, 'DISCOVERY_FOUND', { id: treasure.id, name: treasure.name, rarity: treasure.rarity, category: treasure.category, nodeId: node.id, depth: member.assignedDepth });
-    emitLootSpawn(state, treasure, node.id);
-  }
+  floor.loot.push(...rollMiningLoot(state, floor, node, (type, data) => emit(state, type, data), { crewId: member.id }));
   if (member.assignedDepth === D180) spawnAncientSiteDrop(state, floor, node, member.id);
-}
-
-function chooseCrewTreasureCategory(state: GameState, node: MiningNode): LootCategory {
-  const modifiers = getModifiers(state);
-  const weights: Array<[LootCategory, number]> = [
-    ['VALUABLE', node.valuableWeight * modifiers.valuableWeightMultiplier],
-    ['FOSSIL', node.fossilWeight * modifiers.fossilWeightMultiplier],
-    ['RELIC', node.relicWeight * modifiers.relicWeightMultiplier],
-    ['ANOMALY', node.anomalyWeight * modifiers.anomalyWeightMultiplier],
-    ['RESEARCH', node.researchWeight * modifiers.researchWeightMultiplier],
-    ['CORE', node.coreWeight],
-  ];
-  const total = weights.reduce((sum, [, weight]) => sum + weight, 0);
-  if (total <= 0) return 'VALUABLE';
-  let roll = nextRandom(state) * total;
-  for (const [category, weight] of weights) {
-    roll -= weight;
-    if (roll <= 0) return category;
-  }
-  return 'VALUABLE';
-}
-
-function pickTreasureKind(state: GameState, category: LootCategory): LootKind {
-  switch (category) {
-    case 'VALUABLE': return pick(state, VALUABLE_KINDS);
-    case 'FOSSIL': return pick(state, FOSSIL_KINDS);
-    case 'RELIC': return pick(state, RELIC_KINDS);
-    case 'ANOMALY': return pick(state, ANOMALY_KINDS);
-    case 'RESEARCH': return pick(state, RESEARCH_KINDS);
-    case 'CORE': return pick(state, CORE_KINDS);
-    case 'ORE': return 'IRON';
-  }
 }
 
 function updateCrewPorter(state: GameState, member: CrewMember, dt: number): void {
@@ -703,7 +596,7 @@ export function processPhase5Events(state: GameState, events: readonly GameEvent
 }
 
 function spawnAncientSiteDrop(state: GameState, floor: FloorState, node: MiningNode, sourceId: string): void {
-  let chance = node.id === 'sealed-chamber' ? 0.1 : node.id === 'ruined-workshop' ? 0.08 : 0.04;
+  let chance = (node.minedCount ?? 0) === 1 ? 1 : node.id === 'sealed-chamber' ? 0.1 : node.id === 'ruined-workshop' ? 0.08 : 0.04;
   if (state.run.research.completed.includes('SALVAGE_ANALYSIS')) chance *= 1.18;
   if (nextRandom(state) >= chance) {
     if (node.id === 'archive-vault' && nextRandom(state) < 0.12) {
