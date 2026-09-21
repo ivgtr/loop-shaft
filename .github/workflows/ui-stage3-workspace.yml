@@ -10,10 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Export tracked workspace for UI implementation
-        run: git archive --format=tar.gz HEAD -o /tmp/loop-shaft-workspace.tar.gz
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Export locked dependencies for local validation
+        run: tar -czf /tmp/loop-shaft-deps.tar.gz node_modules
       - uses: actions/upload-artifact@v4
         with:
-          name: ui-stage3-workspace
-          path: /tmp/loop-shaft-workspace.tar.gz
+          name: ui-stage3-deps
+          path: /tmp/loop-shaft-deps.tar.gz
           retention-days: 1
