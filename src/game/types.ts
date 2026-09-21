@@ -1,5 +1,6 @@
 export type CharacterState =
   | 'IDLE'
+  | 'MOVING_TO_POINT'
   | 'MOVING_TO_NODE'
   | 'MINING'
   | 'COLLECTING'
@@ -163,6 +164,8 @@ export interface WorkerBody {
 export interface Character extends WorkerBody {
   state: CharacterState;
   targetNodeId: string | null;
+  /** Absent in older v6 saves; manual point movement treats absence as no destination. */
+  moveTargetX?: number | null;
   backpackCapacity: number;
   swing: SwingState | null;
   collectTimer: number;

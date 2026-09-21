@@ -2,7 +2,6 @@ import {
   ANOMALY_KINDS,
   ANOMALY_POOL,
   AUTO_DISPATCH_MIN_WEIGHT,
-  AUTO_SWING_MANUAL_SWINGS_REQUIRED,
   CORE_KINDS,
   COLLECT_DURATION,
   CORE_PROTOCOLS,
@@ -28,6 +27,11 @@ import {
 } from './config';
 import { createNewRun } from './createGame';
 import { appraisalMultiplier, getModifiers } from './modifiers';
+import {
+  atPlayerLoadingPoint, cancelPlayerAction, canMoveToNode, MINE_INPUT_BUFFER,
+  miningTarget, nearbyPlayerLoot, PLAYER_LOAD_X, PLAYER_MINE_REACH,
+  playerControlAvailable, playerInteraction, upgradeBlockReason,
+} from './playerControls';
 import { hashSeed, nextRandom, pick } from './rng';
 import type {
   AnomalyId,
@@ -48,7 +52,6 @@ import type {
 } from './types';
 
 const NODE_STOP_DISTANCE = 13;
-const PLAYER_LOAD_X = WORLD.elevatorX - 19;
 const PORTER_LOAD_X = WORLD.elevatorX + 28;
 const RARITY_RANK: Record<Rarity, number> = { COMMON: 0, UNCOMMON: 1, RARE: 2, EPIC: 3, RELIC: 4, ANOMALY: 5 };
 const DEPTH_RANK: Record<DepthId, number> = { 'D-001': 1, 'D-030': 30, 'D-060': 60, 'D-100': 100, 'D-180': 180, 'D-250': 250, 'D-400': 400, 'D-650': 650 };
@@ -78,13 +81,15 @@ export function selectNode(state: GameState, nodeId: string): boolean {
   const node = currentFloor(state).nodes.find((candidate) => candidate.id === nodeId);
   if (!node) return false;
   state.selection = { type: 'node', id: nodeId };
+  if (!canMoveToNode(state, node)) return false;
+  const character = state.run.character;
+  // Re-selecting the same job must not restart movement or cancel its swing.
+  if (character.targetNodeId === nodeId && ['MINING', 'MOVING_TO_NODE'].includes(character.state)) return true;
+  cancelPlayerAction(state);
+  character.targetNodeId = nodeId;
+  character.facing = node.x >= character.x ? 1 : -1;
+  character.state = 'MOVING_TO_NODE';
   emit(state, 'PLAYER_INPUT_MOVE', { nodeId });
-  if (node.hp <= 0 || state.run.character.carried.length > 0) return false;
-  if (!['IDLE', 'MINING', 'MOVING_TO_NODE'].includes(state.run.character.state)) return false;
-  state.run.character.targetNodeId = nodeId;
-  state.run.character.swing = null;
-  state.run.character.facing = node.x >= state.run.character.x ? 1 : -1;
-  state.run.character.state = 'MOVING_TO_NODE';
   emit(state, 'MINER_MOVE_START', { nodeId, distance: node.distanceMeters });
   return true;
 }
@@ -100,12 +105,43 @@ export function selectResearchTerminal(state: GameState): void { if (state.run.d
 export function selectCoreConsole(state: GameState): void { if (state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) state.selection = { type: 'core-console' }; }
 export function selectCoreChamber(state: GameState): void { if (state.run.depth.current === 'D-100') state.selection = { type: 'core-chamber' }; }
 
-export function requestMine(state: GameState): boolean {
-  if (!canStartSwing(state)) return false;
-  const node = findTargetNode(state)!;
+export function requestMine(state: GameState, nodeId?: string): boolean {
+  const node = miningTarget(state, nodeId);
+  if (!node || !canMine(state, node.id)) return false;
+  const character = state.run.character;
+  character.moveTargetX = null;
+  character.targetNodeId = node.id;
+  character.state = 'MINING';
+  state.selection = { type: 'node', id: node.id };
   emit(state, 'PLAYER_INPUT_MINE', { nodeId: node.id });
   state.run.stats.manualSwings += 1;
   return beginSwing(state, node);
+}
+
+export function requestPlayerReturn(state: GameState): boolean {
+  if (!playerControlAvailable(state) || state.run.character.carried.length === 0) return false;
+  cancelPlayerAction(state);
+  const character = state.run.character;
+  character.state = 'RETURNING';
+  character.facing = PLAYER_LOAD_X >= character.x ? 1 : -1;
+  emit(state, 'MINER_RETURN', { weight: cargoWeight(character.carried) });
+  return true;
+}
+
+export function requestPlayerInteraction(state: GameState): boolean {
+  const interaction = playerInteraction(state);
+  if (interaction.reason) return false;
+  if (interaction.type === 'collect') {
+    cancelPlayerAction(state);
+    state.run.character.state = 'COLLECTING';
+  } else if (interaction.type === 'load') {
+    cancelPlayerAction(state);
+    beginCharacterLoading(state);
+  } else if (interaction.type === 'workbench') selectWorkbench(state);
+  else if (interaction.type === 'elevator') selectElevator(state);
+  else if (interaction.type === 'scanner') selectScanner(state);
+  else return false;
+  return true;
 }
 
 export function sendElevator(state: GameState): boolean {
@@ -114,7 +150,7 @@ export function sendElevator(state: GameState): boolean {
 
 export function upgradeTool(state: GameState): boolean {
   const run = state.run;
-  if (run.tool.level !== 1 || !spendScrap(state, UPGRADE_COSTS.tool)) return false;
+  if (upgradeBlockReason(state, 'upgrade-tool') || !spendScrap(state, UPGRADE_COSTS.tool)) return false;
   run.tool = { id: 'player-tool', slot: 'TOOL', level: 2, name: 'Steel Pickaxe', damage: 16 };
   emit(state, 'EQUIPMENT_CHANGED', { slot: 'TOOL', name: run.tool.name, level: 2, damage: run.tool.damage });
   return true;
@@ -122,7 +158,7 @@ export function upgradeTool(state: GameState): boolean {
 
 export function upgradeBoots(state: GameState): boolean {
   const run = state.run;
-  if (run.tool.level !== 2 || run.boots.level !== 1 || !spendScrap(state, UPGRADE_COSTS.boots)) return false;
+  if (upgradeBlockReason(state, 'upgrade-boots') || !spendScrap(state, UPGRADE_COSTS.boots)) return false;
   run.boots = { id: 'player-boots', slot: 'BOOTS', level: 2, name: 'Runner Boots' };
   applyEffectiveParameters(state);
   emit(state, 'EQUIPMENT_CHANGED', { slot: 'BOOTS', name: run.boots.name, level: 2, moveSpeed: run.character.moveSpeed });
@@ -131,8 +167,7 @@ export function upgradeBoots(state: GameState): boolean {
 
 export function unlockAutoSwing(state: GameState): boolean {
   const run = state.run;
-  if (run.boots.level !== 2 || run.automation.autoSwing.unlocked
-    || run.stats.manualSwings < AUTO_SWING_MANUAL_SWINGS_REQUIRED || !spendScrap(state, UPGRADE_COSTS.autoSwing)) return false;
+  if (upgradeBlockReason(state, 'unlock-auto-swing') || !spendScrap(state, UPGRADE_COSTS.autoSwing)) return false;
   run.automation.autoSwing = { unlocked: true, enabled: true };
   emit(state, 'AUTOMATION_UNLOCKED', { automation: 'AUTO_SWING', enabled: true });
   return true;
@@ -147,7 +182,7 @@ export function toggleAutoSwing(state: GameState): boolean {
 
 export function upgradePack(state: GameState): boolean {
   const run = state.run;
-  if (!run.automation.autoSwing.unlocked || run.pack.level !== 1 || !spendScrap(state, UPGRADE_COSTS.pack)) return false;
+  if (upgradeBlockReason(state, 'upgrade-pack') || !spendScrap(state, UPGRADE_COSTS.pack)) return false;
   run.pack = { id: 'player-pack', slot: 'PACK', level: 2, name: 'Frame Pack' };
   run.character.backpackCapacity = PLAYER_PACK_CAPACITY[2];
   emit(state, 'EQUIPMENT_CHANGED', { slot: 'PACK', name: run.pack.name, level: 2, capacity: run.character.backpackCapacity });
@@ -156,7 +191,7 @@ export function upgradePack(state: GameState): boolean {
 
 export function unlockPorter(state: GameState): boolean {
   const run = state.run;
-  if (run.pack.level !== 2 || run.porter.enabled || !spendScrap(state, UPGRADE_COSTS.porter)) return false;
+  if (upgradeBlockReason(state, 'unlock-porter') || !spendScrap(state, UPGRADE_COSTS.porter)) return false;
   run.porter.enabled = true;
   run.porter.state = 'FIND_LOOT';
   emit(state, 'PORTER_UNLOCKED', { capacity: run.porter.capacity, moveSpeed: run.porter.moveSpeed });
@@ -165,7 +200,7 @@ export function unlockPorter(state: GameState): boolean {
 
 export function unlockAutoDispatch(state: GameState): boolean {
   const run = state.run;
-  if (!run.porter.enabled || run.automation.autoDispatch.unlocked || !spendScrap(state, UPGRADE_COSTS.autoDispatch)) return false;
+  if (upgradeBlockReason(state, 'unlock-auto-dispatch') || !spendScrap(state, UPGRADE_COSTS.autoDispatch)) return false;
   run.automation.autoDispatch = { unlocked: true, enabled: false };
   emit(state, 'AUTOMATION_UNLOCKED', { automation: 'AUTO_DISPATCH', enabled: false });
   return true;
@@ -257,6 +292,7 @@ export function requestFloorTravel(state: GameState, depth: DepthId): boolean {
   const directRelay = run.research.completed.includes('MULTI_STOP_RELAY');
   const viaSurface = bothUnderground && !directRelay;
   const duration = viaSurface ? FLOOR_TRAVEL_VIA_SURFACE_DURATION : FLOOR_TRAVEL_DURATION;
+  cancelPlayerAction(state);
   run.elevator.travel = { from, to: depth, remaining: duration, duration, viaSurface };
   run.elevator.state = 'TRAVELING';
   run.elevator.stateTimer = 0;
@@ -349,7 +385,40 @@ export function commitReboot(state: GameState): boolean {
   return true;
 }
 
-export function canMine(state: GameState): boolean { return canStartSwing(state); }
+export function canMine(state: GameState, nodeId?: string): boolean {
+  const character = state.run.character;
+  const node = miningTarget(state, nodeId);
+  return playerControlAvailable(state) && ['IDLE', 'MINING'].includes(character.state)
+    && !character.swing && Boolean(node && Math.abs(node.x - character.x) <= PLAYER_MINE_REACH);
+}
+
+export function canRequestMine(state: GameState, nodeId?: string): boolean {
+  if (!playerControlAvailable(state)) return false;
+  const node = miningTarget(state, nodeId);
+  if (!node) return false;
+  if (canMine(state, node.id)) return true;
+  const character = state.run.character;
+  if (character.targetNodeId !== node.id) return false;
+  if (character.state === 'MINING' && character.swing) return SWING.total - character.swing.elapsed <= MINE_INPUT_BUFFER + 0.000001;
+  return character.state === 'MOVING_TO_NODE'
+    && Math.abs(character.x - nodeDestination(node)) / Math.max(1, character.moveSpeed) <= MINE_INPUT_BUFFER;
+}
+
+export function mineBlockReason(state: GameState, nodeId?: string): string | null {
+  if (canRequestMine(state, nodeId)) return null;
+  if (state.run.elevator.travel) return 'TRAVELING';
+  if (!playerControlAvailable(state)) return 'CHOOSE ANOMALY';
+  const character = state.run.character;
+  if (character.state === 'COLLECTING') return 'COLLECTING · MOVE TO CANCEL';
+  if (character.state === 'LOADING') return 'LOADING · MOVE TO CANCEL';
+  if (character.swing) return 'SWINGING';
+  if (['MOVING_TO_NODE', 'MOVING_TO_POINT', 'RETURNING'].includes(character.state)) return 'MOVING';
+  const node = nodeId ? currentFloor(state).nodes.find((candidate) => candidate.id === nodeId) : undefined;
+  if (node?.access === 'REMOTE_ONLY') return 'NO WALKWAY';
+  if (node && node.hp <= 0) return `DEPLETED · ${Math.ceil(node.respawnTimer)}s`;
+  return 'MOVE CLOSER TO A VEIN';
+}
+
 export function cargoWeight(cargo: readonly LootStack[]): number { return cargo.reduce((sum, item) => sum + item.weight, 0); }
 export function cargoValue(cargo: readonly LootStack[]): number { return cargo.reduce((sum, item) => sum + item.value, 0); }
 export function carriedWeight(state: GameState): number { return cargoWeight(state.run.character.carried); }
@@ -394,6 +463,7 @@ function enterDepth(state: GameState, depth: DepthId): void {
   run.character.x = WORLD.elevatorX - 20;
   run.character.state = 'IDLE';
   run.character.targetNodeId = null;
+  run.character.moveTargetX = null;
   run.character.swing = null;
   run.porter.x = WORLD.elevatorX + 28;
   run.porter.state = run.porter.enabled ? 'FIND_LOOT' : 'IDLE';
@@ -553,6 +623,13 @@ function unlockPassiveFromLoot(state: GameState, kind: LootKind): void {
 function updateCharacter(state: GameState, dt: number): void {
   const character = state.run.character;
   switch (character.state) {
+    case 'MOVING_TO_POINT':
+      if (typeof character.moveTargetX !== 'number' || !Number.isFinite(character.moveTargetX)
+        || moveToward(character, character.moveTargetX, dt)) {
+        character.moveTargetX = null;
+        character.state = 'IDLE';
+      }
+      return;
     case 'MOVING_TO_NODE': {
       const node = findTargetNode(state);
       if (!node || node.hp <= 0) { character.state = 'IDLE'; return; }
@@ -574,10 +651,7 @@ function updateCharacter(state: GameState, dt: number): void {
       }
       if (character.swing.elapsed >= SWING.total) {
         character.swing = null;
-        if (node.hp <= 0 && !state.run.porter.enabled) {
-          character.state = 'COLLECTING';
-          character.collectTimer = 0;
-        }
+        // The player decides when to collect and return, even before hiring a Porter.
       }
       return;
     }
@@ -586,19 +660,15 @@ function updateCharacter(state: GameState, dt: number): void {
       if (character.collectTimer < COLLECT_DURATION) return;
       pickUpNearbyLoot(state);
       character.collectTimer = 0;
-      if (character.carried.length > 0) {
-        character.state = 'RETURNING';
-        character.facing = PLAYER_LOAD_X >= character.x ? 1 : -1;
-        emit(state, 'MINER_RETURN', { weight: cargoWeight(character.carried) });
-      } else character.state = 'IDLE';
+      character.state = 'IDLE';
       return;
     case 'RETURNING':
       character.facing = PLAYER_LOAD_X >= character.x ? 1 : -1;
       if (moveToward(character, PLAYER_LOAD_X, dt)) beginCharacterLoadingOrWait(state);
       return;
     case 'WAITING_FOR_ELEVATOR':
-      if (character.carried.length === 0) { character.state = 'IDLE'; return; }
-      if (state.run.elevator.state === 'IDLE_BOTTOM' && canAnyFit(character.carried, availableElevatorCapacity(state))) beginCharacterLoading(state);
+      // Recover old saves without forcing them back into an uninterruptible wait.
+      character.state = 'IDLE';
       return;
     case 'LOADING':
       character.loadingTimer += dt;
@@ -671,7 +741,8 @@ function updateAutomation(state: GameState): void {
   if (!run.automation.autoDispatch.unlocked || !run.automation.autoDispatch.enabled || !canDispatchElevator(state)) return;
   const weight = cargoWeight(run.elevator.cargo);
   const full = weight >= run.elevator.maxLoad - 0.01;
-  const playerBlocked = run.character.state === 'WAITING_FOR_ELEVATOR' && !canAnyFit(run.character.carried, availableElevatorCapacity(state));
+  const playerBlocked = atPlayerLoadingPoint(state) && run.character.carried.length > 0
+    && !canAnyFit(run.character.carried, availableElevatorCapacity(state));
   const porterBlocked = run.porter.state === 'WAITING_FOR_ELEVATOR' && !canAnyFit(run.porter.carried, availableElevatorCapacity(state));
   if (weight < Math.min(AUTO_DISPATCH_MIN_WEIGHT, run.elevator.maxLoad) && !full && !playerBlocked && !porterBlocked) return;
   emit(state, 'AUTO_DISPATCH_TRIGGER', { weight, threshold: AUTO_DISPATCH_MIN_WEIGHT });
@@ -680,10 +751,8 @@ function updateAutomation(state: GameState): void {
 
 function canStartSwing(state: GameState): boolean {
   const character = state.run.character;
-  const node = findTargetNode(state);
-  if (state.run.elevator.travel || (state.run.depth.current === 'D-030' && !state.run.anomaly.selected)) return false;
-  if (character.state !== 'MINING' || character.swing || !node || node.hp <= 0) return false;
-  return Math.abs(character.x - nodeDestination(node)) <= 1.5;
+  return character.state === 'MINING' && Boolean(character.targetNodeId)
+    && canMine(state, character.targetNodeId ?? undefined);
 }
 
 function beginSwing(state: GameState, node: MiningNode): boolean {
@@ -827,9 +896,7 @@ function emitLootSpawn(state: GameState, item: LootStack): void {
 
 function pickUpNearbyLoot(state: GameState): void {
   const character = state.run.character;
-  const node = findTargetNode(state);
-  if (!node) return;
-  const nearby = currentFloor(state).loot.filter((item) => Math.abs(item.x - node.x) <= 28)
+  const nearby = nearbyPlayerLoot(state)
     .sort((a, b) => RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity] || a.id.localeCompare(b.id));
   for (const item of nearby) {
     if (cargoWeight(character.carried) + item.weight > character.backpackCapacity + 0.001) continue;
@@ -887,7 +954,7 @@ function removeFloorLoot(state: GameState, id: string): void {
 
 function beginCharacterLoadingOrWait(state: GameState): void {
   if (state.run.elevator.state === 'IDLE_BOTTOM' && canAnyFit(state.run.character.carried, availableElevatorCapacity(state))) beginCharacterLoading(state);
-  else state.run.character.state = 'WAITING_FOR_ELEVATOR';
+  else state.run.character.state = 'IDLE';
 }
 function beginCharacterLoading(state: GameState): void {
   state.run.character.state = 'LOADING';
@@ -905,7 +972,7 @@ function finishCharacterLoading(state: GameState): void {
     state.run.stats.playerDeposits += 1;
     emit(state, 'LOOT_DEPOSIT', { carrier: 'PLAYER', items: deposited.length, weight: cargoWeight(deposited), estimatedValue: cargoValue(deposited) });
   }
-  state.run.character.state = remaining.length > 0 ? 'WAITING_FOR_ELEVATOR' : 'IDLE';
+  state.run.character.state = 'IDLE';
 }
 function beginPorterLoadingOrWait(state: GameState): void {
   if (state.run.elevator.state === 'IDLE_BOTTOM' && canAnyFit(state.run.porter.carried, availableElevatorCapacity(state))) beginPorterLoading(state);

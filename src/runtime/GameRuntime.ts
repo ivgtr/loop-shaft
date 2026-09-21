@@ -1,5 +1,5 @@
 import { GameAudio } from '../game/audio';
-import { SAVE_INTERVAL } from '../game/config';
+import { SAVE_INTERVAL, WORLD } from '../game/config';
 import { createGameState } from '../game/createGame';
 import {
   canPlayerAccessNode,
@@ -31,15 +31,16 @@ import {
   unlockCrewOperations,
   updatePhase5,
 } from '../game/phase5';
+import { cancelPlayerAction, movePlayerTo, playerWalkBounds } from '../game/playerControls';
 import { loadFromStorage, saveToStorage } from '../game/save';
 import {
-  canMine,
   chooseAnomaly,
   currentFloor,
   drainEvents,
   moveToSelectedNode,
   purchaseCoreProtocol,
-  requestMine,
+  requestPlayerInteraction,
+  requestPlayerReturn,
   selectArchive,
   selectCoreChamber,
   selectCoreConsole,
@@ -68,11 +69,14 @@ import type { GameState, MinerPriority, PorterPriority } from '../game/types';
 import { GameRenderer } from '../render/gameRenderer';
 import type { InteractionTarget, Point } from '../render/interactionTargets';
 import type { GameCommand } from './commands';
+import { MiningInput } from './MiningInput';
 
 const FIXED_STEP = 1 / 60;
 const UI_UPDATE_INTERVAL = 100;
 const MINER_PRIORITIES: readonly MinerPriority[] = ['ANY', 'RESEARCH', 'RARE', 'NEAREST'];
 const PORTER_PRIORITIES: readonly PorterPriority[] = ['NEAREST', 'RESEARCH', 'CORE', 'RELIC', 'RARE', 'VALUE'];
+const LEFT_KEYS = ['KeyA', 'ArrowLeft'];
+const RIGHT_KEYS = ['KeyD', 'ArrowRight'];
 
 export interface GameSnapshot {
   readonly revision: number;
@@ -84,6 +88,10 @@ type Listener = () => void;
 export class GameRuntime {
   private readonly audio = new GameAudio();
   private readonly listeners = new Set<Listener>();
+  private readonly heldKeys = new Set<string>();
+  private readonly miningInput: MiningInput;
+  private pointerDirection: -1 | 0 | 1 = 0;
+  private directMoving = false;
   private renderer: GameRenderer | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private animationFrame: number | null = null;
@@ -98,11 +106,15 @@ export class GameRuntime {
   private hoveredKey: string | null = null;
 
   constructor(private readonly state: GameState) {
+    // Held directional input must never continue after reloading a save.
+    if (state.run.character.state === 'MOVING_TO_POINT' || state.run.character.state === 'WAITING_FOR_ELEVATOR') cancelPlayerAction(state);
+    this.miningInput = new MiningInput(state);
     this.snapshot = this.createSnapshot();
   }
 
   static fromStorage(): GameRuntime {
     const state = loadFromStorage() ?? createGameState();
+    if (state.run.character.state === 'MOVING_TO_POINT' || state.run.character.state === 'WAITING_FOR_ELEVATOR') cancelPlayerAction(state);
     if (applyOfflineProgress(state)) saveToStorage(state);
     return new GameRuntime(state);
   }
@@ -122,6 +134,7 @@ export class GameRuntime {
 
   detachCanvas(canvas: HTMLCanvasElement): void {
     if (this.canvas !== canvas) return;
+    this.releaseInputs();
     this.clearPointer();
     this.canvas = null;
     this.renderer = null;
@@ -131,6 +144,8 @@ export class GameRuntime {
     if (this.animationFrame !== null) return;
     this.previous = performance.now();
     window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
+    window.addEventListener('blur', this.handleWindowBlur);
     window.addEventListener('beforeunload', this.handleBeforeUnload);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
     this.animationFrame = requestAnimationFrame(this.frame);
@@ -139,14 +154,27 @@ export class GameRuntime {
   stop(): void {
     if (this.animationFrame !== null) cancelAnimationFrame(this.animationFrame);
     this.animationFrame = null;
+    this.releaseInputs();
     window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
+    window.removeEventListener('blur', this.handleWindowBlur);
     window.removeEventListener('beforeunload', this.handleBeforeUnload);
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     saveToStorage(this.state);
   }
 
-  unlockAudio(): void {
-    this.audio.unlock();
+  unlockAudio(): void { this.audio.unlock(); }
+
+  focusCanvas(): void { this.canvas?.focus({ preventScroll: true }); }
+
+  setPointerMovement(direction: -1 | 0 | 1): void {
+    this.pointerDirection = direction;
+    this.synchronizeMovement();
+  }
+
+  releaseInputs(): void {
+    this.miningInput.cancel();
+    this.clearMovementKeys();
   }
 
   updateCanvasPointer(clientX: number, clientY: number): void {
@@ -160,14 +188,17 @@ export class GameRuntime {
     this.setHoveredTarget(null);
   }
 
-  getHoveredTargetKey(): string | null {
-    return this.hoveredKey;
-  }
+  getHoveredTargetKey(): string | null { return this.hoveredKey; }
 
   selectCanvasTarget(clientX: number, clientY: number): void {
     const point = this.renderer?.clientToWorld(clientX, clientY);
     const target = point ? this.renderer?.resolveTarget(point, this.state) : null;
-    if (!target) return;
+    if (!target) {
+      // Blank scenery is not a command; the walkable floor is.
+      if (point && point.y >= WORLD.floorY - 2 && point.y <= WORLD.floorY + 35) this.dispatch({ type: 'walk', x: point.x });
+      return;
+    }
+    this.clearMovementKeys();
     this.applyCanvasTarget(target);
     this.publish();
   }
@@ -176,16 +207,29 @@ export class GameRuntime {
     const ref = target.ref;
     if (ref.type === 'node') {
       const node = currentFloor(this.state).nodes.find((candidate) => candidate.id === ref.id);
-      if (node && !canPlayerAccessNode(node)) this.state.selection = { type: 'node', id: ref.id };
-      else if (this.state.run.character.targetNodeId === ref.id && canMine(this.state)) requestMine(this.state);
-      else selectNode(this.state, ref.id);
-    } else if (ref.type === 'rail-stop') this.state.selection = { type: 'rail-stop', id: ref.id };
+      if (node && !canPlayerAccessNode(node)) {
+        this.miningInput.cancel();
+        this.state.selection = { type: 'node', id: ref.id };
+      } else if (this.state.run.character.targetNodeId === ref.id
+        && ['MINING', 'MOVING_TO_NODE'].includes(this.state.run.character.state)) {
+        // Busy same-node clicks are mining requests, never movement/cancel commands.
+        this.miningInput.request(ref.id);
+      } else {
+        this.miningInput.cancel();
+        selectNode(this.state, ref.id);
+      }
+      return;
+    }
+    this.miningInput.cancel();
+    if (ref.type === 'rail-stop') this.state.selection = { type: 'rail-stop', id: ref.id };
     else if (ref.type === 'cargo-hub') this.state.selection = { type: 'cargo-hub', id: ref.id };
     else if (ref.type === 'freight-control') this.state.selection = { type: 'freight-control' };
     else if (ref.type === 'bore-console') this.state.selection = { type: 'bore-console', id: ref.id };
     else if (ref.type === 'crew-board') selectCrewBoard(this.state);
-    else if (ref.type === 'elevator') selectElevator(this.state);
-    else if (ref.type === 'workbench') selectWorkbench(this.state);
+    else if (ref.type === 'elevator') {
+      selectElevator(this.state);
+      if (this.state.run.character.carried.length > 0 && !['RETURNING', 'LOADING'].includes(this.state.run.character.state)) requestPlayerReturn(this.state);
+    } else if (ref.type === 'workbench') selectWorkbench(this.state);
     else if (ref.type === 'scanner') selectScanner(this.state);
     else if (ref.type === 'archive') selectArchive(this.state);
     else if (ref.type === 'research') selectResearchTerminal(this.state);
@@ -194,9 +238,14 @@ export class GameRuntime {
   }
 
   dispatch(command: GameCommand): void {
+    if (['move', 'walk', 'return', 'interact', 'cancel', 'travel', 'reboot'].includes(command.type)) this.releaseInputs();
     switch (command.type) {
       case 'move': moveToSelectedNode(this.state); break;
-      case 'mine': requestMine(this.state); break;
+      case 'walk': movePlayerTo(this.state, command.x); break;
+      case 'mine': this.miningInput.request(command.nodeId); break;
+      case 'interact': requestPlayerInteraction(this.state); break;
+      case 'return': requestPlayerReturn(this.state); break;
+      case 'cancel': cancelPlayerAction(this.state); this.state.selection = null; break;
       case 'send': sendElevator(this.state); break;
       case 'upgrade-tool': upgradeTool(this.state); break;
       case 'upgrade-boots': upgradeBoots(this.state); break;
@@ -245,6 +294,7 @@ export class GameRuntime {
     this.saveTimer += delta;
     while (this.accumulator >= FIXED_STEP) {
       updateGame(this.state, FIXED_STEP);
+      this.miningInput.update();
       updatePhase5(this.state, FIXED_STEP);
       this.state.meta.bestDepth = deeperDepth(this.state.meta.bestDepth, this.state.run.depth.current);
       this.accumulator -= FIXED_STEP;
@@ -270,20 +320,59 @@ export class GameRuntime {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    this.unlockAudio();
-    if (event.code !== 'Space') return;
+    if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
+    const canvasFocused = this.canvas !== null && document.activeElement === this.canvas;
+    const inGame = canvasFocused || Boolean(this.canvas?.closest('.game-root')?.contains(event.target as Node));
+    if (event.code === 'Escape' && inGame) {
+      event.preventDefault();
+      if (!event.repeat) { this.dispatch({ type: 'cancel' }); this.focusCanvas(); }
+      return;
+    }
+    // Native UI buttons retain Space/Enter activation; text editing never controls the miner.
+    if (!canvasFocused) return;
+    if (![...LEFT_KEYS, ...RIGHT_KEYS, 'Space', 'KeyE', 'KeyF'].includes(event.code)) return;
     event.preventDefault();
-    const selection = this.state.selection;
-    const selected = selection?.type === 'node'
-      ? currentFloor(this.state).nodes.find((node) => node.id === selection.id)
-      : undefined;
-    if (!selected || canPlayerAccessNode(selected)) this.dispatch({ type: 'mine' });
+    if (event.repeat) return;
+    this.unlockAudio();
+    if (LEFT_KEYS.includes(event.code) || RIGHT_KEYS.includes(event.code)) {
+      this.heldKeys.add(event.code);
+      this.synchronizeMovement();
+    } else if (event.code === 'Space') this.dispatch({ type: 'mine' });
+    else if (event.code === 'KeyE') this.dispatch({ type: 'interact' });
+    else if (event.code === 'KeyF') this.dispatch({ type: 'send' });
   };
 
-  private readonly handleBeforeUnload = (): void => saveToStorage(this.state);
+  private readonly handleKeyUp = (event: KeyboardEvent): void => {
+    if (this.heldKeys.delete(event.code)) this.synchronizeMovement();
+  };
+
+  private synchronizeMovement(): void {
+    const left = LEFT_KEYS.some((key) => this.heldKeys.has(key)) || this.pointerDirection < 0;
+    const right = RIGHT_KEYS.some((key) => this.heldKeys.has(key)) || this.pointerDirection > 0;
+    const direction = Number(right) - Number(left);
+    this.miningInput.cancel();
+    if (direction === 0) {
+      if (this.directMoving && this.state.run.character.state === 'MOVING_TO_POINT') cancelPlayerAction(this.state);
+      this.directMoving = false;
+    } else {
+      const [min, max] = playerWalkBounds(this.state);
+      this.directMoving = movePlayerTo(this.state, direction < 0 ? min : max);
+    }
+    this.publish();
+  }
+
+  private clearMovementKeys(): void {
+    this.heldKeys.clear();
+    this.pointerDirection = 0;
+    if (this.directMoving && this.state.run.character.state === 'MOVING_TO_POINT') cancelPlayerAction(this.state);
+    this.directMoving = false;
+  }
+
+  private readonly handleWindowBlur = (): void => { this.releaseInputs(); };
+  private readonly handleBeforeUnload = (): void => { this.releaseInputs(); saveToStorage(this.state); };
 
   private readonly handleVisibilityChange = (): void => {
-    if (document.visibilityState === 'hidden') saveToStorage(this.state);
+    if (document.visibilityState === 'hidden') { this.releaseInputs(); saveToStorage(this.state); }
   };
 
   private cycleMinerPriority(crewId: string): void {
