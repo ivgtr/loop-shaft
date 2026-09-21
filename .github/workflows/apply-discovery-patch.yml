@@ -31,7 +31,8 @@ jobs:
           git apply --check /tmp/discovery.patch
           git apply /tmp/discovery.patch
           node scripts/build-discovery-assets.mjs
-          rm .github/discovery-patch-{1,2,3}.b64 .github/workflows/apply-discovery-patch.yml
+          rm .github/discovery-patch-{1,2,3}.b64
+          git restore -- .github/workflows
       - run: npm ci
       - run: npm run assets:check && npm run typecheck && npm test && npm run build
       - name: Commit verified implementation without transfer files
@@ -40,4 +41,10 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git commit -m 'feat: make D001 discoveries readable through physical cargo and specimens'
-          git push origin HEAD:feat/readable-discoveries
+          git push origin HEAD:feat/readable-discoveries 2>&1 | tee /tmp/discovery-push.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: discovery-apply-result
+          path: /tmp/discovery-push.log
+          retention-days: 1
