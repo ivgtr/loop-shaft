@@ -61,7 +61,7 @@ for (const width of [390, 1280]) test(`selects the real priority policy and ship
   await info.attach(`shipment-policy-${width}`, { body: await page.screenshot(), contentType: 'image/png' });
   for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowLeft');
   await expect(ui(page, width < 680 ? 'lift-selected' : 'lift-item-relay')).toHaveAttribute('aria-pressed', 'true');
-  await expect(ui(page, 'lift-activate')).toHaveAccessibleName('ENABLE RELAY');
+  await expect(ui(page, 'lift-activate')).toHaveAccessibleName('AUTO DISPATCH ON');
   await ui(page, 'lift-activate').click();
   await expect(page.locator('.game-canvas')).toHaveAttribute('data-elevator-state', 'ASCENDING');
   expect((await saved(page)).run.data).toBe(0);
