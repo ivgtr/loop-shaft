@@ -11,7 +11,11 @@ import type {
 
 export type GameCommand =
   | { type: 'move' }
-  | { type: 'mine' }
+  | { type: 'walk'; x: number }
+  | { type: 'mine'; nodeId?: string }
+  | { type: 'interact' }
+  | { type: 'return' }
+  | { type: 'cancel' }
   | { type: 'send' }
   | { type: 'upgrade-tool' }
   | { type: 'upgrade-boots' }

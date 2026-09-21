@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { ContextPanel } from '../components/context/ContextPanel';
 import { GameCanvas } from '../components/game/GameCanvas';
+import { PlayerActions, WorldControls } from '../components/game/PlayerActions';
 import { ResourceHud, RunStatusHud } from '../components/hud/Hud';
 import type { GameRuntime } from '../runtime/GameRuntime';
 import { GameProvider } from './GameProvider';
@@ -19,11 +20,13 @@ export function App({ runtime }: { runtime: GameRuntime }) {
             <GameCanvas />
             <ResourceHud />
             <RunStatusHud />
+            <WorldControls />
           </div>
+          <PlayerActions />
           <ContextPanel />
-          <div className="help-line">
-            <span>Click / tap selects a vein or machine · <kbd>Space</kbd> mines when ready</span>
-            <span>Cargo stays physical: mine → carry → line → vertical transport → Surface.</span>
+          <div className="help-line" id="player-control-help">
+            <span><kbd>A</kbd>/<kbd>D</kbd> or <kbd>←</kbd>/<kbd>→</kbd> walk · <kbd>Space</kbd> mine · <kbd>E</kbd> interact · <kbd>F</kbd> send · <kbd>Esc</kbd> stop / close. Click floor to walk.</span>
+            <span>Cargo stays physical. Choose when to pick up and return; payment happens at Surface.</span>
           </div>
         </div>
       </div>

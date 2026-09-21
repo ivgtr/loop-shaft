@@ -1,19 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createGameState } from '../src/game/createGame';
-import {
-  deriveInitialLogisticsGuide,
-  isFirstLiveScrapGain,
-  isInitialLogisticsGuideEligible,
-} from '../src/game/initialLogisticsGuide';
+import { deriveInitialLogisticsGuide, isFirstLiveScrapGain, isInitialLogisticsGuideEligible } from '../src/game/initialLogisticsGuide';
 import { restoreGameState, serializeGameState } from '../src/game/save';
-import { canDispatchElevator, currentFloor, requestMine, selectNode, updateGame } from '../src/game/simulation';
+import { currentFloor, requestMine, selectNode, updateGame } from '../src/game/simulation';
 import type { GameEvent, GameState, LootStack } from '../src/game/types';
 
 describe('initial logistics guide', () => {
   it('starts at Scrap Ledge and follows another selected target through movement', () => {
     const state = createGameState(12001);
     expect(summary(state)).toEqual(['choose-vein', 'CLICK/TAP TO MOVE', 'node:scrap-ledge']);
-
     expect(selectNode(state, 'copper-pocket')).toBe(true);
     expect(summary(state)).toEqual(['moving-to-vein', 'MOVING TO VEIN', 'node:copper-pocket']);
   });
@@ -22,65 +17,61 @@ describe('initial logistics guide', () => {
     const state = arrivedAtScrapLedge();
     expect(summary(state)).toEqual(['mine-ready', 'MINE', 'node:scrap-ledge']);
     expect(deriveInitialLogisticsGuide(state)?.detailedMiningHelp).toBe(true);
-
     expect(requestMine(state)).toBe(true);
     expect(summary(state)).toEqual(['mining', 'MINING', 'character']);
     while (state.run.character.swing) updateGame(state, 1 / 60);
-
     expect(summary(state)).toEqual(['mine-ready', 'MINE', 'node:scrap-ledge']);
     expect(deriveInitialLogisticsGuide(state)?.detailedMiningHelp).toBe(false);
   });
 
-  it('prioritizes automatic cargo states and an actionable full lift', () => {
-    const state = createGameState(12003);
-    const cargo = loot();
-    state.run.character.targetNodeId = 'scrap-ledge';
-
+  it('explains optional pickup, carrying, return, and loading instead of forced automation', () => {
+    const state = arrivedAtScrapLedge();
+    currentFloor(state).loot.push(loot());
+    expect(summary(state)?.[0]).toBe('pickup-ready');
+    expect(deriveInitialLogisticsGuide(state)?.context).toContain('collect it later');
     state.run.character.state = 'COLLECTING';
     expect(summary(state)).toEqual(['collecting', 'COLLECTING', 'character']);
-
+    state.run.character.carried = currentFloor(state).loot.splice(0);
+    state.run.character.state = 'IDLE';
+    expect(summary(state)?.[0]).toBe('carrying');
+    expect(deriveInitialLogisticsGuide(state)?.context).toContain('Keep mining with cargo');
     state.run.character.state = 'RETURNING';
-    state.run.character.carried = [cargo];
     expect(summary(state)).toEqual(['returning', 'RETURNING WITH CARGO', 'character']);
-
-    state.run.character.state = 'WAITING_FOR_ELEVATOR';
-    expect(summary(state)).toEqual(['waiting-for-lift', 'WAITING FOR LIFT', 'character']);
-
+    state.run.character.x = 221;
+    state.run.character.state = 'IDLE';
+    expect(summary(state)?.[0]).toBe('load-ready');
     state.run.character.state = 'LOADING';
     state.run.elevator.state = 'LOADING';
     expect(summary(state)).toEqual(['loading-lift', 'LOADING LIFT', 'character']);
-
-    state.run.character.state = 'WAITING_FOR_ELEVATOR';
-    state.run.character.carried = [loot('cargo-2', 3)];
-    state.run.elevator.state = 'IDLE_BOTTOM';
-    state.run.elevator.cargo = [cargo];
-    expect(canDispatchElevator(state)).toBe(true);
-    expect(summary(state)).toEqual(['select-elevator', 'SELECT ELEVATOR', 'elevator']);
   });
 
-  it('guides selection, dispatch, ascent, and appraisal from elevator state', () => {
+  it('offers SEND on a full lift without forcing the player into a waiting state', () => {
+    const state = createGameState(12003);
+    state.run.character.carried = [loot('held', 3)];
+    state.run.elevator.cargo = [loot('loaded', 20)];
+    expect(summary(state)).toEqual(['send-to-surface', 'F · SEND TO SURFACE', 'elevator']);
+    expect(state.run.character.state).toBe('IDLE');
+  });
+
+  it('guides dispatch independently of selection, then ascent and appraisal', () => {
     const state = createGameState(12004);
     state.run.elevator.cargo = [loot()];
-    expect(summary(state)).toEqual(['select-elevator', 'SELECT ELEVATOR', 'elevator']);
-
+    expect(summary(state)).toEqual(['send-to-surface', 'F · SEND TO SURFACE', 'elevator']);
     state.selection = { type: 'elevator' };
-    expect(summary(state)).toEqual(['send-to-surface', 'SEND TO SURFACE', 'elevator']);
-
+    expect(summary(state)).toEqual(['send-to-surface', 'F · SEND TO SURFACE', 'elevator']);
     state.run.elevator.state = 'ASCENDING';
     expect(summary(state)).toEqual(['to-surface', 'TO SURFACE', 'elevator']);
-
     state.run.elevator.state = 'UNLOADING';
     expect(summary(state)).toEqual(['appraising', 'APPRAISING', 'elevator']);
   });
 
-  it('restores an in-progress stage without relying on selection', () => {
+  it('restores an in-progress return without relying on selection', () => {
     const state = createGameState(12005);
     state.selection = { type: 'elevator' };
     state.run.character.state = 'RETURNING';
     state.run.character.targetNodeId = 'scrap-ledge';
     state.run.character.carried = [loot()];
     const restored = restoreGameState(serializeGameState(state));
-
     expect(restored?.selection).toBeNull();
     expect(restored && summary(restored)).toEqual(['returning', 'RETURNING WITH CARGO', 'character']);
   });
@@ -107,12 +98,10 @@ describe('initial logistics guide', () => {
     state.eventHistory.push(first);
     state.run.stats.elevatorTrips = 1;
     expect(isFirstLiveScrapGain(state, first)).toBe(true);
-
     const second = event(20, 4);
     state.eventHistory.push(second);
     state.run.stats.elevatorTrips = 2;
     expect(isFirstLiveScrapGain(state, second)).toBe(false);
-
     const restored = restoreGameState(serializeGameState(state))!;
     expect(restored.events).toEqual([]);
     expect(isInitialLogisticsGuideEligible(restored)).toBe(false);
@@ -126,32 +115,17 @@ function arrivedAtScrapLedge(): GameState {
   expect(state.run.character.state).toBe('MINING');
   return state;
 }
-
 function summary(state: GameState): [string, string, string] | null {
   const guide = deriveInitialLogisticsGuide(state);
   if (!guide) return null;
-  const target = guide.target.kind === 'character'
-    ? 'character'
+  const target = guide.target.kind === 'character' ? 'character'
     : 'id' in guide.target.ref ? `${guide.target.ref.type}:${guide.target.ref.id}` : guide.target.ref.type;
   return [guide.step, guide.label, target];
 }
-
 function loot(id = 'cargo-1', weight = 2): LootStack {
-  return {
-    id,
-    kind: 'STONE',
-    name: 'Stone',
-    rarity: 'COMMON',
-    category: 'ORE',
-    weight,
-    value: 2,
-    dataValue: 0,
-    coreValue: 0,
-    x: currentFloor(createGameState(1)).nodes[0]!.x,
-    y: 201,
-  };
+  return { id, kind: 'STONE', name: 'Stone', rarity: 'COMMON', category: 'ORE', weight, value: 2,
+    dataValue: 0, coreValue: 0, x: currentFloor(createGameState(1)).nodes[0]!.x, y: 201 };
 }
-
 function event(id: number, amount: number): GameEvent {
   return { id, type: 'RESOURCE_GAIN', at: id, data: { resource: 'Scrap', amount, total: amount } };
 }

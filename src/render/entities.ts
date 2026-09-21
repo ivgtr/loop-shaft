@@ -181,7 +181,7 @@ function drawScanner(ctx: CanvasRenderingContext2D, state: GameState, now: numbe
 }
 
 function drawCharacter(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
-  const run = state.run; const c = run.character; const walking = c.state === 'MOVING_TO_NODE' || c.state === 'RETURNING'; const step = walking && Math.floor(now / 120) % 2 === 0 ? 1 : 0;
+  const run = state.run; const c = run.character; const walking = c.state === 'MOVING_TO_NODE' || c.state === 'MOVING_TO_POINT' || c.state === 'RETURNING'; const step = walking && Math.floor(now / 120) % 2 === 0 ? 1 : 0;
   const x = Math.round(c.x); const y = Math.round(c.y) - step; const dir = c.facing;
   ctx.fillStyle = '#6a4935'; ctx.fillRect(x - 3, y - 7, 7, 7); ctx.fillStyle = PALETTE.helmet; ctx.fillRect(x - 4, y - 9, 8, 3); ctx.fillStyle = PALETTE.worker; ctx.fillRect(x - 3, y - 4, 7, 6);
   ctx.fillStyle = run.boots.level === 1 ? '#4a5660' : '#87979d'; ctx.fillRect(x - 3, y + 2, 2, 4 + step); ctx.fillRect(x + 2, y + 2, 2, 5 - step);
