@@ -1,3 +1,6 @@
+import { DEPTH_ORDER } from './depth';
+import { elevatorItems } from './elevatorUi';
+import { workshopGuide } from './workshop';
 import { deriveInitialLogisticsGuide } from './initialLogisticsGuide';
 import { miningTarget, playerInteraction } from './playerControls';
 import { currentFloor, mineBlockReason } from './simulation';
@@ -6,6 +9,7 @@ import type { GameState } from './types';
 /** One readout source for paint, contextual help and assistive technology. */
 export function sceneReadout(state: GameState) {
   const guide = deriveInitialLogisticsGuide(state);
+  const goal = guide?.label ?? nextObjective(state);
   const selection = state.selection;
   const node = selection?.type === 'node'
     ? currentFloor(state).nodes.find((candidate) => candidate.id === selection.id) : miningTarget(state);
@@ -15,19 +19,24 @@ export function sceneReadout(state: GameState) {
   return {
     title: node?.name ?? `${state.run.depth.current} · SHAFT`,
     short: [node?.name, health, reason ?? 'READY TO MINE'].filter(Boolean).join(' · '),
-    detail: [guide?.context, node?.name, health, reason].filter(Boolean).join(' · '),
-    goal: guide?.label ?? nextObjective(state),
+    detail: [guide?.context ?? goal, node?.name, health, reason].filter(Boolean).join(' · '),
+    goal,
   };
 }
 
+/** Use the same live prerequisites as the lift, so completed objectives do not linger. */
 export function nextObjective(state: GameState): string {
-  const { run } = state;
+  const { run, meta } = state;
+  const upgrade = workshopGuide(state);
+  if (upgrade) return upgrade.label;
   if (run.depth.current === 'D-650') return 'D-650 · End of the known shaft';
-  if (run.depth.current === 'D-400') return run.deepAutomation.bores.length ? 'Deliver Deep Components; research Deep Shaft Geometry' : 'Inspect Remote-only sites for Bore installation';
-  if (run.depth.current === 'D-250') return run.logistics.lines.length ? 'Route bulk cargo through Rail and Freight' : 'Research Rail Logistics; restore the line';
-  if (run.depth.current === 'D-180') return 'Recover the Lost Signal Sample and deliver it';
-  if (run.depth.current === 'D-100') return run.pendingCore ? 'Reboot, or inspect the next shaft connection' : 'Break the Core Shell; deliver the fragments';
-  if (run.depth.current === 'D-060') return 'Collect Data; research Core Resonance';
-  if (run.depth.current === 'D-030') return run.anomaly.selected ? 'Deliver a collectible and unlock a passive' : 'Choose an Anomaly at the scanner';
-  return 'Update your equipment at the Workshop';
+  if (run.depth.current === 'D-100') {
+    if (!run.pendingCore) return 'Break the Core Shell; deliver the fragments';
+    if (meta.runIndex === 1) return 'Reboot at the Core Chamber; keep the appraised Core';
+  }
+  const nextDepth = DEPTH_ORDER[DEPTH_ORDER.indexOf(run.depth.current) + 1];
+  if (nextDepth && run.depth.unlocked.includes(nextDepth)) return `LIFT · TRAVEL TO ${nextDepth}`;
+  const connection = elevatorItems(state, 'extend').find((item) => item.id === nextDepth);
+  if (connection) return connection.command ? `LIFT · ${connection.actionLabel}` : `${connection.name} · ${connection.reason}`;
+  return 'Inspect the next connection at the Lift';
 }
