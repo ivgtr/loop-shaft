@@ -35,8 +35,12 @@ export function stationSelection(station: Station): Selection {
 
 export function createManagementState(state: GameState, request: StationRequest, returnSelection = state.selection): ManagementState {
   const ui: ManagementState = { ...request, tab: request.tab ?? '', subjectId: request.subjectId ?? null,
-    selectedId: request.selectedId ?? '', detailPage: 0, confirmation: null, notice: null,
+    selectedId: request.selectedId ?? '', detailPage: 0, detailsOpen: false, optionId: null, confirmation: null, notice: null,
     depth: state.run.depth.current, runIndex: state.meta.runIndex, returnSelection };
+  if (ui.station === 'crew' && !ui.subjectId && !['hire', 'routes'].includes(ui.tab) && state.run.phase5.crew.unlocked) {
+    ui.subjectId = state.run.phase5.crew.members[0]?.id ?? null;
+    ui.tab = 'assign';
+  }
   const view = stationView(state, ui);
   if (!view.tabs.some((tab) => tab.id === ui.tab)) ui.tab = view.tabs[0]?.id ?? '';
   const items = stationView(state, ui).items;
@@ -67,20 +71,20 @@ export function selectedStationItem(state: GameState, ui: ManagementState): Stat
 
 function facilitiesView(state: GameState): StationView {
   const names: [Station, string, string][] = [
-    ['equipment', 'Recovered gear', 'Inspect every recovered item; fit basic upgrades at the workbench.'],
-    ['research', 'Surface analyzer', 'Running research, available projects and prerequisites.'],
+    ['equipment', 'Recovered gear', 'Compare and equip recovered tools.'],
+    ['research', 'Surface analyzer', 'Continue research and plan the next discovery.'],
     ['crew', 'Shift board', 'Hire, assign floors, set priorities and fit worker equipment.'],
     ['archive', 'Archive terminal', 'Collection, active passives and permanent records.'],
     ['scanner', 'Geological scanner', 'Inspect the three Anomaly responses before choosing one.'],
     ['core', 'Core console', 'Inspect and install permanent Core Protocols.'],
     ['reboot', 'Core chamber', 'Review Core gain, retained discoveries and everything that resets.'],
-    ['logistics', 'Deep logistics', 'Inspect physical Rail, Freight and Bore operations.'],
+    ['logistics', 'Deep logistics', 'Find a bottleneck and adjust the route.'],
   ];
   return { title: 'BASE FACILITIES', tabs: [], items: [
     { ...information('workshop', 'Workshop', 'Upgrade basic tools and automation.'), actionLabel: 'OPEN WORKSHOP', action: { type: 'workshop' } },
     ...names.filter(([station]) => stationAvailable(state, station)).map(([station, name, summary]): StationItem => ({
-      ...information(station, name, summary, ['The world and automatic work continue while you inspect a facility.']),
-      actionLabel: 'INSPECT FACILITY', action: { type: 'navigate', request: { station } },
+      ...information(station, name, summary),
+      actionLabel: `OPEN ${station === 'archive' ? 'COLLECTION' : station.toUpperCase()}`, action: { type: 'navigate', request: { station } },
     })),
   ] };
 }

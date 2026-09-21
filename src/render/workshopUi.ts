@@ -9,7 +9,7 @@ export interface UiViewport { width: number; height: number; world: Rect; }
 export type WorkshopUiAction = { type: 'station-open'; request: import('../game/management').StationRequest } | { type: 'open' | 'close' | 'buy' } | { type: 'select'; id: string } | { type: 'command'; command: GameCommand };
 export interface UiButton<Action = WorkshopUiAction> extends Rect {
   id: string; label: string; text: string; action: Action;
-  disabled?: boolean; selected?: boolean; icon?: WorkshopIcon; owned?: boolean;
+  disabled?: boolean; selected?: boolean; icon?: WorkshopIcon; owned?: boolean; badge?: string; detail?: string;
 }
 export interface WorkshopUiLayout {
   buttons: UiButton[];
@@ -19,12 +19,12 @@ export interface WorkshopUiLayout {
   itemCount: string;
 }
 export const C = { background: '#171519', surface: '#262127', line: '#74604b', light: '#d9c9ac',
-  text: '#dbd3c6', muted: '#b0a397', gold: '#d5b373', installed: '#a7c3b3', disabled: '#77716c' };
+  text: '#dbd3c6', muted: '#b0a397', gold: '#d5b373', installed: '#a7c3b3', disabled: '#77716c', warning: '#e3aa89' };
 
 /** One geometry model for the Canvas paint and its semantic input targets. All units are CSS pixels. */
 export function layoutWorkshopUi(state: GameState, workshop: WorkshopState | null, viewport: UiViewport): WorkshopUiLayout {
   const { width: w, height: h } = viewport;
-  const compact = w < 640;
+  const compact = w < 680;
   const buttons: UiButton[] = [];
   if (!workshop) return { buttons, panel: null, compact, item: null, itemCount: '' };
   const items = workshopItems(state);
@@ -86,8 +86,8 @@ export function drawWorkshopUi(ctx: CanvasRenderingContext2D, state: GameState, 
     text(ctx, `SCRAP ${state.run.scrap}`, p.x + p.width - 64, p.y + 26, 12, C.light, 'right');
     if (!compact) {
       ctx.strokeStyle = '#40373a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p.x + 202.5, p.y + 56); ctx.lineTo(p.x + 202.5, p.y + p.height - 12); ctx.stroke();
-      icon(ctx, item.icon, p.x + 216, p.y + 59, 2, item.owned);
-      text(ctx, item.name, p.x + 251, p.y + 76, 17, C.light);
+      icon(ctx, item.icon, p.x + 214, p.y + 57, 3, item.owned);
+      text(ctx, item.name, p.x + 270, p.y + 80, 17, C.light);
       text(ctx, item.owned ? 'FITTED' : item.tab.toUpperCase(), p.x + 212, p.y + 105, 11, item.owned ? C.installed : C.muted);
     }
     const x = p.x + (compact ? 14 : 212);
@@ -101,14 +101,23 @@ export function drawWorkshopUi(ctx: CanvasRenderingContext2D, state: GameState, 
     if (workshop.notice && !compact) lines(ctx, workshop.notice, x, p.y + p.height - 78, width, 11, 1, C.installed);
     if (!compact && layout.buttons.some((b) => b.id === 'previous')) text(ctx, layout.itemCount, p.x + 104, p.y + 297, 11, C.muted, 'center');
   }
-  for (const button of layout.buttons) drawButton(ctx, button, focused === button.id || hovered === button.id, compact);
+  for (const button of layout.buttons) drawButton(ctx, button, focused === button.id, compact, hovered === button.id);
 }
 
-export function drawButton<Action>(ctx: CanvasRenderingContext2D, b: UiButton<Action>, focused: boolean, compact: boolean): void {
-  ctx.fillStyle = b.disabled ? '#19171b' : b.selected ? '#3b3025' : '#282228'; ctx.fillRect(b.x, b.y, b.width, b.height);
+export function drawButton<Action>(ctx: CanvasRenderingContext2D, b: UiButton<Action>, focused: boolean, compact: boolean, hovered = false): void {
+  ctx.fillStyle = b.disabled ? '#19171b' : b.selected ? '#3b3025' : hovered ? '#302a2e' : '#282228'; ctx.fillRect(b.x, b.y, b.width, b.height);
   ctx.strokeStyle = focused ? C.light : b.selected ? C.gold : '#594a42'; ctx.lineWidth = focused ? 2 : 1;
   ctx.strokeRect(Math.round(b.x) + .5, Math.round(b.y) + .5, Math.round(b.width) - 1, Math.round(b.height) - 1);
-  if (b.icon) {
+  if (b.badge || b.detail) {
+    text(ctx, elide(ctx, b.text, b.width - 16, 12), b.x + 8, b.y + 18, 12, C.light);
+    if (b.detail) text(ctx, elide(ctx, b.detail, b.width - 16, 11), b.x + 8, b.y + 36, 11, C.muted);
+    if (b.badge) {
+      const statusColor = ['LOCKED', 'STORED', 'INACTIVE', 'CANDIDATE'].includes(b.badge) ? C.muted
+        : b.badge.includes('JAM') || b.badge.includes('BLOCK') ? C.warning : C.installed;
+      ctx.fillStyle = statusColor; ctx.fillRect(b.x + 8, b.y + b.height - 15, 4, 4);
+      text(ctx, elide(ctx, b.width < 85 && b.badge === 'ACTIVE' ? 'ON' : b.badge, b.width - 26, 11), b.x + 18, b.y + b.height - 9, 11, statusColor);
+    }
+  } else if (b.icon) {
     icon(ctx, b.icon, b.x + 7, b.y + 8, 2, Boolean(b.owned));
     const available = b.width - 42;
     lines(ctx, b.text, b.x + 38, b.y + 18, available, 11, 2, C.text);
@@ -146,7 +155,7 @@ export function elide(ctx: CanvasRenderingContext2D, label: string, width: numbe
   while (result.length && ctx.measureText(`${result}…`).width > width) result = result.slice(0, -1);
   return `${result}…`;
 }
-function icon(ctx: CanvasRenderingContext2D, kind: WorkshopIcon, x: number, y: number, scale: number, owned: boolean): void {
+export function icon(ctx: CanvasRenderingContext2D, kind: WorkshopIcon, x: number, y: number, scale: number, owned: boolean): void {
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(scale, scale);
   ctx.fillStyle = owned ? '#bac4bc' : '#b39369';
   if (kind === 'pick' || kind === 'swing') {

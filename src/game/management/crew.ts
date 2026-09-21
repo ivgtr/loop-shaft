@@ -1,7 +1,7 @@
 import { CREW_BOARD_COST, CREW_HIRE_COSTS, CREW_SLOT_COSTS } from '../config';
 import { canUnlockCrewOperations, crewAssignmentBlockReason } from '../phase5';
 import type { CargoRoutingPriority, GameState, MinerPriority, PorterPriority } from '../types';
-import { commandAction, information, number, type ManagementState, type StationItem, type StationView } from './types';
+import { commandAction, information, number, type CrewRow, type ManagementState, type StationItem, type StationView } from './types';
 
 export const MINER_PRIORITIES: MinerPriority[] = ['ANY', 'RESEARCH', 'RARE', 'NEAREST'];
 export const PORTER_PRIORITIES: PorterPriority[] = ['NEAREST', 'RESEARCH', 'CORE', 'RELIC', 'RARE', 'VALUE'];
@@ -18,12 +18,12 @@ export function crewView(state: GameState, ui: ManagementState): StationView {
   const member = crew.members.find((candidate) => candidate.id === ui.subjectId);
   if (member) {
     const status = `${member.assignedDepth}${member.pendingDepth ? ` → ${member.pendingDepth}` : ''} · ${member.state.replaceAll('_', ' ')}`;
-    const load = `Carried: ${number(member.body.carried.reduce((sum, item) => sum + item.weight, 0))} kg. Transfers use the Central Elevator; work is not teleported.`;
+    const load = `Carried: ${number(member.body.carried.reduce((sum, item) => sum + item.weight, 0))} kg. Unloads before taking the lift to another floor.`;
     let items: StationItem[];
     if (ui.tab === 'priority') {
       items = (member.role === 'MINER' ? MINER_PRIORITIES : PORTER_PRIORITIES).map((priority) => {
         const active = priority === (member.role === 'MINER' ? member.minerPriority : member.porterPriority);
-        return { id: priority, name: priority, summary: status, lines: [PRIORITY_HELP[priority]!, load], active,
+        return { id: priority, name: priority, summary: status, lines: [PRIORITY_HELP[priority]!, load], active, badge: active ? 'ACTIVE' : undefined,
           reason: active ? 'Current priority.' : null, actionLabel: active ? 'ACTIVE' : `SET ${priority}`,
           action: active ? null : commandAction(member.role === 'MINER'
             ? { type: 'miner-priority', crewId: member.id, priority: priority as MinerPriority }
@@ -32,19 +32,19 @@ export function crewView(state: GameState, ui: ManagementState): StationView {
     } else if (ui.tab === 'gear') {
       items = (['TOOL', 'LAMP'] as const).map((slot) => {
         const current = run.phase5.equipment.inventory.find((item) => item.id === member.equipment[slot]);
-        return { id: slot, name: slot, summary: current?.name ?? 'No recovered equipment fitted', lines: [status, 'Browse every eligible instance and compare it before equipping. Equipment cannot be shared by two owners.'],
+        return { id: slot, name: slot, summary: current?.name ?? 'No recovered equipment fitted', lines: [status, 'Compare with the current equipment before fitting a replacement.'],
           reason: null, actionLabel: `INSPECT ${slot}`, action: { type: 'navigate', request: { station: 'equipment', subjectId: member.id, tab: slot } } };
       });
     } else {
       items = run.depth.unlocked.map((depth) => {
         const reason = crewAssignmentBlockReason(state, member.id, depth);
         return { id: depth, name: depth, summary: status, lines: [load, ...(member.travel ? [`Travel: ${Math.ceil(member.travel.remaining)}s remaining.`] : [])],
-          reason, active: member.assignedDepth === depth, actionLabel: `ASSIGN TO ${depth}`,
+          reason, active: member.assignedDepth === depth, badge: member.assignedDepth === depth ? 'CURRENT' : member.pendingDepth === depth ? 'EN ROUTE' : undefined, actionLabel: `ASSIGN TO ${depth}`,
           action: reason ? null : commandAction({ type: 'assign-crew', crewId: member.id, depth }) };
       });
     }
-    return { title: member.name, tabs: [{ id: 'assign', label: 'ASSIGN' }, { id: 'priority', label: 'PRIORITY' }, { id: 'gear', label: 'GEAR' }],
-      items, back: { station: 'crew', selectedId: member.id } };
+    return { title: 'SHIFT BOARD', roster: crewRoster(state), tabs: [{ id: 'assign', label: 'ASSIGN' }, { id: 'priority', label: 'PRIORITY' }, { id: 'gear', label: 'GEAR' }],
+      items, back: { station: 'facilities', selectedId: 'crew' } };
   }
   const tabs = [{ id: 'members', label: 'CREW' }, { id: 'hire', label: 'HIRE' }, { id: 'routes', label: 'ROUTES' }];
   if (!crew.unlocked) {
@@ -58,7 +58,7 @@ export function crewView(state: GameState, ui: ManagementState): StationView {
       const cost = CREW_HIRE_COSTS[role];
       const reason = crew.members.length >= crew.slots ? 'All shift slots are occupied. Expand the shift first.' : run.scrap < cost ? `Need ${cost - run.scrap} more Scrap.` : null;
       return { id: role, name: `Hire ${role}`, summary: `${crew.members.length}/${crew.slots} staffed · ${cost} Scrap · owned ${run.scrap}`,
-        lines: [role === 'MINER' ? 'Mines selected veins on the assigned floor.' : 'Carries physical loot to Floor Cargo for elevator collection.', `Starts on ${run.depth.current}. Assign a floor and priority after hiring.`],
+        lines: [role === 'MINER' ? 'Mines veins on the assigned floor.' : 'Carries ore to the lift collection point.', `Starts on ${run.depth.current}. Assign a floor and priority after hiring.`],
         reason, actionLabel: `HIRE ${role} · ${cost}`, action: reason ? null : commandAction({ type: 'hire-crew', role }) };
     });
     const cost = CREW_SLOT_COSTS[crew.slots] ?? 5200;
@@ -72,8 +72,8 @@ export function crewView(state: GameState, ui: ManagementState): StationView {
     const items = ROUTES.map((priority): StationItem => {
       const active = run.phase5.cargo.priority === priority;
       const reason = !run.phase5.cargo.unlocked ? 'Cargo Scheduler routing is not available.' : active ? 'Current routing priority.' : null;
-      return { id: priority, name: priority, summary: 'Central Elevator · Floor Cargo queues', lines: [PRIORITY_HELP[priority]!, 'Scheduling changes which physical queue is served next. It does not teleport cargo or pay before appraisal.'],
-        active, reason, actionLabel: `SET ${priority}`, action: reason ? null : commandAction({ type: 'cargo-priority', priority }) };
+      return { id: priority, name: priority, summary: 'Central Elevator · Floor Cargo queues', lines: [PRIORITY_HELP[priority]!, 'Choose which waiting floor cargo the lift collects next. Payment arrives at Surface.'],
+        active, badge: active ? 'ACTIVE' : undefined, reason, actionLabel: `SET ${priority}`, action: reason ? null : commandAction({ type: 'cargo-priority', priority }) };
     });
     if (run.depth.unlocked.includes('D-250')) items.push({ ...information('plant', 'Deep logistics', 'Rail / Freight / Bore controls'),
       actionLabel: 'INSPECT LOGISTICS', action: { type: 'navigate', request: { station: 'logistics' } } });
@@ -96,4 +96,21 @@ function unlockReason(state: GameState): string | null {
   if (!run.porter.enabled) return 'Hire the original Porter at the workshop first.';
   if (run.porter.carried.length || run.porter.state === 'LOADING') return 'Wait for the Porter to finish unloading.';
   return `Need ${CREW_BOARD_COST - run.scrap} more Scrap.`;
+}
+
+export function crewRoster(state: GameState): CrewRow[] {
+  return state.run.phase5.crew.members.map((worker) => ({
+    id: worker.id, name: worker.name,
+    location: `${worker.assignedDepth}${worker.pendingDepth ? ` → ${worker.pendingDepth}` : ''}`,
+    task: workerTask(worker.state), priority: worker.role === 'MINER' ? worker.minerPriority : worker.porterPriority,
+  }));
+}
+function workerTask(state: string): string {
+  const tasks: Record<string, string> = {
+    FIND_NODE: 'Finding a vein', MOVING_TO_NODE: 'Walking to vein', MINING: 'Mining',
+    FIND_LOOT: 'Looking for ore', MOVING_TO_LOOT: 'Walking to ore', COLLECTING: 'Picking up',
+    MOVING_TO_CARGO: 'Hauling', DEPOSITING: 'Unloading', MOVING_TO_ELEVATOR: 'Walking to lift',
+    TRAVELING: 'Taking the lift', IDLE: 'Idle',
+  };
+  return tasks[state] ?? state.replaceAll('_', ' ').toLowerCase();
 }

@@ -65,6 +65,7 @@ import { MiningInput } from './MiningInput';
 import { elevatorItems, selectedElevatorItem, type ElevatorTab, type ElevatorUiState } from '../game/elevatorUi';
 import { nextWorkshopUpgrade, selectedWorkshopItem, workshopItems, type WorkshopState } from '../game/workshop';
 
+import { managementFeedback } from '../game/management/feedback';
 import { createManagementState, selectedStationItem, stationAvailable, stationSelection, stationView, type ManagementState, type StationRequest } from '../game/management';
 
 const FIXED_STEP = 1 / 60;
@@ -232,7 +233,7 @@ export class GameRuntime {
     this.miningInput.cancel();
     if (ref.type === 'rail-stop') {
       const line = this.state.run.logistics.lines.find((line) => line.id === ref.id);
-      this.openManagement({ station: 'logistics', tab: 'rail', selectedId: line ? `${line.id}:${line.priority}` : undefined });
+      this.openManagement({ station: 'logistics', tab: 'rail', selectedId: line?.id });
     } else if (ref.type === 'cargo-hub' || ref.type === 'freight-control') this.openManagement({ station: 'logistics', tab: 'freight' });
     else if (ref.type === 'bore-console') this.openManagement({ station: 'logistics', tab: 'bore', selectedId: this.state.run.deepAutomation.bores.find((bore) => bore.id === ref.id)?.siteId });
     else if (ref.type === 'crew-board') this.openManagement({ station: 'crew' });
@@ -285,18 +286,30 @@ export class GameRuntime {
 
   selectManagementItem(id: string): void {
     if (!this.management || this.management.confirmation || !stationView(this.state, this.management).items.some((item) => item.id === id)) return;
-    this.management = { ...this.management, selectedId: id, detailPage: 0, notice: null };
+    this.management = { ...this.management, selectedId: id, optionId: null, detailsOpen: false, detailPage: 0, notice: null };
     this.publish();
+  }
+
+  toggleManagementDetails(): void {
+    if (!this.management) return;
+    this.management = { ...this.management, detailsOpen: !this.management.detailsOpen, detailPage: 0 }; this.publish();
+  }
+
+  selectManagementOption(id: string): void {
+    if (!this.management || this.management.confirmation) return;
+    const item = selectedStationItem(this.state, this.management);
+    if (!item.options?.some((option) => option.id === id)) return;
+    this.management = { ...this.management, selectedId: item.id, optionId: id, notice: null }; this.publish();
   }
 
   setManagementPage(page: number): void {
     if (!this.management || !Number.isFinite(page)) return;
-    this.management = { ...this.management, detailPage: Math.max(0, Math.floor(page)) }; this.publish();
+    this.management = { ...this.management, detailsOpen: true, detailPage: Math.max(0, Math.floor(page)) }; this.publish();
   }
 
   cancelManagementConfirmation(): void {
     if (!this.management) return;
-    this.management = { ...this.management, confirmation: null, detailPage: 0, notice: null };
+    this.management = { ...this.management, confirmation: null, detailsOpen: false, detailPage: 0, notice: null };
     this.publish();
   }
 
@@ -305,14 +318,15 @@ export class GameRuntime {
     const item = selectedStationItem(this.state, this.management);
     if (!item.action || item.reason) return;
     if (item.confirmKey && this.management.confirmation !== item.confirmKey) {
-      this.management = { ...this.management, confirmation: item.confirmKey, detailPage: 0, notice: 'Review the consequences. Cancel keeps the current state.' };
+      this.management = { ...this.management, confirmation: item.confirmKey, detailsOpen: false, detailPage: 0, notice: null };
       this.publish(); return;
     }
     if (item.action.type === 'navigate') { this.openManagement(item.action.request); return; }
     if (item.action.type === 'workshop') { this.closeManagement(); this.openWorkshop(); return; }
     this.dispatch(item.action.command);
     if (!this.management) return;
-    this.management = { ...this.management, confirmation: null, notice: `${item.name}: applied.` };
+    const selected = selectedStationItem(this.state, this.management);
+    this.management = { ...this.management, selectedId: selected.id, confirmation: null, notice: managementFeedback(this.state, item.action.command) };
     this.publish();
   }
 
@@ -514,7 +528,7 @@ export class GameRuntime {
     if (this.management?.confirmation) {
       const item = selectedStationItem(this.state, this.management);
       if (item.confirmKey !== this.management.confirmation || item.reason) {
-        this.management = { ...this.management, confirmation: null, detailPage: 0, notice: 'State changed. Review the updated details before confirming.' };
+        this.management = { ...this.management, confirmation: null, detailsOpen: false, detailPage: 0, notice: 'State changed. Review again.' };
       }
     }
     this.refreshPointerTarget();

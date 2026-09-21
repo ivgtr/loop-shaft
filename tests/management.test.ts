@@ -37,7 +37,7 @@ describe('management presentation uses actual game state', () => {
     const state = managementGame(); const worker = state.run.phase5.crew.members[0]!; const item = state.run.phase5.equipment.inventory[0]!;
     equipCrewItem(state, worker.id, item.id);
     const selected = selectedStationItem(state, createManagementState(state, { station: 'equipment' }));
-    expect(selected.confirmKey).toBeTruthy(); expect(selected.lines.join(' ')).toContain(worker.name);
+    expect(selected.confirmKey).toBeTruthy(); expect(selected.decision?.facts.map((fact) => fact.value).join(' ')).toContain(worker.name);
     expect(worker.equipment.TOOL).toBe(item.id);
   });
   it('keeps unavailable research inspectable and shares its start gate', () => {
@@ -75,7 +75,7 @@ describe('management presentation uses actual game state', () => {
     state.meta.passives.active = state.meta.passives.unlocked.slice(0, 2);
     const ui = createManagementState(state, { station: 'archive', tab: 'passives' });
     expect(stationView(state, ui).items[2]!.reason).toContain('Two passives');
-    expect(stationView(state, ui).items[0]!.actionLabel).toBe('STORE PASSIVE');
+    expect(stationView(state, ui).items[0]!.actionLabel).toBe('DEACTIVATE');
   });
   it('shows explicit priorities and cargo-blocked assignments for both worker roles', () => {
     const state = managementGame();
@@ -93,14 +93,14 @@ describe('management presentation uses actual game state', () => {
     state.run.research.completed.push('RAIL_LOGISTICS');
     const runtime = new GameRuntime(state); runtime.openManagement({ station: 'logistics' }); runtime.activateManagementItem();
     expect(state.run.logistics.lines).toHaveLength(1);
-    expect(stationView(state, runtime.getSnapshot().management!).items).toHaveLength(4);
+    expect(stationView(state, runtime.getSnapshot().management!).items).toHaveLength(1);
     expect(state.run.engineer.job?.kind).toBe('RAIL_INSTALL');
   });
   it('previews the same Legacy Locker choice and reset values without mutating meta', () => {
     const state = managementGame(); state.meta.protocols.push('LEGACY_LOCKER'); const item = state.run.phase5.equipment.inventory[3]!;
     equipPlayerItem(state, item.id); const before = structuredClone(state);
     const ui = createManagementState(state, { station: 'reboot' }); const details = selectedStationItem(state, ui).lines.join(' ');
-    expect(details).toContain(item.id); expect(details).toContain('NOT included in the Core reward');
+    expect(details).toContain(item.name); expect(details).toContain('NOT included in the Core reward');
     expect(legacyEquipmentForReboot(state)?.id).toBe(item.id); expect(state).toEqual(before);
   });
   it('only exposes facilities at their existing progression gates', () => {
@@ -206,7 +206,7 @@ describe('management layout', () => {
   });
   for (const width of [320, 390, 640, 960, 1440]) it(`keeps all station controls contained and nonoverlapping at ${width}px`, () => {
     const state = managementGame(); state.run.depth.current = 'D-100'; state.run.coreChamber.rebootAvailable = true; state.run.pendingCore = 7;
-    const height = width < 640 ? width * 9 / 16 + 242 : width * 9 / 16 + 88;
+    const height = width < 680 ? Math.max(568, width * 9 / 16 + 242) : width * 9 / 16 + 88;
     const viewport = { width, height, world: { x: 0, y: 0, width, height: width * 9 / 16 } };
     for (const station of stations) {
       let ui = createManagementState(state, { station });

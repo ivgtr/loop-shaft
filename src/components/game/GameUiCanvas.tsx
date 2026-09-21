@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useGameRuntime, useGameSnapshot } from '../../app/GameProvider';
 import { selectedWorkshopItem, workshopItems } from '../../game/workshop';
 import { drawWorkshopUi, layoutWorkshopUi, type UiViewport } from '../../render/workshopUi';
@@ -23,8 +23,8 @@ export function GameUiCanvas() {
   const [hovered, setHovered] = useState<string | null>(null);
   const open = workshop !== null || elevatorUi !== null || helpOpen || management !== null;
   const heldPointer = useRef<{ id: number; button: string } | null>(null);
-  const managementLayout = management ? layoutManagementUi(state, management, viewport) : null;
-  const layout = workshop ? layoutWorkshopUi(state, workshop, viewport) : layoutGameUi(state, elevatorUi, helpOpen, viewport);
+  const managementLayout = useMemo(() => management ? layoutManagementUi(state, management, viewport) : null, [state, management, viewport]);
+  const layout = useMemo(() => workshop ? layoutWorkshopUi(state, workshop, viewport) : layoutGameUi(state, elevatorUi, helpOpen, viewport), [state, workshop, elevatorUi, helpOpen, viewport]);
   const buttons = managementLayout?.buttons ?? layout.buttons;
   const readout = sceneReadout(state);
 
@@ -62,10 +62,10 @@ export function GameUiCanvas() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.imageSmoothingEnabled = false;
-    if (management) drawManagementUi(ctx, viewport, layoutManagementUi(state, management, viewport), focused, hovered);
-    else if (workshop) drawWorkshopUi(ctx, state, workshop, viewport, layoutWorkshopUi(state, workshop, viewport), focused, hovered);
-    else drawGameUi(ctx, state, elevatorUi, helpOpen, viewport, layoutGameUi(state, elevatorUi, helpOpen, viewport), focused, hovered);
-  }, [state, workshop, elevatorUi, helpOpen, management, viewport, focused, hovered]);
+    if (managementLayout) drawManagementUi(ctx, viewport, managementLayout, focused, hovered);
+    else if (workshop && 'itemCount' in layout) drawWorkshopUi(ctx, state, workshop, viewport, layout, focused, hovered);
+    else if (!('itemCount' in layout)) drawGameUi(ctx, state, elevatorUi, helpOpen, viewport, layout, focused, hovered);
+  }, [state, workshop, elevatorUi, helpOpen, managementLayout, layout, viewport, focused, hovered]);
 
   useLayoutEffect(() => {
     setHovered(null);
@@ -84,7 +84,9 @@ export function GameUiCanvas() {
       && !(active instanceof HTMLButtonElement && active.disabled)) return;
     // Paging can remove the previously focused slot; arrow navigation follows the new selection.
     focusSelectedItem.current = false;
-    inputsRef.current?.querySelector<HTMLButtonElement>('[data-selected="true"][data-item="true"]')?.focus({ preventScroll: true });
+    const fallback = inputsRef.current?.querySelector<HTMLButtonElement>('[data-ui-action="station-cancel"], [data-selected="true"][data-item="true"], [data-ui-action="station-details"]')
+      ?? inputsRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)');
+    fallback?.focus({ preventScroll: true });
   }, [open, state, workshop, elevatorUi, management]);
 
   function activate(action: GameUiAction): void {
@@ -92,6 +94,8 @@ export function GameUiCanvas() {
     if (action.type === 'station-open') runtime.openManagement(action.request);
     else if (action.type === 'station-close') runtime.closeManagement();
     else if (action.type === 'station-back') runtime.backManagement();
+    else if (action.type === 'station-details') runtime.toggleManagementDetails();
+    else if (action.type === 'station-option') runtime.selectManagementOption(action.id);
     else if (action.type === 'station-select') runtime.selectManagementItem(action.id);
     else if (action.type === 'station-tab') runtime.selectManagementTab(action.tab);
     else if (action.type === 'station-page') runtime.setManagementPage(action.page);
@@ -119,12 +123,20 @@ export function GameUiCanvas() {
     if (!open) return;
     if (management && ['PageUp', 'PageDown'].includes(event.code)) {
       event.preventDefault();
-      if (managementLayout) runtime.setManagementPage(Math.max(0, Math.min(managementLayout.pages.length - 1, managementLayout.page + (event.code === 'PageDown' ? 1 : -1))));
+      if (managementLayout && (managementLayout.detailsAvailable || managementLayout.reading)) runtime.setManagementPage(managementLayout.reading ? Math.max(0, Math.min(managementLayout.pages.length - 1, managementLayout.page + (event.code === 'PageDown' ? 1 : -1))) : 0);
     }
     if ((workshop || elevatorUi || (management && !management.confirmation)) && ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].includes(event.code)) {
       event.preventDefault();
       if (event.repeat) return;
       const offset = ['ArrowLeft', 'ArrowUp'].includes(event.code) ? -1 : 1;
+      const options = managementLayout?.item.options;
+      if (options?.length && document.activeElement?.getAttribute('data-ui-action')?.startsWith('station-option-')) {
+        const index = options.findIndex((option) => option.selected);
+        const next = options[(index + offset + options.length) % options.length]!;
+        runtime.selectManagementOption(next.id);
+        inputsRef.current?.querySelector<HTMLButtonElement>(`[data-ui-action="station-option-${next.id}"]`)?.focus({ preventScroll: true });
+        return;
+      }
       focusSelectedItem.current = true;
       if (workshop) {
         const items = workshopItems(state); const item = selectedWorkshopItem(items, workshop.selectedId);
@@ -157,6 +169,7 @@ export function GameUiCanvas() {
     <canvas ref={canvasRef} className="game-ui-canvas" aria-hidden="true" />
     <div ref={inputsRef} className={`canvas-inputs${open ? ' window-open' : ''}`}
       data-station={management?.station} data-selected-item={managementLayout?.item.id}
+      data-detail-open={management?.detailsOpen} data-detail-pages={managementLayout?.pages.length} data-item-count={managementLayout?.count}
       role={open ? 'dialog' : undefined} aria-modal={open ? true : undefined}
       aria-label={management ? stationView(state, management).title : workshop ? 'Workshop' : elevatorUi ? 'Elevator controls' : helpOpen ? 'Controls help' : undefined}
       aria-describedby={management ? 'management-detail' : workshop ? 'workshop-detail' : elevatorUi ? 'elevator-detail' : undefined}
@@ -165,6 +178,14 @@ export function GameUiCanvas() {
       {management && managementLayout && <div className="canvas-semantics" id="management-detail">
         <h2>{managementLayout.title}</h2>
         <p>{managementLayout.item.name}. {managementLayout.item.summary}. {managementLayout.item.reason}</p>
+        {managementLayout.item.decision && <section data-testid="management-consequences" aria-label="Consequences">
+          {managementLayout.item.decision.facts.map((fact) => <p key={fact.label}>{fact.label}: {fact.value}</p>)}
+        </section>}
+        {managementLayout.item.route && <ol aria-label="Cargo route">{managementLayout.item.route.map((stop, index) =>
+          <li key={index}>{stop.label}: {stop.detail}{stop.blocked ? ' · BLOCKED' : ''}</li>)}</ol>}
+        {managementLayout.item.equipment && <p>Current: {managementLayout.item.equipment.current}. Candidate: {managementLayout.item.equipment.candidate}.</p>}
+        {managementLayout.bars.map((bar, index) => <p key={index} role="progressbar" aria-label={bar.label}
+          aria-valuemin={0} aria-valuemax={bar.total} aria-valuenow={Math.max(0, Math.min(bar.total, bar.value))}>{bar.label}</p>)}
         {managementLayout.item.lines.map((line, index) => <p key={index}>{line}</p>)}
         <p>Arrow keys browse items. Page Up/Down reads all details. Tab chooses an action. Escape cancels confirmation, then closes the facility.</p>
         <p data-testid="detail-page">Detail {managementLayout.page + 1}/{managementLayout.pages.length}</p>
@@ -193,6 +214,7 @@ export function GameUiCanvas() {
       </section>}
       {viewport.width > 0 && buttons.map((button) => <button key={button.id} type="button"
         className="canvas-hit" aria-label={button.label} disabled={button.disabled}
+        data-status={button.badge} aria-describedby={button.badge || button.detail ? `status-${button.id}` : undefined}
         aria-pressed={button.selected === undefined ? undefined : button.selected}
         data-ui-action={button.id} data-selected={button.selected} data-item={button.icon || button.id.startsWith('lift-item-') || button.id === 'lift-selected' || button.id.startsWith('station-item-') || button.id === 'station-selected' ? 'true' : undefined}
         style={{ left: button.x, top: button.y, width: button.width, height: button.height }}
@@ -221,7 +243,7 @@ export function GameUiCanvas() {
         onClick={(event) => {
           // Rapid read-only navigation must not be mistaken for a purchase double click.
           const navigation = ['station-close', 'station-back', 'station-select', 'station-tab', 'station-page',
-            'station-cancel-confirm', 'close', 'select', 'lift-close', 'lift-tab', 'lift-select', 'help-close'];
+            'station-cancel-confirm', 'station-details', 'station-option', 'station-open', 'close', 'select', 'lift-close', 'lift-tab', 'lift-select', 'help-close'];
           if (event.detail >= 2 && !navigation.includes(button.action.type)) {
             // A second pointerdown focuses CONFIRM before click is suppressed. Return
             // focus to Cancel so a following Enter cannot accidentally commit.
@@ -231,6 +253,7 @@ export function GameUiCanvas() {
           activate(button.action);
         }}>
         <span className="canvas-semantics">{button.label}</span>
+        {(button.badge || button.detail) && <span className="canvas-semantics" id={`status-${button.id}`}>{button.badge}. {button.detail}</span>}
       </button>)}
     </div>
   </>;

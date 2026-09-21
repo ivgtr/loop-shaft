@@ -16,7 +16,7 @@ export interface GameUiLayout {
 
 export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null, help: boolean, viewport: UiViewport): GameUiLayout {
   const { width: w, height: h, world } = viewport;
-  const compact = w < 640;
+  const compact = w < 680;
   const buttons: UiButton<GameUiAction>[] = [];
   if (elevator || help) {
     const panel: Rect = { x: compact ? 8 : (w - Math.min(660, w - 32)) / 2, y: compact ? 8 : Math.max(12, (h - 386) / 2),
@@ -72,8 +72,8 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
     buttons.push({ ...control, x: start + rowWidths.slice(0, index).reduce((sum, width) => sum + width + gap, 0),
       y: h - (compact ? 100 : 52) + row * 48, width: rowWidths[index]!, height: 44 });
   });
-  buttons.push({ id: 'send', label: 'SEND', text: 'F · SEND', action: { type: 'command', command: { type: 'send' } },
-    x: world.x + world.width / 2 - 51, y: world.y + world.height * .43, width: 102, height: 44, disabled: !canDispatchElevator(state) });
+  buttons.push({ id: 'send', label: 'SEND', text: 'SEND', action: { type: 'command', command: { type: 'send' } },
+    x: Math.min(w - 106, world.x + world.width * .55), y: world.y + world.height * .43, width: 96, height: 44, disabled: !canDispatchElevator(state) });
   const guide = workshopGuide(state);
   if (guide) buttons.push({ id: 'goal', label: 'Inspect next workshop upgrade', text: guide.label, action: { type: 'open' },
     x: 10, y: compact ? 56 : 46, width: Math.min(w - 100, 420), height: 44, selected: guide.ready });
@@ -137,11 +137,18 @@ export function drawGameUi(ctx: CanvasRenderingContext2D, state: GameState, elev
     const send = layout.buttons.find((button) => button.id === 'send')!;
     const value = `${Number(cargoWeight(run.elevator.cargo).toFixed(1))}/${run.elevator.maxLoad} kg`;
     const status = shipmentStatus(state);
-    ctx.fillStyle = '#0b0a0de8'; ctx.fillRect(send.x - 24, send.y - 32, send.width + 48, 32);
-    text(ctx, elide(ctx, status, send.width + 40, 10), send.x + send.width / 2, send.y - 19, 10, C.muted, 'center');
-    text(ctx, value, send.x + send.width / 2, send.y - 5, 11, C.light, 'center');
+    // The shipping switch belongs to the lift-side control box, clear of the shaft.
+    const cabinet = { x: send.x - 4, y: send.y - 36, width: send.width + 8, height: 84 };
+    ctx.fillStyle = C.surface; ctx.fillRect(cabinet.x, cabinet.y, cabinet.width, cabinet.height);
+    ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.strokeRect(cabinet.x, cabinet.y, cabinet.width, cabinet.height);
+    ctx.beginPath(); ctx.moveTo(viewport.world.x + viewport.world.width / 2, cabinet.y + 17); ctx.lineTo(cabinet.x, cabinet.y + 17); ctx.stroke();
+    text(ctx, elide(ctx, status, send.width - 4, 10), send.x + 4, send.y - 22, 10, C.muted);
+    text(ctx, value, send.x + 4, send.y - 9, 11, C.light);
+    const fill = Math.min(1, cargoWeight(run.elevator.cargo) / Math.max(1, run.elevator.maxLoad));
+    ctx.fillStyle = C.installed; ctx.fillRect(send.x + 2, send.y - 4, (send.width - 4) * fill, 2);
+
   }
-  for (const button of layout.buttons) drawButton(ctx, button, focused === button.id || hovered === button.id, compact);
+  for (const button of layout.buttons) drawButton(ctx, button, focused === button.id, compact, hovered === button.id);
 }
 
 function amount(value: number): string {

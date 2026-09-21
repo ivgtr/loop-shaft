@@ -39,9 +39,15 @@ All window input stays inside the active window; closing restores the game focus
 
 The dock shows backpack capacity once; the shaft shows lift load and shipment status. SHIP sends cargo or changes the automatic relay / routing policy, TRAVEL visits connected floors, and EXTEND opens new connections (or starts D-650 construction). Opening a connection never automatically travels there. Unavailable destinations remain inspectable with the blocking reason; their permissions and fees come from the existing simulation.
 
-Equipment, research and logistics share the same inspect → detail → execute controls. Locked entries can still be inspected. Crew destinations and priorities are explicit choices, not cycling buttons. Long detail text is paged rather than discarded at small widths. Collection preserves discovery records and separates the two active passive slots.
+Facilities share focus, close and execution rules while using task-specific layouts. Locked entries can still be inspected. Crew destinations and priorities are explicit choices, not cycling buttons. Long detail text is paged rather than discarded at small widths. Collection preserves discovery records and separates the two active passive slots.
 
 Anomaly choices, equipment transfers, and Reboot consequences require an explicit review before confirmation. Reboot shows the actual Core reward, permanent records, retained Legacy Locker item and reset resources / cargo / equipment. Escape first cancels confirmation, then closes the window. Confirmation is never restored from a save.
+
+### Facility controls
+
+Equipment compares current gear with a candidate; **EFFECTS & STATS** opens the full comparison. The shift board shows workers and their floor/task/priority beside the selected worker's controls. Research progress stays visible while inspecting plans, and Collection uses discovery tiles. Rail/Freight settings belong to the selected route: choosing a priority does not apply it until confirmed. Equipped/active/current badges remain independent of the inspected item.
+
+Reboot and equipment transfers pin their consequences beside the final action. **KEEP MINING** cancels Reboot and returns to the mine. Extra explanations are optional; Page Up/Down opens and pages them. The portrait stage uses available height without stretching the world or resizing it when a facility opens.
 
 ## Checks
 
