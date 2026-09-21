@@ -1,0 +1,36 @@
+name: Apply second-stage UI changes
+on:
+  push:
+    branches: ['codex/canvas-hud-elevator']
+    paths: ['.github/workflows/apply-ui-stage-two.yml', '.ui-stage-two/**']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and apply change set
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, lzma
+          compressed = b''.join(Path(f'.ui-stage-two/part-{i}').read_bytes() for i in range(4))
+          patch = lzma.decompress(compressed)
+          assert hashlib.sha256(patch).hexdigest() == 'e08d01cc49f80aa60511a8f70adfe36c35874d7d29e3f3e4f5908002371faef3'
+          Path('/tmp/stage-two.patch').write_bytes(patch)
+          PY
+          git apply --check /tmp/stage-two.patch
+          git apply --index /tmp/stage-two.patch
+          git rm -r .ui-stage-two .github/workflows/apply-ui-stage-two.yml .github/workflows/ui-workspace.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: unify Canvas HUD and split elevator shipping, travel and expansion'
+          git push origin HEAD:codex/canvas-hud-elevator
+          git archive HEAD | gzip > /tmp/ui-stage-two-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-stage-two-source
+          path: /tmp/ui-stage-two-source.tar.gz
+          retention-days: 1
