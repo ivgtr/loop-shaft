@@ -199,8 +199,35 @@ for (const width of [320, 390]) test.describe(`management touch ${width}px`, () 
         await info.attach(`reboot-${width}px-confirm`, { body: await page.screenshot(), contentType: 'image/png' });
       }
       await ui(page, 'station-close').tap();
+      await expect(modal(page)).toHaveCount(0);
       expect(await page.locator('.game-shell').boundingBox()).toEqual(bounds);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
+});
+
+test('D-030 SCAN and E open the same Canvas choice as the scanner in the world', async ({ page }) => {
+  const state = managementGame(); state.run.depth.current = 'D-030';
+  state.run.anomaly.options = ['GOLD_RUSH', 'HEAVY_WORLD', 'FOSSIL_AGE']; state.run.anomaly.selected = null;
+  await seed(page, state);
+  const canvas = page.locator('.game-canvas');
+  await expect(ui(page, 'interact')).toHaveAccessibleName('SCAN');
+  await ui(page, 'interact').click(); await expect(modal(page)).toHaveAttribute('data-station', 'scanner');
+  await page.keyboard.press('Escape'); await canvas.focus(); await page.keyboard.press('KeyE');
+  await expect(modal(page)).toHaveAttribute('data-station', 'scanner');
+  await page.keyboard.press('Escape');
+  const world = (await canvas.boundingBox())!;
+  await page.mouse.click(world.x + world.width * 282 / 480, world.y + world.height * 190 / 270);
+  await expect(modal(page)).toHaveAttribute('data-station', 'scanner');
+  expect((await saved(page)).run.anomaly.selected).toBeNull();
+});
+
+test('rapid inspection and close gestures are not discarded as purchases', async ({ page }) => {
+  await seed(page, managementGame()); await open(page, 'equipment');
+  const first = await modal(page).getAttribute('data-selected-item');
+  await ui(page, 'station-next').dispatchEvent('click', { detail: 2 });
+  await expect(modal(page)).not.toHaveAttribute('data-selected-item', first!);
+  await ui(page, 'station-close').dispatchEvent('click', { detail: 2 });
+  await expect(modal(page)).toHaveCount(0);
+  await expect(page.locator('.game-canvas')).toBeFocused();
 });

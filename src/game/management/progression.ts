@@ -18,7 +18,7 @@ export function researchView(state: GameState, ui: ManagementState): StationView
       action: reason ? null : commandAction({ type: 'research', research: id }) };
   });
   const filtered = all.filter((item) => ui.tab === 'done' ? run.research.completed.includes(item.id as ResearchId)
-    : ui.tab === 'plans' ? !run.research.completed.includes(item.id as ResearchId) && !item.action && run.research.active?.id !== item.id
+    : ui.tab === 'plans' ? item.id === ui.selectedId || (!run.research.completed.includes(item.id as ResearchId) && !item.action && run.research.active?.id !== item.id)
       : item.action || run.research.active?.id === item.id || item.id === ui.selectedId);
   return { title: 'SURFACE ANALYZER', tabs: [{ id: 'work', label: 'CURRENT' }, { id: 'plans', label: 'PLANS' }, { id: 'done', label: 'DONE' }],
     items: filtered.length ? filtered : [information('empty', ui.tab === 'done' ? 'No completed research' : 'No project available',

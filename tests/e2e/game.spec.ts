@@ -118,7 +118,7 @@ test('keeps NPC and Cargo paths operable when their image groups fail independen
 test('keeps Bore hover and selected context aligned in a later-game state', async ({ page }) => {
   const state = createGameState(9101);
   state.run.depth.current = 'D-400';
-  state.run.depth.unlocked.push('D-400');
+  state.run.depth.unlocked.push('D-250', 'D-400');
   state.run.deepAutomation.bores.push({ id: 'bore-echo-pocket', depth: 'D-400', siteId: 'echo-pocket', targetNodeId: 'echo-pocket',
     state: 'JAMMED', cycleProgress: 0, cycleDuration: 1.35, hitAt: 0.72, damage: 18, outputBuffer: [], maxOutputWeight: 26,
     connectedLineId: null, installProgress: 10, requiredInstallProgress: 10 });
@@ -127,8 +127,10 @@ test('keeps Bore hover and selected context aligned in a later-game state', asyn
   await clickWorld(page, 364, 190);
   const canvas = page.getByLabel('LOOP SHAFT mining floor');
   await expect(canvas).toHaveAttribute('data-interaction-target', 'bore-console:bore-echo-pocket');
-  await expect(page.getByRole('heading', { name: 'Remote Bore Console' })).toBeVisible();
-  await expect(page.locator('.context-meta')).toContainText('JAMMED');
+  const facility = page.getByRole('dialog', { name: 'DEEP LOGISTICS' });
+  await expect(facility).toBeVisible();
+  await expect(facility).toHaveAttribute('data-selected-item', 'echo-pocket');
+  await expect(facility).toContainText('JAMMED');
 });
 
 test.describe('touch selection', () => {

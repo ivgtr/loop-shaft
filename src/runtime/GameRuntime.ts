@@ -423,6 +423,9 @@ export class GameRuntime {
       if (!allowed || command.type !== allowed.type
         || ('itemId' in allowed && (!('itemId' in command) || command.itemId !== allowed.itemId))) return;
     }
+    if (command.type === 'interact' && playerInteraction(this.state).type === 'scanner') {
+      this.openManagement({ station: 'scanner' }); return;
+    }
     if (command.type === 'interact' && playerInteraction(this.state).type === 'elevator') {
       this.openElevator(); return;
     }

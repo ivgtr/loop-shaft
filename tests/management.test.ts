@@ -57,6 +57,14 @@ describe('management presentation uses actual game state', () => {
     expect(selectedStationItem(state, ui).summary).toBe('COMPLETE');
     expect(stationView(state, { ...ui, tab: 'done' }).items.some((i) => i.id === 'PRIORITY_CARGO_TAG')).toBe(true);
   });
+  it('keeps an inspected plan selected when an appraisal supplies its missing Data', () => {
+    const state = managementGame(); state.run.data = 0;
+    const ui = createManagementState(state, { station: 'research', tab: 'plans', selectedId: 'PRIORITY_CARGO_TAG' });
+    expect(selectedStationItem(state, ui).reason).toContain('more Data');
+    state.run.data = 40;
+    expect(selectedStationItem(state, ui).id).toBe('PRIORITY_CARGO_TAG');
+    expect(selectedStationItem(state, ui).action).toMatchObject({ command: { type: 'research', research: 'PRIORITY_CARGO_TAG' } });
+  });
   it('does not leak undiscovered collection names or passive effects', () => {
     const state = managementGame(); const ui = createManagementState(state, { station: 'archive' });
     expect(stationView(state, ui).items.filter((i) => i.name === '????').length).toBeGreaterThan(0);
@@ -168,6 +176,15 @@ describe('management runtime safety and continuation', () => {
     const runtime = new GameRuntime(state); runtime.openManagement({ station: 'reboot' }); runtime.activateManagementItem();
     state.run.pendingCore = 9; runtime.activateManagementItem(); expect(state.meta.runIndex).toBe(2);
     runtime.activateManagementItem(); expect(state.meta.core).toBe(39);
+  });
+  it('routes the D-030 interaction into the scanner without confirming an Anomaly', () => {
+    const state = managementGame(); state.run.depth.current = 'D-030';
+    state.run.anomaly.options = ['GOLD_RUSH', 'HEAVY_WORLD', 'FOSSIL_AGE']; state.run.anomaly.selected = null;
+    const runtime = new GameRuntime(state); runtime.dispatch({ type: 'interact' });
+    expect(runtime.getSnapshot().management?.station).toBe('scanner');
+    expect(state.run.anomaly.selected).toBeNull();
+    runtime.closeManagement(); runtime.dispatch({ type: 'interact' });
+    expect(runtime.getSnapshot().management?.station).toBe('scanner');
   });
   it('never restores confirmation from v6 saves or accepts direct Reboot commands', () => {
     const state = managementGame(); state.run.depth.current = 'D-100'; state.run.pendingCore = 7; state.run.coreChamber.rebootAvailable = true;

@@ -218,7 +218,18 @@ export function GameUiCanvas() {
         }}
         onPointerEnter={(event) => { if (event.pointerType !== 'touch') setHovered(button.id); }}
         onPointerLeave={() => setHovered(null)}
-        onClick={(event) => { if (event.detail < 2) activate(button.action); }}>
+        onClick={(event) => {
+          // Rapid read-only navigation must not be mistaken for a purchase double click.
+          const navigation = ['station-close', 'station-back', 'station-select', 'station-tab', 'station-page',
+            'station-cancel-confirm', 'close', 'select', 'lift-close', 'lift-tab', 'lift-select', 'help-close'];
+          if (event.detail >= 2 && !navigation.includes(button.action.type)) {
+            // A second pointerdown focuses CONFIRM before click is suppressed. Return
+            // focus to Cancel so a following Enter cannot accidentally commit.
+            if (management?.confirmation) inputsRef.current?.querySelector<HTMLButtonElement>('[data-ui-action="station-cancel"]')?.focus({ preventScroll: true });
+            return;
+          }
+          activate(button.action);
+        }}>
         <span className="canvas-semantics">{button.label}</span>
       </button>)}
     </div>
