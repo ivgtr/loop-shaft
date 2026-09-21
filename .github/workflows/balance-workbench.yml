@@ -1,0 +1,75 @@
+name: Balance workbench
+on:
+  push:
+    branches: [balance/discovery-logistics]
+    paths:
+      - scripts/balance-edit.py
+      - .github/workflows/balance-workbench.yml
+permissions:
+  contents: write
+concurrency:
+  group: balance-workbench
+  cancel-in-progress: false
+jobs:
+  balance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: balance/discovery-logistics
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply reviewed balance edits
+        if: hashFiles('scripts/balance-edit.py') != ''
+        run: |
+          python3 scripts/balance-edit.py
+          rm scripts/balance-edit.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests docs scripts package.json README.md
+          git diff --cached --quiet || git commit -m "feat: implement mining discovery and logistics balance"
+          git push origin HEAD:balance/discovery-logistics
+      - run: npm ci
+      - name: Typecheck
+        id: types
+        continue-on-error: true
+        run: npm run typecheck
+      - name: Unit and balance tests
+        id: tests
+        continue-on-error: true
+        run: npm test
+      - name: Build
+        id: build
+        continue-on-error: true
+        run: npm run build
+      - name: Install Chromium
+        if: steps.types.outcome == 'success'
+        run: npx playwright install chromium --with-deps
+      - name: Browser tests
+        id: browser
+        if: steps.types.outcome == 'success'
+        continue-on-error: true
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: balance-validation
+          path: |
+            playwright-report/
+            test-results/
+            docs/balance-results.json
+          retention-days: 7
+      - name: Check all outcomes
+        if: always()
+        env:
+          TYPES: ${{ steps.types.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          BROWSER: ${{ steps.browser.outcome }}
+        run: |
+          test "$TYPES" = success
+          test "$TESTS" = success
+          test "$BUILD" = success
+          test "$BROWSER" = success
