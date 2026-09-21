@@ -14,19 +14,26 @@ export function ContextLayout({ title, meta, children }: PropsWithChildren<{ tit
   );
 }
 
-export function ActionButton({ command, disabled = false, className = '', children }: PropsWithChildren<{
+export function ActionButton({ command, disabled = false, className = '', title, children }: PropsWithChildren<{
   command: GameCommand;
   disabled?: boolean;
   className?: string;
+  title?: string;
 }>) {
-  return <CommandButton command={command} className={`action ${className}`.trim()} disabled={disabled}>{children}</CommandButton>;
+  return <CommandButton command={command} className={`action ${className}`.trim()} disabled={disabled} title={title}>{children}</CommandButton>;
 }
 
-export function CommandButton({ command, disabled = false, className, children }: PropsWithChildren<{
+export function CommandButton({ command, disabled = false, className, title, children }: PropsWithChildren<{
   command: GameCommand;
   disabled?: boolean;
   className: string;
+  title?: string;
 }>) {
   const runtime = useGameRuntime();
-  return <button className={className} disabled={disabled} onClick={() => { runtime.unlockAudio(); runtime.dispatch(command); }}>{children}</button>;
+  return <button className={className} disabled={disabled} title={title} onClick={(event) => {
+    runtime.unlockAudio();
+    runtime.dispatch(command);
+    // Pointer users can immediately continue with keyboard controls; Tab users retain focus.
+    if (event.detail > 0) runtime.focusCanvas();
+  }}>{children}</button>;
 }
