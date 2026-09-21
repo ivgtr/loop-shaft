@@ -334,12 +334,20 @@ export function togglePassive(state: GameState, passive: PassiveId): boolean {
   return true;
 }
 
-export function canStartResearch(state: GameState, id: ResearchId): boolean {
+export function researchBlockReason(state: GameState, id: ResearchId): string | null {
   const run = state.run;
   const definition = RESEARCH[id];
-  if (!run.depth.unlocked.includes('D-060') || run.research.active || run.research.completed.includes(id)) return false;
-  if (definition.prerequisite && !run.research.completed.includes(definition.prerequisite)) return false;
-  return run.data >= definition.dataCost;
+  if (run.research.completed.includes(id)) return 'Research complete.';
+  if (!run.depth.unlocked.includes('D-060')) return 'Connect D-060 to use the Surface Analyzer.';
+  if (run.research.active?.id === id) return `Research running: ${Math.ceil(run.research.active.remaining)}s remaining.`;
+  if (run.research.active) return `Finish ${RESEARCH[run.research.active.id].name} first.`;
+  if (definition.prerequisite && !run.research.completed.includes(definition.prerequisite)) return `Requires ${RESEARCH[definition.prerequisite].name}.`;
+  if (run.data < definition.dataCost) return `Need ${definition.dataCost - run.data} more Data.`;
+  return null;
+}
+
+export function canStartResearch(state: GameState, id: ResearchId): boolean {
+  return researchBlockReason(state, id) === null;
 }
 
 export function startResearch(state: GameState, id: ResearchId): boolean {

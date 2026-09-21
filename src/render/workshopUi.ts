@@ -6,7 +6,7 @@ import type { Rect } from './interactionTargets';
 import { drawPixelText } from './pixelText';
 
 export interface UiViewport { width: number; height: number; world: Rect; }
-export type WorkshopUiAction = { type: 'open' | 'close' | 'buy' } | { type: 'select'; id: string } | { type: 'command'; command: GameCommand };
+export type WorkshopUiAction = { type: 'station-open'; request: import('../game/management').StationRequest } | { type: 'open' | 'close' | 'buy' } | { type: 'select'; id: string } | { type: 'command'; command: GameCommand };
 export interface UiButton<Action = WorkshopUiAction> extends Rect {
   id: string; label: string; text: string; action: Action;
   disabled?: boolean; selected?: boolean; icon?: WorkshopIcon; owned?: boolean;
@@ -58,8 +58,8 @@ export function layoutWorkshopUi(state: GameState, workshop: WorkshopState | nul
       add({ id: 'next', label: 'Next workshop item', text: '>', action: select(1), x: panel.x + 148, y: panel.y + 270, width: 44, height: 44 });
     }
   }
-  add({ id: 'buy', label: item.actionLabel, text: item.owned ? item.actionLabel : item.cost === null ? 'EQUIP' : `BUY · ${item.cost} SCRAP`,
-    action: { type: 'buy' }, disabled: item.command === null, x: panel.x + (compact ? 8 : 212), y: panel.y + panel.height - 54,
+  add({ id: 'buy', label: item.actionLabel, text: item.id === 'recovered-gear' ? 'INSPECT GEAR' : item.owned ? item.actionLabel : item.cost === null ? 'EQUIP' : `BUY · ${item.cost} SCRAP`,
+    action: item.id === 'recovered-gear' ? { type: 'station-open', request: { station: 'equipment' } } : { type: 'buy' }, disabled: item.id !== 'recovered-gear' && item.command === null, x: panel.x + (compact ? 8 : 212), y: panel.y + panel.height - 54,
     width: panel.width - (compact ? 16 : 228), height: 44 });
   return { buttons, panel, compact, item, itemCount: `${index + 1} / ${group.length}` };
 }

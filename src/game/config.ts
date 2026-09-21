@@ -37,6 +37,7 @@ export const D250_EXTENSION_COST = 12000;
 export const D400_EXTENSION_COST = 18000;
 export const D650_SHAFT_COST = 28000;
 export const CREW_BOARD_COST = 1800;
+export const CREW_HIRE_COSTS = { MINER: 2600, PORTER: 2200 } as const;
 export const CREW_SLOT_COSTS = [0, 0, 3200, 5200] as const;
 export const CREW_TRAVEL_DURATION = 3.4;
 export const CARGO_ROUTE_DURATION = 2.4;

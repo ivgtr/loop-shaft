@@ -7,7 +7,7 @@ import { workshopGuide } from '../game/workshop';
 import { C, drawButton, elide, lines, text, type UiButton, type UiViewport, type WorkshopUiAction } from './workshopUi';
 import type { Rect } from './interactionTargets';
 
-export type GameUiAction = WorkshopUiAction | { type: 'lift-open'; tab?: ElevatorTab; id?: string }
+export type GameUiAction = import('./managementUi').ManagementUiAction | WorkshopUiAction | { type: 'lift-open'; tab?: ElevatorTab; id?: string }
   | { type: 'lift-close' | 'lift-activate' | 'help-open' | 'help-close' }
   | { type: 'lift-tab'; tab: ElevatorTab } | { type: 'lift-select'; id: string } | { type: 'direction'; direction: -1 | 1 };
 export interface GameUiLayout {
@@ -76,15 +76,17 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
     x: world.x + world.width / 2 - 51, y: world.y + world.height * .43, width: 102, height: 44, disabled: !canDispatchElevator(state) });
   const guide = workshopGuide(state);
   if (guide) buttons.push({ id: 'goal', label: 'Inspect next workshop upgrade', text: guide.label, action: { type: 'open' },
-    x: 10, y: compact ? 56 : 46, width: Math.min(w - 20, 420), height: 44, selected: guide.ready });
+    x: 10, y: compact ? 56 : 46, width: Math.min(w - 100, 420), height: 44, selected: guide.ready });
   else if (state.run.depth.current === 'D-001' && state.run.porter.enabled) {
     const relay = state.run.automation.autoDispatch.unlocked;
     const connected = state.run.depth.unlocked.includes('D-030');
     buttons.push({ id: 'shaft-goal', label: 'Inspect the next shaft connection',
       text: !relay ? 'LIFT · FIT AUTO RELAY' : connected ? 'LIFT · TRAVEL TO D-030' : 'LIFT · OPEN D-030 CONNECTION',
       action: { type: 'lift-open', tab: !relay ? 'dispatch' : connected ? 'travel' : 'extend', id: !relay ? 'relay' : 'D-030' },
-      x: 10, y: compact ? 56 : 46, width: Math.min(w - 20, 360), height: 44 });
+      x: 10, y: compact ? 56 : 46, width: Math.min(w - 100, 360), height: 44 });
   }
+  buttons.push({ id: 'base', label: 'Open base facilities', text: 'BASE', action: { type: 'station-open', request: { station: 'facilities' } },
+    x: w - 82, y: compact ? 56 : 46, width: 72, height: 44, disabled: Boolean(state.run.elevator.travel) });
   return { buttons, panel: null, compact, item: null };
 }
 
@@ -119,7 +121,7 @@ export function drawGameUi(ctx: CanvasRenderingContext2D, state: GameState, elev
     text(ctx, `SCRAP ${amount(run.scrap)}  DATA ${amount(run.data)}  CORE ${amount(state.meta.core)}`, 10, 22, 12, C.gold);
     text(ctx, `${run.depth.current}  RUN ${String(state.meta.runIndex).padStart(2, '0')}`, compact ? 10 : w - 10, compact ? 44 : 22, 12, C.light, compact ? 'left' : 'right');
     const readout = sceneReadout(state);
-    if (!layout.buttons.some((button) => ['goal', 'shaft-goal'].includes(button.id))) lines(ctx, readout.goal, 12, compact ? 77 : 62, Math.min(w - 24, 440), 12, 2, C.gold);
+    if (!layout.buttons.some((button) => ['goal', 'shaft-goal'].includes(button.id))) lines(ctx, readout.goal, 12, compact ? 77 : 62, Math.min(w - 104, 440), 12, 2, C.gold);
     const top = h - (compact ? 132 : 88);
     ctx.fillStyle = C.background; ctx.fillRect(0, top, w, h - top);
     ctx.fillStyle = C.line; ctx.fillRect(0, top, w, 1);

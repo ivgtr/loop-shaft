@@ -1,3 +1,4 @@
+import { createManagementState, stationView } from '../src/game/management';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGameState } from '../src/game/createGame';
 import { PLAYER_PACK_CAPACITY, UPGRADE_COSTS } from '../src/game/config';
@@ -59,8 +60,10 @@ describe('workshop presentation', () => {
     const state = createGameState(15);
     for (let i = 0; i < 12; i++) state.run.phase5.equipment.inventory.push({ id: `gear-${i}`, baseId: 'ancient-pick', slot: 'TOOL',
       name: `Pick ${i}`, rarity: 'RARE', level: 1, affixes: [], originDepth: 'D-180' });
-    expect(workshopItems(state).filter((i) => i.tab === 'recovered')).toHaveLength(12);
-    expect(item(state, 'gear-0').command).toEqual({ type: 'equip-item', itemId: 'gear-0' });
+    expect(item(state, 'recovered-gear').comparison).toBe('12 stored instances');
+    const recovered = stationView(state, createManagementState(state, { station: 'equipment' })).items;
+    expect(recovered).toHaveLength(12);
+    expect(recovered[0]!.action).toEqual({ type: 'command', command: { type: 'equip-item', itemId: 'gear-0' } });
   });
 
   it('guides the next purchase only after delivery, with a live shortfall and no forced opening', () => {

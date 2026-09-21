@@ -60,7 +60,7 @@ test('first delivery funds an in-world purchase without using the outside contro
   const stage = await page.locator('.game-shell').boundingBox();
   await ui(page, 'goal').click();
   await expect(dialog(page)).toContainText('Hit power 10 → 16');
-  await expect(page.locator('.legacy-controls')).toHaveAttribute('inert', '');
+  await expect(page.locator('.legacy-controls, .context-strip')).toHaveCount(0);
   await assertContained(page);
   await testInfo.attach('workshop-before-purchase', { body: await page.screenshot(), contentType: 'image/png' });
   await ui(page, 'buy').click();
@@ -157,18 +157,20 @@ test('offers all recovered equipment, including items older than the last eight'
     name: `Recovered pick ${i}`, slot: 'TOOL', rarity: 'RARE', level: 1, affixes: [], originDepth: 'D-180' });
   await seed(page, state); await page.goto('/'); await clickWorld(page, 202, 216);
   await ui(page, 'tab-recovered').click();
-  await expect(ui(page, 'item-gear-0')).toBeVisible();
-  await ui(page, 'buy').click();
+  await ui(page, 'buy').click(); // FINDS opens the common recovered equipment inspector.
+  await expect(ui(page, 'station-item-gear-0')).toBeVisible();
+  await ui(page, 'station-activate').click();
   expect((await saved(page)).run.phase5.equipment.equippedPlayer.TOOL).toBe('gear-0');
-  await ui(page, 'previous').click();
-  await expect(ui(page, 'item-gear-11')).toHaveAttribute('aria-pressed', 'true');
-  await ui(page, 'item-gear-11').focus();
+  await ui(page, 'station-previous').click();
+  await expect(ui(page, 'station-item-gear-11')).toHaveAttribute('aria-pressed', 'true');
+  await ui(page, 'station-item-gear-11').focus();
   for (let i = 0; i < 5; i++) {
     await page.keyboard.press('ArrowRight');
-    await expect(ui(page, `item-gear-${i}`)).toHaveAttribute('aria-pressed', 'true');
-    await expect(ui(page, `item-gear-${i}`)).toBeFocused();
+    await expect(ui(page, `station-item-gear-${i}`)).toHaveAttribute('aria-pressed', 'true');
+    await expect(ui(page, `station-item-gear-${i}`)).toBeFocused();
   }
-  await assertContained(page);
+  await expect(page.getByRole('dialog', { name: 'RECOVERED GEAR', exact: true })).toContainText('Base hit:');
+
 });
 
 for (const width of [320, 390]) {

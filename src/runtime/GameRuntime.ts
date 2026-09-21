@@ -15,7 +15,7 @@ import {
 import { deeperDepth } from '../game/depth';
 import {
   applyOfflineProgress,
-  armPhase5Reboot,
+  confirmPhase5Reboot,
   assignCrew,
   equipCrewItem,
   equipPlayerItem,
@@ -24,7 +24,6 @@ import {
   processPhase5Events,
   pushD180,
   requestPhase5Travel,
-  selectCrewBoard,
   setCargoPriority,
   setMinerPriority,
   setPorterPriority,
@@ -41,12 +40,7 @@ import {
   purchaseCoreProtocol,
   requestPlayerInteraction,
   requestPlayerReturn,
-  selectArchive,
-  selectCoreChamber,
-  selectCoreConsole,
   selectNode,
-  selectResearchTerminal,
-  selectScanner,
   sendElevator,
   startResearch,
   toggleAutoDispatch,
@@ -63,7 +57,7 @@ import {
   upgradePack,
   upgradeTool,
 } from '../game/simulation';
-import type { DepthId, GameState, MinerPriority, PorterPriority } from '../game/types';
+import type { DepthId, GameState } from '../game/types';
 import { GameRenderer } from '../render/gameRenderer';
 import type { InteractionTarget, Point } from '../render/interactionTargets';
 import type { GameCommand } from './commands';
@@ -71,10 +65,10 @@ import { MiningInput } from './MiningInput';
 import { elevatorItems, selectedElevatorItem, type ElevatorTab, type ElevatorUiState } from '../game/elevatorUi';
 import { nextWorkshopUpgrade, selectedWorkshopItem, workshopItems, type WorkshopState } from '../game/workshop';
 
+import { createManagementState, selectedStationItem, stationAvailable, stationSelection, stationView, type ManagementState, type StationRequest } from '../game/management';
+
 const FIXED_STEP = 1 / 60;
 const UI_UPDATE_INTERVAL = 100;
-const MINER_PRIORITIES: readonly MinerPriority[] = ['ANY', 'RESEARCH', 'RARE', 'NEAREST'];
-const PORTER_PRIORITIES: readonly PorterPriority[] = ['NEAREST', 'RESEARCH', 'CORE', 'RELIC', 'RARE', 'VALUE'];
 const LEFT_KEYS = ['KeyA', 'ArrowLeft'];
 const RIGHT_KEYS = ['KeyD', 'ArrowRight'];
 
@@ -84,6 +78,7 @@ export interface GameSnapshot {
   readonly workshop: WorkshopState | null;
   readonly elevatorUi: ElevatorUiState | null;
   readonly helpOpen: boolean;
+  readonly management: ManagementState | null;
 }
 
 type Listener = () => void;
@@ -110,14 +105,16 @@ export class GameRuntime {
   private workshop: WorkshopState | null = null;
   private elevatorUi: ElevatorUiState | null = null;
   private helpOpen = false;
+  private management: ManagementState | null = null;
 
-  private get windowOpen(): boolean { return this.workshop !== null || this.elevatorUi !== null || this.helpOpen; }
+  private get windowOpen(): boolean { return this.workshop !== null || this.elevatorUi !== null || this.helpOpen || this.management !== null; }
 
   constructor(private readonly state: GameState) {
     // Held directional input must never continue after reloading a save.
     if (state.run.character.state === 'MOVING_TO_POINT' || state.run.character.state === 'WAITING_FOR_ELEVATOR') cancelPlayerAction(state);
     // Old saves may contain a workbench selection; windows are deliberately not saved.
-    if (state.selection?.type === 'workbench') state.selection = null;
+    if (state.selection && !['node', 'elevator'].includes(state.selection.type)) state.selection = null;
+    state.run.coreChamber.rebootArmed = false;
     this.miningInput = new MiningInput(state);
     this.snapshot = this.createSnapshot();
   }
@@ -221,7 +218,7 @@ export class GameRuntime {
       const node = currentFloor(this.state).nodes.find((candidate) => candidate.id === ref.id);
       if (node && !canPlayerAccessNode(node)) {
         this.miningInput.cancel();
-        this.state.selection = { type: 'node', id: ref.id };
+        this.openManagement({ station: 'logistics', tab: 'bore', selectedId: ref.id });
       } else if (this.state.run.character.targetNodeId === ref.id
         && ['MINING', 'MOVING_TO_NODE'].includes(this.state.run.character.state)) {
         // Busy same-node clicks are mining requests, never movement/cancel commands.
@@ -233,21 +230,90 @@ export class GameRuntime {
       return;
     }
     this.miningInput.cancel();
-    if (ref.type === 'rail-stop') this.state.selection = { type: 'rail-stop', id: ref.id };
-    else if (ref.type === 'cargo-hub') this.state.selection = { type: 'cargo-hub', id: ref.id };
-    else if (ref.type === 'freight-control') this.state.selection = { type: 'freight-control' };
-    else if (ref.type === 'bore-console') this.state.selection = { type: 'bore-console', id: ref.id };
-    else if (ref.type === 'crew-board') selectCrewBoard(this.state);
+    if (ref.type === 'rail-stop') {
+      const line = this.state.run.logistics.lines.find((line) => line.id === ref.id);
+      this.openManagement({ station: 'logistics', tab: 'rail', selectedId: line ? `${line.id}:${line.priority}` : undefined });
+    } else if (ref.type === 'cargo-hub' || ref.type === 'freight-control') this.openManagement({ station: 'logistics', tab: 'freight' });
+    else if (ref.type === 'bore-console') this.openManagement({ station: 'logistics', tab: 'bore', selectedId: this.state.run.deepAutomation.bores.find((bore) => bore.id === ref.id)?.siteId });
+    else if (ref.type === 'crew-board') this.openManagement({ station: 'crew' });
     else if (ref.type === 'elevator') {
-      // Cargo clicks retain the established return action. The explicit LIFT control opens the console.
       if (this.state.run.character.carried.length > 0) requestPlayerReturn(this.state);
       else this.openElevator();
     } else if (ref.type === 'workbench') this.openWorkshop();
-    else if (ref.type === 'scanner') selectScanner(this.state);
-    else if (ref.type === 'archive') selectArchive(this.state);
-    else if (ref.type === 'research') selectResearchTerminal(this.state);
-    else if (ref.type === 'core-console') selectCoreConsole(this.state);
-    else selectCoreChamber(this.state);
+    else if (ref.type === 'scanner') this.openManagement({ station: 'scanner' });
+    else if (ref.type === 'archive') this.openManagement({ station: 'archive' });
+    else if (ref.type === 'research') this.openManagement({ station: 'research' });
+    else if (ref.type === 'core-console') this.openManagement({ station: 'core' });
+    else this.openManagement({ station: 'reboot' });
+  }
+
+  openManagement(request: StationRequest): void {
+    if (this.state.run.elevator.travel || !stationAvailable(this.state, request.station)) return;
+    // Only the workshop's FINDS entry and navigation inside this window may switch windows.
+    if (this.elevatorUi || this.helpOpen || (this.workshop && request.station !== 'equipment')) return;
+    const returning = this.management ? this.management.returnSelection : this.state.selection;
+    this.releaseInputs(); this.clearPointer(); cancelPlayerAction(this.state);
+    this.workshop = null;
+    this.management = createManagementState(this.state, request, returning);
+    this.state.selection = stationSelection(request.station);
+    this.state.run.coreChamber.rebootArmed = false;
+    this.publish();
+  }
+
+  closeManagement(): void {
+    if (!this.management) return;
+    const ui = this.management;
+    this.releaseInputs(); this.management = null;
+    if (ui.runIndex === this.state.meta.runIndex && ui.depth === this.state.run.depth.current) this.state.selection = ui.returnSelection;
+    this.state.run.coreChamber.rebootArmed = false;
+    this.publish(); this.focusCanvas();
+  }
+
+  backManagement(): void {
+    if (!this.management) return;
+    if (this.management.confirmation) { this.cancelManagementConfirmation(); return; }
+    const back = stationView(this.state, this.management).back;
+    if (back === 'workshop') { this.closeManagement(); this.openWorkshop(); }
+    else if (back) this.openManagement(back);
+  }
+
+  selectManagementTab(tab: string): void {
+    if (!this.management || this.management.confirmation || !stationView(this.state, this.management).tabs.some((candidate) => candidate.id === tab)) return;
+    this.management = createManagementState(this.state, { station: this.management.station, subjectId: this.management.subjectId ?? undefined, tab }, this.management.returnSelection);
+    this.publish();
+  }
+
+  selectManagementItem(id: string): void {
+    if (!this.management || this.management.confirmation || !stationView(this.state, this.management).items.some((item) => item.id === id)) return;
+    this.management = { ...this.management, selectedId: id, detailPage: 0, notice: null };
+    this.publish();
+  }
+
+  setManagementPage(page: number): void {
+    if (!this.management || !Number.isFinite(page)) return;
+    this.management = { ...this.management, detailPage: Math.max(0, Math.floor(page)) }; this.publish();
+  }
+
+  cancelManagementConfirmation(): void {
+    if (!this.management) return;
+    this.management = { ...this.management, confirmation: null, detailPage: 0, notice: null };
+    this.publish();
+  }
+
+  activateManagementItem(): void {
+    if (!this.management) return;
+    const item = selectedStationItem(this.state, this.management);
+    if (!item.action || item.reason) return;
+    if (item.confirmKey && this.management.confirmation !== item.confirmKey) {
+      this.management = { ...this.management, confirmation: item.confirmKey, detailPage: 0, notice: 'Review the consequences. Cancel keeps the current state.' };
+      this.publish(); return;
+    }
+    if (item.action.type === 'navigate') { this.openManagement(item.action.request); return; }
+    if (item.action.type === 'workshop') { this.closeManagement(); this.openWorkshop(); return; }
+    this.dispatch(item.action.command);
+    if (!this.management) return;
+    this.management = { ...this.management, confirmation: null, notice: `${item.name}: applied.` };
+    this.publish();
   }
 
   openWorkshop(): void {
@@ -338,6 +404,12 @@ export class GameRuntime {
   }
 
   dispatch(command: GameCommand): void {
+    if (this.management) {
+      if (command.type === 'cancel') { if (this.management.confirmation) this.cancelManagementConfirmation(); else this.closeManagement(); return; }
+      const item = selectedStationItem(this.state, this.management);
+      if (item.reason || item.action?.type !== 'command' || JSON.stringify(item.action.command) !== JSON.stringify(command)
+        || (item.confirmKey && item.confirmKey !== this.management.confirmation)) return;
+    } else if (command.type === 'reboot') return; // A saved or direct command cannot bypass the review screen.
     if (this.helpOpen) { if (command.type === 'cancel') this.closeHelp(); return; }
     if (this.elevatorUi) {
       if (command.type === 'cancel') { this.closeElevator(); return; }
@@ -390,8 +462,8 @@ export class GameRuntime {
       case 'expand-crew': expandCrewSlots(this.state); break;
       case 'hire-crew': hireCrew(this.state, command.role); break;
       case 'assign-crew': assignCrew(this.state, command.crewId, command.depth); break;
-      case 'cycle-miner-priority': this.cycleMinerPriority(command.crewId); break;
-      case 'cycle-porter-priority': this.cyclePorterPriority(command.crewId); break;
+      case 'miner-priority': setMinerPriority(this.state, command.crewId, command.priority); break;
+      case 'porter-priority': setPorterPriority(this.state, command.crewId, command.priority); break;
       case 'cargo-priority': setCargoPriority(this.state, command.priority); break;
       case 'equip-item': equipPlayerItem(this.state, command.itemId); break;
       case 'equip-crew-item': equipCrewItem(this.state, command.crewId, command.itemId); break;
@@ -400,9 +472,10 @@ export class GameRuntime {
       case 'toggle-passive': togglePassive(this.state, command.passive); break;
       case 'research': startResearch(this.state, command.research); break;
       case 'protocol': purchaseCoreProtocol(this.state, command.protocol); break;
-      case 'reboot': armPhase5Reboot(this.state); break;
+      case 'reboot': confirmPhase5Reboot(this.state); break;
     }
     if (this.elevatorUi && this.state.run.elevator.travel) this.closeElevator();
+    if (this.management && this.management.runIndex !== this.state.meta.runIndex) this.closeManagement();
     saveToStorage(this.state);
     this.publish();
   }
@@ -434,6 +507,13 @@ export class GameRuntime {
       || this.workshop.depth !== this.state.run.depth.current || this.state.run.elevator.travel)) this.closeWorkshop();
     if (this.elevatorUi && (this.elevatorUi.runIndex !== this.state.meta.runIndex
       || this.elevatorUi.depth !== this.state.run.depth.current || this.state.run.elevator.travel)) this.closeElevator();
+    if (this.management && (this.management.runIndex !== this.state.meta.runIndex || this.management.depth !== this.state.run.depth.current || this.state.run.elevator.travel)) this.closeManagement();
+    if (this.management?.confirmation) {
+      const item = selectedStationItem(this.state, this.management);
+      if (item.confirmKey !== this.management.confirmation || item.reason) {
+        this.management = { ...this.management, confirmation: null, detailPage: 0, notice: 'State changed. Review the updated details before confirming.' };
+      }
+    }
     this.refreshPointerTarget();
     this.renderer?.render(this.state, now, this.hoveredKey);
     if (now - this.lastUiUpdate >= UI_UPDATE_INTERVAL) {
@@ -449,7 +529,7 @@ export class GameRuntime {
     const inGame = canvasFocused || Boolean(this.canvas?.closest('.game-root')?.contains(event.target as Node));
     if (event.code === 'Escape' && (inGame || this.windowOpen)) {
       event.preventDefault();
-      if (!event.repeat) { this.dispatch({ type: 'cancel' }); this.focusCanvas(); }
+      if (!event.repeat) { this.dispatch({ type: 'cancel' }); if (!this.windowOpen) this.focusCanvas(); }
       return;
     }
     // Native UI buttons retain Space/Enter activation; text editing never controls the miner.
@@ -499,20 +579,6 @@ export class GameRuntime {
     if (document.visibilityState === 'hidden') { this.releaseInputs(); saveToStorage(this.state); }
   };
 
-  private cycleMinerPriority(crewId: string): void {
-    const member = this.state.run.phase5.crew.members.find((candidate) => candidate.id === crewId && candidate.role === 'MINER');
-    if (!member) return;
-    const next = MINER_PRIORITIES[(MINER_PRIORITIES.indexOf(member.minerPriority) + 1) % MINER_PRIORITIES.length]!;
-    setMinerPriority(this.state, crewId, next);
-  }
-
-  private cyclePorterPriority(crewId: string): void {
-    const member = this.state.run.phase5.crew.members.find((candidate) => candidate.id === crewId && candidate.role === 'PORTER');
-    if (!member) return;
-    const next = PORTER_PRIORITIES[(PORTER_PRIORITIES.indexOf(member.porterPriority) + 1) % PORTER_PRIORITIES.length]!;
-    setPorterPriority(this.state, crewId, next);
-  }
-
   private refreshPointerTarget(): void {
     if (this.windowOpen || !this.renderer || !this.pointerClient) {
       this.pointerWorld = null;
@@ -548,6 +614,6 @@ export class GameRuntime {
   private createSnapshot(): GameSnapshot {
     return Object.freeze({ revision: this.revision, state: structuredClone(this.state),
       workshop: this.workshop ? { ...this.workshop } : null,
-      elevatorUi: this.elevatorUi ? { ...this.elevatorUi } : null, helpOpen: this.helpOpen });
+      elevatorUi: this.elevatorUi ? { ...this.elevatorUi } : null, helpOpen: this.helpOpen, management: this.management ? structuredClone(this.management) : null });
   }
 }

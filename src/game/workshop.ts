@@ -53,17 +53,10 @@ export function workshopItems(state: GameState): WorkshopItem[] {
     items[items.indexOf(item)] = { ...item, reason: null, command: { type: 'toggle-auto-swing' },
       actionLabel: run.automation.autoSwing.enabled ? 'Switch Auto Swing OFF' : 'Switch Auto Swing ON' };
   }
-  // Keep all existing recovered gear accessible while its richer comparison UI is a later stage.
-  for (const item of run.phase5.equipment.inventory) {
-    const owned = run.phase5.equipment.equippedPlayer[item.slot] === item.id;
-    const crewOwner = run.phase5.crew.members.find((member) => Object.values(member.equipment).includes(item.id));
-    items.push({ id: item.id, tab: 'recovered', name: item.name,
-      icon: item.slot === 'TOOL' ? 'pick' : item.slot === 'BOOTS' ? 'boots' : item.slot === 'PACK' ? 'pack' : 'lamp',
-      owned, cost: null, comparison: `${item.rarity} · ${item.slot} · Lv.${item.level}`,
-      description: item.affixes.map((affix) => affix.name).join(' / ') || 'Recovered equipment.',
-      reason: owned ? 'Equipped by you' : crewOwner ? `Reassigns equipment from ${crewOwner.name}` : null,
-      actionLabel: owned ? 'Equipped' : 'Equip recovered item', command: owned ? null : { type: 'equip-item', itemId: item.id } });
-  }
+  if (run.phase5.equipment.inventory.length) items.push({ id: 'recovered-gear', tab: 'recovered', name: 'Recovered gear',
+    icon: 'lamp', owned: false, cost: null, comparison: `${run.phase5.equipment.inventory.length} stored instances`,
+    description: 'Browse by slot and compare all recovered equipment. Ownership transfers require confirmation.', reason: null,
+    actionLabel: 'INSPECT RECOVERED GEAR', command: null });
   return items;
 
   function upgrade(id: UpgradeAction, tab: WorkshopTab, name: string, icon: WorkshopIcon, owned: boolean,

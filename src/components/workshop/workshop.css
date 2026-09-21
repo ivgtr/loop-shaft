@@ -2,7 +2,6 @@
 .canvas-inputs { position:absolute; inset:0; z-index:5; pointer-events:none; }
 .canvas-inputs.window-open { pointer-events:auto; }
 .canvas-hit { position:absolute; display:block; margin:0; padding:0; border:0; border-radius:0; background:transparent; color:transparent; outline:0; cursor:pointer; pointer-events:auto; touch-action:manipulation; }
-.legacy-controls[inert] { visibility:hidden; }
 .canvas-hit:disabled { cursor:default; }
 .canvas-semantics { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
 @media (forced-colors:active) {
