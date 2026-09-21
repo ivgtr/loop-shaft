@@ -14,13 +14,13 @@ describe('D-001 assets', () => {
     expect(urls.every((url) => url.endsWith(`?v=${D001_ASSET_VERSION}`))).toBe(true);
   });
 
-  it('keeps Player, each NPC role and Cargo as independent fallback groups', () => {
+  it('keeps Player and each NPC role as independent fallback groups', () => {
     expect(Object.keys(D001_FALLBACK_GROUPS)).toEqual([
-      'player', 'porter', 'crewMiner', 'crewPorter', 'engineer', 'cargo',
+      'player', 'porter', 'crewMiner', 'crewPorter', 'engineer',
       'elevator', 'rope', 'surfaceJunction', 'shaftBottom',
     ]);
     expect(D001_FALLBACK_GROUPS.player).toHaveLength(5);
-    for (const group of ['porter', 'crewMiner', 'crewPorter', 'engineer', 'cargo'] as const) {
+    for (const group of ['porter', 'crewMiner', 'crewPorter', 'engineer'] as const) {
       expect(D001_FALLBACK_GROUPS[group]).toHaveLength(1);
     }
     for (const group of ['elevator', 'rope', 'surfaceJunction', 'shaftBottom'] as const) {

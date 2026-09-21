@@ -6,6 +6,7 @@ import { SAVE_KEY, serializeGameState } from '../../src/game/save';
 import { deriveInteractionTargets } from '../../src/render/interactionTargets';
 import { loot, specimenGame } from '../fixtures/discovery';
 import type { GameState } from '../../src/game/types';
+import { observeDiscoveryArt, expectDiscoveryArt } from './helpers/discoveryArt';
 
 const ui = (page: Page, id: string) => page.locator(`.canvas-hit[data-ui-action="${id}"]`);
 const modal = (page: Page) => page.getByRole('dialog');
@@ -104,15 +105,18 @@ test('a real D030 break creates a field tool, shipping identifies it, and Run 1 
 
 test('a visible persistent trace changes from sealed to exposed to spent through mining and reload', async ({ page }, info) => {
   test.setTimeout(60000);
+  await observeDiscoveryArt(page);
   const state = createGameState(771); const floor = state.run.floors['D-001'];
   for (let i = 0; i < 6; i++) advanceProspecting(floor, floor.nodes[0]!);
   const plan = floorProspects(floor)[0]!; const node = floor.nodes.find((n) => n.id === plan.nodeId)!;
   node.hp = 1; state.run.character.x = node.x - 13;
   await seed(page, state); await selectNode(page, state, node.id);
   await expect(page.getByTestId('scene-detail')).toContainText('2 breaks to extract');
+  await expectDiscoveryArt(page, 'traces', `${plan.signal.toLowerCase()}-sealed`);
   await info.attach('trace-sealed', { body: await page.screenshot(), contentType: 'image/png' });
   await page.keyboard.press('Space'); await expect(page.getByTestId('scene-detail')).toContainText('1 breaks to extract');
   await expect.poll(async () => (await saved(page)).run.floors['D-001'].prospecting?.prospectWork[0], { timeout: 8000 }).toBe(1);
+  await expectDiscoveryArt(page, 'traces', `${plan.signal.toLowerCase()}-nearly`);
   await info.attach('trace-exposed', { body: await page.screenshot(), contentType: 'image/png' });
   await page.reload(); await selectNode(page, state, node.id);
   await expect(page.getByTestId('scene-detail')).toContainText('1 breaks to extract');
@@ -126,6 +130,7 @@ test('a visible persistent trace changes from sealed to exposed to spent through
     await expect(page.locator('.game-canvas')).toHaveAttribute('data-swing', 'ready');
   }
   await expect.poll(async () => (await saved(page)).run.floors['D-001'].prospecting?.prospectWork[0], { timeout: 8000 }).toBe(2);
+  await expectDiscoveryArt(page, 'traces', `${plan.signal.toLowerCase()}-spent`);
   await info.attach('trace-spent', { body: await page.screenshot(), contentType: 'image/png' });
 });
 

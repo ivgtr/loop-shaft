@@ -1,4 +1,4 @@
-import { drawCargoMark } from './discoveryCues';
+import { drawPhysicalCargo, drawCarriedCargo } from './cargoRenderer';
 import { WORLD } from '../game/config';
 import { canShowCrewBoard, phase5Floor } from '../game/phase5';
 import type { CrewMember, EquipmentItem, EquipmentRarity, GameEvent, GameState, Phase5DepthId } from '../game/types';
@@ -7,9 +7,7 @@ import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
 import {
   drawD001ActorShadow,
-  drawD001Cargo,
   drawD001CargoShadow,
-  drawD001CarriedCargo,
   drawD001Crew,
   type D001AssetStore,
 } from './d001ImageRenderer';
@@ -37,18 +35,22 @@ export class Phase5Renderer {
     this.base.handleEvent(event, state, now);
   }
 
-  drawForegroundFx(now: number): void {
-    this.base.drawForegroundFx(now);
+  worldShake(state: GameState, now: number): number {
+    return this.base.worldShake(state, now);
+  }
+
+  drawForegroundFx(now: number, shake = 0): void {
+    this.base.drawForegroundFx(now, shake);
   }
 
   render(state: GameState, now: number): void {
     this.base.render(state, now);
     if (state.run.elevator.travel) return;
     this.ctx.save();
-    if ((state.run.depth.current as string) === 'D-180') drawAncientRuins(this.ctx, state, now);
+    if ((state.run.depth.current as string) === 'D-180') drawAncientRuins(this.ctx, now);
     const semantic = deriveSemanticRenderState(state, now);
     if (state.run.phase5.crew.unlocked) {
-      drawCargoPlatform(this.ctx, state, this.assets);
+      drawCargoPlatform(this.ctx, state);
       drawCrew(this.ctx, state, now, semantic, this.assets);
     }
     drawCrewBoard(this.ctx, state, now);
@@ -83,7 +85,7 @@ function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: num
   drawPixelText(ctx, crew.unlocked ? 'SHIFT BOARD' : 'CREW BOARD', x + 5, y + 27, { font: 'standard', baseline: 'bottom' });
 }
 
-function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, assets: D001AssetStore): void {
+function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState): void {
   const floor = phase5Floor(state, state.run.depth.current as Phase5DepthId);
   if (!floor) return;
   const x = WORLD.elevatorX + 38;
@@ -95,15 +97,8 @@ function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, asse
   for (let index = count - 1; index >= 0; index -= 1) {
     const row = Math.floor(index / 4); const col = index % 4;
     const item = floor.cargo[index]!;
-    if (state.run.depth.current === 'D-001' && assets.ready('cargoItems')) {
-      drawD001CargoShadow(ctx, x + 7 + col * 8, y - 4 - row * 5);
-    }
-    const cargoImage = state.run.depth.current === 'D-001' && drawD001Cargo(ctx, item, x + 7 + col * 8, y - 4 - row * 5, assets);
-    if (!cargoImage) {
-      ctx.fillStyle = item.equipmentSeed !== undefined ? '#8b795f' : item.category === 'CORE' ? '#9e8067' : item.category === 'RESEARCH' ? '#718e96' : '#755f43';
-      ctx.fillRect(x + 4 + col * 8, y - 8 - row * 5, 6, 4);
-      drawCargoMark(ctx, item, x + 7 + col * 8, y - 4 - row * 5);
-    }
+    drawD001CargoShadow(ctx, x + 7 + col * 8, y - 4 - row * 5);
+    drawPhysicalCargo(ctx, item, x + 7 + col * 8, y - 4 - row * 5);
   }
   if (floor.cargo.length > 8) {
     ctx.fillStyle = '#c8bda8';
@@ -130,11 +125,7 @@ function drawCrew(
       drawCrewMember(ctx, state, member, now);
       ctx.restore();
     }
-    else if (actor && !drawD001CarriedCargo(ctx, actor, assets) && actor.carried.length > 0) {
-      ctx.fillStyle = '#735e43';
-      ctx.fillRect(actor.worldAnchor.x + actor.facing * 6 - (actor.facing > 0 ? 0 : 6), actor.worldAnchor.y - 12, 6, 8);
-      drawCargoMark(ctx, actor.carried[0]!, actor.worldAnchor.x + actor.facing * 8, actor.worldAnchor.y - 4);
-    }
+    else if (actor) drawCarriedCargo(ctx, actor);
   }
 }
 
@@ -146,8 +137,8 @@ function drawCrewMember(ctx: CanvasRenderingContext2D, state: GameState, member:
   ctx.fillStyle = member.role === 'MINER' ? '#b29355' : '#668b91'; ctx.fillRect(x - 4, y - 9, 8, 3);
   ctx.fillStyle = member.role === 'MINER' ? '#a6906d' : '#8b8c79'; ctx.fillRect(x - 3, y - 4, 7, 6);
   ctx.fillStyle = '#49545a'; ctx.fillRect(x - 3, y + 2, 2, 4 + step); ctx.fillRect(x + 2, y + 2, 2, 5 - step);
-  if (member.role === 'MINER') drawCrewPick(ctx, state, member, x, y, dir);
-  if (member.body.carried.length > 0) { ctx.fillStyle = '#735e43'; ctx.fillRect(x - dir * 7 - (dir > 0 ? 6 : 0), y - 5, 6, 8); drawCargoMark(ctx, member.body.carried[0]!, x - dir * 7, y + 3); }
+  if (member.role === 'MINER' && (member.swing || member.state === 'MINING')) drawCrewPick(ctx, state, member, x, y, dir);
+  if (member.body.carried.length > 0) { ctx.fillStyle = '#735e43'; ctx.fillRect(x - dir * 7 - (dir > 0 ? 6 : 0), y - 5, 6, 8); drawPhysicalCargo(ctx, member.body.carried[0]!, x + dir * 8, y + 3); }
   if (member.pendingDepth) { ctx.fillStyle = '#a98e62'; ctx.fillRect(x - 1, y - 13, 3, 2); }
 }
 
@@ -176,7 +167,7 @@ function drawCargoRouteIndicator(ctx: CanvasRenderingContext2D, state: GameState
   ctx.fillStyle = '#776a50'; ctx.fillRect(270, 50, Math.max(1, Math.round(29 * ratio)), 1);
 }
 
-function drawAncientRuins(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
+function drawAncientRuins(ctx: CanvasRenderingContext2D, now: number): void {
   ctx.fillStyle = '#191816'; ctx.fillRect(0, 42, 214, 134); ctx.fillRect(266, 42, 214, 134);
   ctx.fillStyle = '#292723';
   for (const x of [22, 76, 142, 188, 286, 344, 402, 454]) {
@@ -190,31 +181,14 @@ function drawAncientRuins(ctx: CanvasRenderingContext2D, state: GameState, now: 
   ctx.fillStyle = Math.floor(now / 900) % 2 === 0 ? '#766d57' : '#5f594a'; ctx.fillRect(54, 104, 2, 2);
   ctx.fillRect(397, 111, 2, 2);
 
-  const floor = phase5Floor(state, 'D-180');
-  for (const node of floor.nodes) {
-    if (node.hp <= 0) continue;
-    if (node.id === 'ruined-workshop') {
-      ctx.fillStyle = '#403c34'; ctx.fillRect(node.x - 17, 188, 34, 19);
-      ctx.fillStyle = '#746b5d'; ctx.fillRect(node.x - 12, 191, 21, 3); ctx.fillRect(node.x + 8, 194, 3, 11);
-      ctx.fillStyle = '#5c5143'; ctx.fillRect(node.x - 10, 199, 8, 6);
-    } else if (node.id === 'archive-vault') {
-      ctx.fillStyle = '#343633'; ctx.fillRect(node.x - 18, 184, 36, 23);
-      ctx.fillStyle = '#77766c'; ctx.fillRect(node.x - 13, 188, 26, 2); ctx.fillRect(node.x - 13, 197, 26, 2);
-      ctx.fillStyle = '#202320'; ctx.fillRect(node.x - 8, 191, 16, 5);
-    } else if (node.id === 'sealed-chamber') {
-      ctx.fillStyle = '#302f2b'; ctx.fillRect(node.x - 22, 178, 44, 29);
-      ctx.strokeStyle = '#706a5c'; ctx.strokeRect(node.x - 16.5, 183.5, 33, 22);
-      ctx.fillStyle = '#514a3f'; ctx.fillRect(node.x - 2, 185, 4, 18);
-    }
-  }
 }
 
 function drawPlayerEquipment(ctx: CanvasRenderingContext2D, state: GameState): void {
   const equipped = state.run.phase5.equipment.equippedPlayer;
   if (Object.keys(equipped).length === 0) return;
-  const c = state.run.character; const x = Math.round(c.x); const y = Math.round(c.y); const dir = c.facing;
+  const c = state.run.character; const x = Math.round(c.x); const y = Math.round(c.y) + (state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0); const dir = c.facing;
   const tool = itemFor(state, equipped.TOOL); const pack = itemFor(state, equipped.PACK); const boots = itemFor(state, equipped.BOOTS); const lamp = itemFor(state, equipped.LAMP);
-  if (tool) { ctx.fillStyle = equipmentColor(tool.rarity); ctx.fillRect(x + dir * 8 - (dir < 0 ? 4 : 0), y - 10, 5, 2); }
+  if (tool && state.run.depth.current !== 'D-001' && !c.swing && c.state === 'MINING') { ctx.fillStyle = equipmentColor(tool.rarity); ctx.fillRect(x + dir * 8 - (dir < 0 ? 4 : 0), y - 10, 5, 2); }
   if (pack) { ctx.strokeStyle = equipmentColor(pack.rarity); ctx.strokeRect(x - dir * 8 - (dir > 0 ? 7 : 0) + 0.5, y - 6.5, 7, 9); }
   if (boots) { ctx.fillStyle = equipmentColor(boots.rarity); ctx.fillRect(x - 3, y + 3, 2, 2); ctx.fillRect(x + 2, y + 3, 2, 2); }
   if (lamp) {

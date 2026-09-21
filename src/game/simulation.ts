@@ -705,15 +705,15 @@ function beginSwing(state: GameState, node: MiningNode): boolean {
   if (!canStartSwing(state)) return false;
   state.run.character.swing = { elapsed: 0, hitApplied: false };
   state.run.character.facing = node.x >= state.run.character.x ? 1 : -1;
-  emit(state, 'MINER_SWING_START', { nodeId: node.id });
+  emit(state, 'MINER_SWING_START', { nodeId: node.id, depth: state.run.depth.current });
   return true;
 }
 
 function applyMiningHit(state: GameState, node: MiningNode): void {
   const damage = playerMiningDamage(state, node);
-  emit(state, 'MINER_SWING_HIT', { nodeId: node.id, damage });
+  emit(state, 'MINER_SWING_HIT', { nodeId: node.id, depth: state.run.depth.current, damage });
   node.hp = Math.max(0, node.hp - damage);
-  emit(state, 'NODE_DAMAGE', { nodeId: node.id, hp: node.hp, maxHp: node.maxHp });
+  emit(state, 'NODE_DAMAGE', { nodeId: node.id, depth: state.run.depth.current, hp: node.hp, maxHp: node.maxHp });
   if (node.hp > 0) return;
   node.respawnTimer = node.respawnDelay;
   emit(state, 'NODE_BREAK', { nodeId: node.id, depth: state.run.depth.current });

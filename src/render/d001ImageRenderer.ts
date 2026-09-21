@@ -1,6 +1,5 @@
-import { drawCargoMark } from './discoveryCues';
 import { WORLD } from '../game/config';
-import type { GameState, LootKind, LootStack, MiningNode } from '../game/types';
+import type { GameState, MiningNode } from '../game/types';
 import type { AssetStore } from './assets/assetStore';
 import {
   D001_ASSET_FILES,
@@ -10,7 +9,6 @@ import {
   type D001AssetKey,
 } from './assets/d001Manifest';
 import {
-  cargoVisualClass,
   D001_WORKBENCH_IMAGE_OFFSET,
   D001_VISUAL_GROUND_OFFSET,
   D001_ROPE_START_Y,
@@ -153,40 +151,6 @@ function drawActor(
   ctx.restore();
 }
 
-const CARGO_FRAME = {
-  rock: 0, metal: 1, copper: 2, gold: 3, gem: 4, fossil: 5,
-  relic: 6, research: 7, anomaly: 8, core: 9, 'equipment-crate': 10, 'industrial-crate': 11,
-} as const;
-
-export function drawD001Cargo(
-  ctx: CanvasRenderingContext2D,
-  item: Pick<LootStack, 'kind' | 'category' | 'equipmentSeed' | 'quality' | 'specimen'>,
-  anchorX: number,
-  anchorY: number,
-  assets: D001AssetStore,
-): boolean {
-  const image = assets.ready('cargoItems');
-  if (!image) return false;
-  const frame = CARGO_FRAME[cargoVisualClass(item)];
-  ctx.drawImage(image, frame * 12, 0, 12, 10, Math.round(anchorX) - 6, Math.round(anchorY) - 10, 12, 10);
-  drawCargoMark(ctx, item, anchorX, anchorY);
-  return true;
-}
-
-export function drawD001CarriedCargo(
-  ctx: CanvasRenderingContext2D,
-  actor: ActorRenderState<string>,
-  assets: D001AssetStore,
-): boolean {
-  if (actor.carried.length === 0 || !assets.ready('cargoItems')) return false;
-  const visible = actor.carried.slice(0, 3);
-  visible.forEach((item, index) => {
-    const forward = actor.worldAnchor.x + actor.facing * (8 + index * 2);
-    drawD001Cargo(ctx, item, forward, actor.worldAnchor.y - 7 - index * 3, assets);
-  });
-  return true;
-}
-
 export function drawD001ActorShadow(
   ctx: CanvasRenderingContext2D,
   actor: Pick<ActorRenderState<string>, 'worldAnchor'>,
@@ -226,27 +190,6 @@ export function drawD001ElevatorBack(
   return true;
 }
 
-export function drawD001ElevatorCargo(
-  ctx: CanvasRenderingContext2D,
-  state: GameState,
-  semantic: SemanticRenderState,
-  assets: D001AssetStore,
-): boolean {
-  if (!assets.ready('cargoItems')) return false;
-  const count = Math.min(9, state.run.elevator.cargo.length);
-  for (let index = count - 1; index >= 0; index -= 1) {
-    const row = Math.floor(index / 3);
-    const column = index % 3;
-    const item = state.run.elevator.cargo[index]!;
-    if (!drawD001Cargo(ctx, item, WORLD.elevatorX - 8 + column * 9,
-      Math.round(semantic.elevator.y) + 13 - row * 6, assets)) {
-      ctx.fillStyle = lootColor(item.kind);
-      ctx.fillRect(WORLD.elevatorX - 12 + column * 9, Math.round(semantic.elevator.y) + 8 - row * 6, 7, 5);
-    }
-  }
-  return true;
-}
-
 export function drawD001ElevatorFront(
   ctx: CanvasRenderingContext2D,
   state: GameState,
@@ -270,13 +213,4 @@ export function drawD001ElevatorFront(
 
 export function assetDebugSummary(assets: D001AssetStore): Record<string, string> {
   return Object.fromEntries((Object.keys(D001_ASSET_FILES) as D001AssetKey[]).map((key) => [key, assets.get(key).state]));
-}
-
-function lootColor(kind: LootKind): string {
-  if (kind === 'STONE') return '#715a4d';
-  if (kind === 'IRON') return '#b8a795';
-  if (kind === 'COPPER') return '#b45f2e';
-  if (kind === 'GOLD_NUGGET' || kind === 'NATURAL_GOLD') return '#e6a02b';
-  if (kind === 'GEM') return '#916a4e';
-  return '#9f7353';
 }

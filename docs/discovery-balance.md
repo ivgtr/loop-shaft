@@ -47,6 +47,8 @@ LIFT → SHIP → Porter pickup holdで新規回収のみ保留する。既に�
 
 ## グラフィック契約と将来の拡張
 
+画像の現行実装は[発見の描画仕様](./discovery-visuals.md)を参照。下記の初期ピクセル記号は段階別アトラスに置換し、Fine/Pureも刻みだけでなく輪郭で区別する。意味のある状態キーと秘匿規則は継続する。
+
 `deriveSemanticRenderState().discoveries` に、各地点の `{ signal, stage, remaining }` を返す。stageはSEALED / EXPOSED / SPENT。現在は `drawDiscoveryCues` の金属片／渦巻き／層状線で区別し、掘ると露出形状・残り目印・採取済み跡が変わる。装飾用の時刻や乱数で段階を進めない。
 
 物理貨物は同じ `quality / specimen` を床・手持ち・リフト・集積所・トロッコ・Freight・Bore出力まで運ぶ。Fineは一本、Pureは二本の明るい刻み、未鑑定品は小さいタグを付ける。Pristineの正体はタグの見た目から漏らさない。形状でも区別し、色覚や音だけに頼らない。
