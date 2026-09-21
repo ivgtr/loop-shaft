@@ -2,7 +2,7 @@ import { CARGO_ROUTE_DURATION, COLLECT_DURATION, CREW_BOARD_COST, CREW_HIRE_COST
 import { canPlayerAccessNode, localCargoDropX, processDeepEvents, updateDeepGame } from './deepGame';
 import { depthDistance } from './depth';
 import { getModifiers } from './modifiers';
-import { finishingDamage, rollMiningLoot, nodeTripEstimate, treasureCategoryChance, visibleSeams, coreReserveRemaining } from './mining';
+import { finishingDamage, rollMiningLoot, nodeTripEstimate, treasureChance, treasureCategoryChance, visibleSeams, coreReserveRemaining } from './mining';
 import { hashSeed, nextRandom } from './rng';
 import { armReboot, canTravelToDepth, cargoWeight, drainEvents, requestFloorTravel, sendElevator, updateGame } from './simulation';
 import type { CargoRoutingPriority, CrewMember, CrewRole, EquipmentAffix, EquipmentAffixId, EquipmentItem, EquipmentRarity, EquipmentSlot, FloorState, GameEvent, GameEventType, GameState, LootKind, LootStack, MinerPriority, MiningNode, OfflineReport, Phase5DepthId, PorterPriority, Rarity, WorkerBody } from './types';
@@ -308,7 +308,7 @@ function chooseMinerNode(state: GameState, member: CrewMember, floor: FloorState
     const bonusRate = seam ? 1 / Math.max(1, seam.at - (node.minedCount ?? 0)) : 0;
     if (member.minerPriority === 'RESEARCH') return (treasureCategoryChance(state, node, 'RESEARCH') * 5
       + (bonus?.dataValue ?? 0) * bonusRate) / Math.max(1, travel + work + haul);
-    if (member.minerPriority === 'RARE') return (node.treasureChance + bonusRate + (coreReserveRemaining(node) > 0 ? node.coreWeight : 0))
+    if (member.minerPriority === 'RARE') return (treasureChance(state, node) + bonusRate + (coreReserveRemaining(node) > 0 ? node.coreWeight : 0))
       / Math.max(1, travel + work + haul * 0.5);
     return (estimate.averageScrap + (bonus?.value ?? 0) * bonusRate) / Math.max(1, travel + work + haul * estimate.averageWeight / CREW_PORTER_CAPACITY);
   };

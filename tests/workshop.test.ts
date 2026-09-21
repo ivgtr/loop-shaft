@@ -40,7 +40,7 @@ describe('workshop presentation', () => {
     expect(item(state, 'upgrade-boots').comparison).toBe('Walk speed  55.4 → 87.1 px/s');
     upgradeBoots(state);
     expect(state.run.character.moveSpeed).toBeCloseTo(87.12);
-    expect(item(state, 'upgrade-boots').comparison).toBe('Walk speed  78.4 px/s');
+    expect(item(state, 'upgrade-boots').comparison).toBe('Walk speed  87.1 px/s');
   });
 
   it('compares and installs the actual backpack capacity', () => {

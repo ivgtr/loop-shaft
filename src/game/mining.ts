@@ -33,7 +33,7 @@ export const CORE_RESERVES: Readonly<Partial<Record<string, number>>> = {
 };
 
 const ORDINARY_WEIGHTS: Readonly<Partial<Record<string, readonly number[]>>> = {
-  'scrap-ledge': [1, 9], 'copper-pocket': [1, 4], 'fossil-crack': [2, 1],
+  'copper-pocket': [1, 4], 'fossil-crack': [2, 1],
 };
 const KIND_WEIGHTS: Partial<Record<LootKind, number>> = {
   GOLD_NUGGET: 6, OLD_COIN: 3, POCKET_WATCH: 2, NATURAL_GOLD: 2, GEM: 1,
@@ -59,6 +59,7 @@ export function coreReserveRemaining(node: MiningNode): number {
 }
 
 export function treasureChance(state: GameState, node: MiningNode): number {
+  if (node.id === 'core-shell') return coreReserveRemaining(node) > 0 ? 1 : 0;
   return Math.min(0.95, node.treasureChance * getModifiers(state).treasureChanceMultiplier);
 }
 
@@ -128,6 +129,8 @@ export function rollMiningLoot(state: GameState, floor: FloorState, node: Mining
     };
     spawned.push(item);
     if (item.category !== 'ORE') {
+      const categories = state.run.discovery.categoriesFound ??= [];
+      if (!categories.includes(item.category)) categories.push(item.category);
       state.run.discovery.foundThisRun += 1;
       emit('DISCOVERY_FOUND', { id: item.id, name: item.name, rarity: item.rarity, category: item.category });
     }
@@ -155,11 +158,12 @@ export function rollMiningLoot(state: GameState, floor: FloorState, node: Mining
   const discovery = state.run.discovery;
   if (floor.id === 'D-030') discovery.d030NodeBreaks += 1;
   if (floor.id === 'D-060') discovery.d060NodeBreaks += 1;
+  const categories = discovery.categoriesFound ?? [];
   const hasFossil = state.meta.collection.entries.some((entry) => entry.category === 'FOSSIL' && entry.discovered);
   const firstFind = floor.id === 'D-030' && discovery.foundThisRun === 0 && discovery.d030NodeBreaks >= discovery.firstDiscoveryBreak;
-  const fossil = floor.id === 'D-030' && !hasFossil && discovery.d030NodeBreaks >= discovery.firstFossilBreak;
-  const relic = floor.id === 'D-030' && !state.meta.passives.unlocked.length && discovery.d030NodeBreaks >= discovery.firstRelicBreak;
-  const research = floor.id === 'D-060' && state.run.data === 0 && discovery.d060NodeBreaks >= discovery.firstResearchBreak;
+  const fossil = floor.id === 'D-030' && !hasFossil && !categories.includes('FOSSIL') && discovery.d030NodeBreaks >= discovery.firstFossilBreak;
+  const relic = floor.id === 'D-030' && !state.meta.passives.unlocked.length && !categories.includes('RELIC') && discovery.d030NodeBreaks >= discovery.firstRelicBreak;
+  const research = floor.id === 'D-060' && state.run.data === 0 && !categories.includes('RESEARCH') && discovery.d060NodeBreaks >= discovery.firstResearchBreak;
   // Every finite deep Core reserve makes progress even on an unlucky seed.
   const core = coreReserveRemaining(node) > 0 && node.minedCount % 6 === 0;
   const safeguard = firstFind || fossil || relic || research || core;
@@ -206,13 +210,15 @@ export function nodeRole(node: MiningNode): string {
 }
 
 export function nodeSurvey(state: GameState, floor: FloorState, node: MiningNode): string {
+  const parts = [nodeRole(node)];
   const seam = visibleSeams(floor, node)[0];
+  if (floor.id === 'D-180' && (node.minedCount ?? 0) === 0) parts.push('Sealed equipment on first break');
+  if (seam) parts.push(`${LOOT[seam.kind].name} in ${seam.at - (node.minedCount ?? 0)} breaks`);
   const reserve = CORE_RESERVES[node.id];
-  if (reserve) return `${nodeRole(node)} · ${coreReserveRemaining(node)}/${reserve} Core left this Run`;
-  if (seam) return `${nodeRole(node)} · ${LOOT[seam.kind].name} in ${seam.at - (node.minedCount ?? 0)} breaks`;
-  if (floor.id === 'D-180' && (node.minedCount ?? 0) === 0) return `${nodeRole(node)} · Sealed equipment on first break`;
+  if (reserve) parts.push(`${coreReserveRemaining(node)}/${reserve} Core left this Run`);
   const exact = state.meta.passives.active.includes('PROSPECTORS_EYE') || state.run.research.completed.includes('STRATA_SCANNER');
-  return `${nodeRole(node)} · STEADY ORE${exact ? ` · FIND ${(treasureChance(state, node) * 100).toFixed(0)}%` : ''}`;
+  if (!seam) parts.push(`STEADY ORE${exact ? ` · FIND ${(treasureChance(state, node) * 100).toFixed(0)}%` : ''}`);
+  return parts.join(' · ');
 }
 
 /** Approximate round trip for manual hauling, calculated from the actual world coordinates. */

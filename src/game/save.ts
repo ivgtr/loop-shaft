@@ -176,6 +176,12 @@ function restoreStructured(raw: Record<string, unknown>, hasPhase5: boolean, has
   }
   const chamber = asRecord(rawRun.coreChamber); if (chamber) run.coreChamber = { ...run.coreChamber, ...(chamber as Partial<typeof run.coreChamber>) };
   const discovery = asRecord(rawRun.discovery); if (discovery) run.discovery = { ...run.discovery, ...(discovery as Partial<typeof run.discovery>) };
+  run.discovery.categoriesFound = normalizeStringArray(discovery?.categoriesFound, ['VALUABLE', 'FOSSIL', 'RELIC', 'ANOMALY', 'RESEARCH', 'CORE'] as const);
+  if (!discovery?.categoriesFound) {
+    if (run.data > 0 || run.research.completed.length) run.discovery.categoriesFound.push('RESEARCH');
+    if (meta.passives.unlocked.length) run.discovery.categoriesFound.push('RELIC');
+    if (meta.collection.entries.some((entry) => entry.discovered && entry.category === 'FOSSIL')) run.discovery.categoriesFound.push('FOSSIL');
+  }
   if (hasPhase5) normalizePhase5Run(run, rawRun.phase5);
   if (hasDeep) normalizeDeepRun(run, rawRun);
   run.automation.dispatchPolicy = DISPATCH_POLICIES.includes(automation?.dispatchPolicy as DispatchPolicy) ? automation!.dispatchPolicy as DispatchPolicy : 'BALANCED';

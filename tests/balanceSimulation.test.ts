@@ -1,7 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { mean, percentile, runFirstCoreScenario, runIncomeScenario } from './fixtures/balanceScenario';
 
 const seeds = Array.from({ length: 12 }, (_, n) => 1001 + n * 7919);
+
+const report: Record<string, unknown> = {
+  method: 'Deterministic scripted physical delivery, not human play time or an optimality proof.',
+  fixedStepSeconds: 0.1, incomeHorizonSeconds: 360, incomeSeeds: seeds,
+  configSha256: createHash('sha256').update(readFileSync(new URL('../src/game/config.ts', import.meta.url))).digest('hex'),
+  miningSha256: createHash('sha256').update(readFileSync(new URL('../src/game/mining.ts', import.meta.url))).digest('hex'),
+  modifiersSha256: createHash('sha256').update(readFileSync(new URL('../src/game/modifiers.ts', import.meta.url))).digest('hex'),
+};
+afterAll(() => {
+  const output = process.env.BALANCE_REPORT_PATH;
+  if (output) { mkdirSync(dirname(output), { recursive: true }); writeFileSync(output, JSON.stringify(report, null, 2) + '\n'); }
+});
 
 describe('reproducible balance probes (scripted, not human play time)', () => {
   it('changes the useful income site after investment without requiring a forced rotation', () => {
@@ -16,6 +31,7 @@ describe('reproducible balance probes (scripted, not human play time)', () => {
         meanWalkingSeconds: Number(mean(outcomes.map((row) => row.walkingSeconds)).toFixed(1)),
         meanFloorWeight: Number(mean(outcomes.map((row) => row.floorWeight)).toFixed(1)) });
     }
+    report.income = rows;
     console.log('BALANCE_INCOME ' + JSON.stringify(rows));
     const get = (site: string, upgraded: boolean) => rows.find((row) => row.site === site && row.upgraded === upgraded)!;
     expect(get('scrap-ledge', false).meanScrap).toBeGreaterThan(get('copper-pocket', false).meanScrap);
@@ -31,6 +47,7 @@ describe('reproducible balance probes (scripted, not human play time)', () => {
       for (const outcome of outcomes) { expect(outcome.scrap).toBeGreaterThan(100); expect(outcome.delivered).toBeGreaterThan(0); }
       return { site, meanScrap: Number(mean(outcomes.map((row) => row.scrap)).toFixed(1)), meanFloorWeight: Number(mean(outcomes.map((row) => row.floorWeight)).toFixed(1)) };
     });
+    report.automation = rows;
     console.log('BALANCE_AUTOMATION ' + JSON.stringify(rows));
   }, 60000);
 
@@ -40,6 +57,11 @@ describe('reproducible balance probes (scripted, not human play time)', () => {
       const result = runFirstCoreScenario(seed, exploreEarly);
       results.push({ exploreEarly, ...result });
     }
+    report.firstCore = results;
+    report.firstCoreSummary = [false, true].map((exploreEarly) => {
+      const values = results.filter((row) => row.exploreEarly === exploreEarly && row.coreDelivered !== null).map((row) => row.coreDelivered!);
+      return { exploreEarly, completed: values.length, p50Seconds: percentile(values, 0.5), p90Seconds: percentile(values, 0.9), maxSeconds: Math.max(...values) };
+    });
     console.log('BALANCE_FIRST_CORE ' + JSON.stringify(results));
     for (const result of results) {
       expect(result.firstDelivery, `first delivery seed ${result.seed}`).not.toBeNull();

@@ -327,9 +327,18 @@ export function startResearch(state: GameState, id: ResearchId): boolean {
   return true;
 }
 
+export function coreProtocolBlockReason(state: GameState, id: CoreProtocolId): string | null {
+  const definition = CORE_PROTOCOLS[id];
+  if (state.meta.protocols.includes(id)) return 'Protocol installed permanently.';
+  if (definition.requiredDepth && DEPTH_RANK[state.meta.bestDepth] < DEPTH_RANK[definition.requiredDepth]) {
+    return `Reach ${definition.requiredDepth} before installing this deep Protocol.`;
+  }
+  return state.meta.core < definition.cost ? `Need ${definition.cost - state.meta.core} more Core.` : null;
+}
+
 export function purchaseCoreProtocol(state: GameState, id: CoreProtocolId): boolean {
   const definition = CORE_PROTOCOLS[id];
-  if (state.selection?.type !== 'core-console' || state.meta.protocols.includes(id) || state.meta.core < definition.cost) return false;
+  if (state.selection?.type !== 'core-console' || coreProtocolBlockReason(state, id)) return false;
   state.meta.core -= definition.cost;
   state.meta.protocols.push(id);
   applyProtocolToCurrentRun(state, id);

@@ -30,8 +30,8 @@ export const BASE_ELEVATOR_CAPACITY = 20;
 export const BASE_ELEVATOR_SPEED = 0.34;
 export const AUTO_DISPATCH_MIN_WEIGHT = 11;
 export const D030_EXTENSION_COST = 1200;
-export const D060_EXTENSION_COST = 4800;
-export const D100_EXTENSION_COST = 6000;
+export const D060_EXTENSION_COST = 3600;
+export const D100_EXTENSION_COST = 5000;
 export const D180_EXTENSION_COST = 11000;
 export const D250_EXTENSION_COST = 12000;
 export const D400_EXTENSION_COST = 18000;
@@ -172,7 +172,7 @@ export const RESEARCH: Record<ResearchId, ResearchDefinition> = {
   DEEP_SHAFT_GEOMETRY: { name: 'Deep Shaft Geometry', description: 'Turn recovered Deep Components into a construction plan for D-650.', dataCost: 24, duration: 64, prerequisite: 'REMOTE_BORE_CONTROL' },
 };
 
-export interface ProtocolDefinition { name: string; description: string; cost: number; }
+export interface ProtocolDefinition { name: string; description: string; cost: number; requiredDepth?: import('./types').DepthId; }
 export const CORE_PROTOCOLS: Record<CoreProtocolId, ProtocolDefinition> = {
   EXPERIENCED_HANDS: { name: 'Experienced Hands', description: 'Start with Steel Pickaxe and Auto Swing already fitted.', cost: 2 },
   CARGO_MEMORY: { name: 'Cargo Memory', description: 'Start each Run with a Porter already on the floor.', cost: 2 },
@@ -182,17 +182,17 @@ export const CORE_PROTOCOLS: Record<CoreProtocolId, ProtocolDefinition> = {
   CREW_MANIFEST: { name: 'Crew Manifest', description: 'Begin the next Run with the first Miner already on the shift board.', cost: 4 },
   FREIGHT_MEMORY: { name: 'Freight Memory', description: 'Begin the next Run with Cargo Scheduler routing available.', cost: 4 },
   LEGACY_LOCKER: { name: 'Legacy Locker', description: 'Keep one recovered piece of equipment for the next Run.', cost: 5 },
-  RAIL_BLUEPRINT: { name: 'Rail Blueprint', description: 'Retain the restored Rail plan so its blueprint step is skipped next Run.', cost: 4 },
-  FREIGHT_CHARTER: { name: 'Freight Charter', description: 'Retain Freight Cage authorization and skip its blueprint stage next Run.', cost: 5 },
-  ENGINEER_LICENSE: { name: 'Engineer License', description: 'Begin future Runs with Engineer service already licensed.', cost: 4 },
-  BORE_MEMORY: { name: 'Bore Memory', description: 'Retain the Remote Bore blueprint after Reboot.', cost: 5 },
-  DEEP_SURVEY_ARCHIVE: { name: 'Deep Survey Archive', description: 'Keep the Lost survey record and shorten the repeated deep survey chain.', cost: 5 },
+  RAIL_BLUEPRINT: { name: 'Rail Blueprint', description: 'Retain the restored Rail plan so its blueprint step is skipped next Run.', cost: 4, requiredDepth: 'D-250' },
+  FREIGHT_CHARTER: { name: 'Freight Charter', description: 'Retain Freight Cage authorization and skip its blueprint stage next Run.', cost: 5, requiredDepth: 'D-250' },
+  ENGINEER_LICENSE: { name: 'Engineer License', description: 'Begin future Runs with Engineer service already licensed.', cost: 4, requiredDepth: 'D-250' },
+  BORE_MEMORY: { name: 'Bore Memory', description: 'Retain the Remote Bore blueprint after Reboot.', cost: 5, requiredDepth: 'D-400' },
+  DEEP_SURVEY_ARCHIVE: { name: 'Deep Survey Archive', description: 'Keep the Lost survey record and shorten the repeated deep survey chain.', cost: 5, requiredDepth: 'D-180' },
 };
 
 export function createD001Nodes(): MiningNode[] {
   return [
-    node('scrap-ledge', 'Scrap Ledge', 'NEAR', 154, 30, 7, ['STONE', 'IRON'], 0.01, [1, 0, 0, 0, 0, 0], 3, 3, 6),
-    node('copper-pocket', 'Copper Pocket', 'MID', 356, 96, 17, ['IRON', 'COPPER'], 0.04, [1, 0, 0, 0, 0, 0], 4, 6, 12),
+    node('scrap-ledge', 'Scrap Ledge', 'NEAR', 154, 30, 7, ['IRON'], 0.01, [1, 0, 0, 0, 0, 0], 3, 3, 6),
+    node('copper-pocket', 'Copper Pocket', 'MID', 356, 110, 17, ['IRON', 'COPPER'], 0.04, [1, 0, 0, 0, 0, 0], 4, 6, 12),
     node('fossil-crack', 'Fossil Crack', 'FAR', 438, 96, 29, ['STONE', 'COPPER'], 0.22, [0.12, 0.88, 0, 0, 0, 0], 1, 2, 20),
   ];
 }

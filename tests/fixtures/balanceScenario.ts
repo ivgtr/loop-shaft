@@ -1,5 +1,5 @@
 import { createGameState } from '../../src/game/createGame';
-import { LOOT, D030_EXTENSION_COST, D060_EXTENSION_COST, D100_EXTENSION_COST, PLAYER_PACK_CAPACITY, PLAYER_TOOL_DAMAGE } from '../../src/game/config';
+import { D030_EXTENSION_COST, D060_EXTENSION_COST, D100_EXTENSION_COST, PLAYER_PACK_CAPACITY, PLAYER_TOOL_DAMAGE } from '../../src/game/config';
 import { nodeTripEstimate, visibleSeams } from '../../src/game/mining';
 import { atPlayerLoadingPoint, cancelPlayerAction, movePlayerTo, nearbyPlayerLoot, playerInteraction } from '../../src/game/playerControls';
 import {
@@ -165,4 +165,3 @@ export function percentile(values: number[], fraction: number): number {
   return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction))]!;
 }
 export const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
-export const ordinaryValue = (kind: keyof typeof LOOT) => LOOT[kind].value;

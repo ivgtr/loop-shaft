@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "assets:d001": "node scripts/process-d001-assets.mjs && node scripts/refine-d001-assets.mjs",
-    "test:balance": "vitest run tests/balance.test.ts tests/balanceSimulation.test.ts"
+    "test:balance": "vitest run tests/balance.test.ts tests/balanceSimulation.test.ts",
+    "balance:report": "node scripts/balance-report.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

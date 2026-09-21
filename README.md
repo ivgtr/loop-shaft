@@ -49,6 +49,12 @@ Equipment compares current gear with a candidate; **EFFECTS & STATS** opens the 
 
 Reboot and equipment transfers pin their consequences beside the final action. **KEEP MINING** cancels Reboot and returns to the mine. Extra explanations are optional; Page Up/Down opens and pages them. The portrait stage uses available height without stretching the world or resizing it when a facility opens.
 
+## Balance
+
+Renewable ore supports stable work. Visible, finite seams add fossils and special finds without lowering ordinary yield for staying at a site. D-030 can open before full automation; Boots and Pack do not require earlier shop purchases. Auto Dispatch offers BALANCED / BULK / PRIORITY policies with a maximum cargo wait. Core reserves are finite per site and Run.
+
+The current rules and save migration are in [balance-design.md](docs/balance-design.md). `npm run test:balance` checks physical rewards, shipping and comparative routes; `npm run balance:report` explicitly regenerates [the scripted measurements](docs/balance-results.json). These are not human play-time or game-feel results.
+
 ## Checks
 
 ```bash

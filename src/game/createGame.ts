@@ -156,6 +156,7 @@ export function createNewRun(meta: MetaProgression): RunState {
       d060NodeBreaks: 0,
       d100CoreBreaks: 0,
       foundThisRun: 0,
+      categoriesFound: [],
       firstDiscoveryBreak: 3 + (hashSeed(seed ^ 0xd030f1) % 4),
       firstFossilBreak: 5 + (hashSeed(seed ^ 0xf05511) % 3),
       firstRelicBreak: 8 + (hashSeed(seed ^ 0x5e11c) % 4),

@@ -248,6 +248,7 @@ export interface DiscoveryState {
   d060NodeBreaks: number;
   d100CoreBreaks: number;
   foundThisRun: number;
+  categoriesFound?: LootCategory[];
   firstDiscoveryBreak: number;
   firstFossilBreak: number;
   firstRelicBreak: number;

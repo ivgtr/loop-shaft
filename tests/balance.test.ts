@@ -4,7 +4,7 @@ import { LOOT, PLAYER_PACK_CAPACITY, UPGRADE_COSTS } from '../src/game/config';
 import { CORE_RESERVES, coreReserveRemaining, finishingDamage, maximumMiningDropWeight, nodeSurvey, rollMiningLoot, visibleSeams } from '../src/game/mining';
 import { DISPATCH_POLICIES, setDispatchPolicy, shipmentDecision, updateShipmentWait } from '../src/game/dispatch';
 import { restoreGameState, serializeGameState } from '../src/game/save';
-import { canExtendD030, currentFloor, requestMine, unlockAutoDispatch, unlockAutoSwing, unlockPorter, updateGame, upgradeBoots, upgradePack } from '../src/game/simulation';
+import { coreProtocolBlockReason, purchaseCoreProtocol, canExtendD030, currentFloor, requestMine, unlockAutoDispatch, unlockAutoSwing, unlockPorter, updateGame, upgradeBoots, upgradePack } from '../src/game/simulation';
 import { updatePhase5, unlockCrewOperations } from '../src/game/phase5';
 import { sceneReadout } from '../src/game/hud';
 import { elevatorItems } from '../src/game/elevatorUi';
@@ -249,5 +249,27 @@ describe('progression, finishing hits and save migration', () => {
     expect(visibleSeams(currentFloor(restored), currentFloor(restored).nodes[2]!)).toEqual([]);
     expect(restored.run.character.carried[0]!.id).toBe('keep-me');
     expect(visibleSeams(restored.run.floors['D-060'], restored.run.floors['D-060'].nodes[0]!).length).toBeGreaterThan(0);
+  });
+});
+
+describe('first-find and deep-protocol safeguards', () => {
+  it('does not reissue first Research because cargo is undelivered or Data was spent', () => {
+    const state = createGameState(400);
+    const floor = state.run.floors['D-060']; const node = floor.nodes[0]!;
+    node.treasureChance = 0;
+    expect(rollMiningLoot(state, floor, node, sink).some((item) => item.category === 'RESEARCH')).toBe(true);
+    state.run.discovery.d060NodeBreaks = 100; state.run.data = 0;
+    expect(rollMiningLoot(state, floor, node, sink).some((item) => item.category === 'RESEARCH')).toBe(false);
+    const restored = restoreGameState(serializeGameState(state))!;
+    const again = restored.run.floors['D-060']; again.nodes[0]!.treasureChance = 0;
+    expect(rollMiningLoot(restored, again, again.nodes[0]!, sink).some((item) => item.category === 'RESEARCH')).toBe(false);
+  });
+  it('requires a real deep expedition for deep permanent shortcuts without revoking owned ones', () => {
+    const state = createGameState(401); state.meta.core = 100; state.selection = { type: 'core-console' };
+    expect(coreProtocolBlockReason(state, 'BORE_MEMORY')).toContain('D-400');
+    expect(purchaseCoreProtocol(state, 'BORE_MEMORY')).toBe(false);
+    state.meta.bestDepth = 'D-400'; expect(purchaseCoreProtocol(state, 'BORE_MEMORY')).toBe(true);
+    state.meta.bestDepth = 'D-001';
+    expect(restoreGameState(serializeGameState(state))!.meta.protocols).toContain('BORE_MEMORY');
   });
 });
