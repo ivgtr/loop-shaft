@@ -14,6 +14,7 @@ import {
   LOAD_DURATION,
   LOOT,
   PLAYER_PACK_CAPACITY,
+  PLAYER_TOOL_DAMAGE,
   PORTER_COLLECT_DURATION,
   PORTER_LOAD_DURATION,
   RESEARCH,
@@ -151,7 +152,7 @@ export function sendElevator(state: GameState): boolean {
 export function upgradeTool(state: GameState): boolean {
   const run = state.run;
   if (upgradeBlockReason(state, 'upgrade-tool') || !spendScrap(state, UPGRADE_COSTS.tool)) return false;
-  run.tool = { id: 'player-tool', slot: 'TOOL', level: 2, name: 'Steel Pickaxe', damage: 16 };
+  run.tool = { id: 'player-tool', slot: 'TOOL', level: 2, name: 'Steel Pickaxe', damage: PLAYER_TOOL_DAMAGE[2] };
   emit(state, 'EQUIPMENT_CHANGED', { slot: 'TOOL', name: run.tool.name, level: 2, damage: run.tool.damage });
   return true;
 }
@@ -498,7 +499,7 @@ function generateAnomalyOptions(runSeed: number, floorSeed: number): AnomalyId[]
 function applyProtocolToCurrentRun(state: GameState, id: CoreProtocolId): void {
   const run = state.run;
   if (id === 'EXPERIENCED_HANDS') {
-    run.tool = { id: 'player-tool', slot: 'TOOL', level: 2, name: 'Steel Pickaxe', damage: 16 };
+    run.tool = { id: 'player-tool', slot: 'TOOL', level: 2, name: 'Steel Pickaxe', damage: PLAYER_TOOL_DAMAGE[2] };
     run.automation.autoSwing = { unlocked: true, enabled: true };
   } else if (id === 'CARGO_MEMORY') {
     run.porter.enabled = true;

@@ -7,7 +7,7 @@ import type { GameState } from '../../game/types';
 import { ContextLayout, ActionButton } from './common';
 import { CrewContext } from './CrewPanel';
 import { DeepControls } from './DeepControls';
-import { ElevatorContext, WorkbenchContext } from './OperationsPanels';
+import { ElevatorContext } from './OperationsPanels';
 import { ArchiveContext, CoreConsoleContext, ResearchContext, ScannerContext } from './ProgressionPanels';
 import { BoreContext, CargoHubContext, FreightContext, NodeContext, RailContext } from './WorldPanels';
 
@@ -39,7 +39,6 @@ export function ContextPanel() {
     if (bore) return <BoreContext state={state} bore={bore} />;
   }
   if (selection?.type === 'elevator') return <ElevatorContext state={state} guide={guideForElevator(initialGuide)} />;
-  if (selection?.type === 'workbench') return <WorkbenchContext state={state} objective={nextObjective(state)} />;
   if (selection?.type === 'scanner') return <ScannerContext state={state} />;
   if (selection?.type === 'archive') return <ArchiveContext state={state} />;
   if (selection?.type === 'research') return <ResearchContext state={state} />;

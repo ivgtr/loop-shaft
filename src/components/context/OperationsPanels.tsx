@@ -12,7 +12,7 @@ import {
 } from '../../game/simulation';
 import type { CargoRoutingPriority, GameState } from '../../game/types';
 import { fmt, formatState } from '../shared/format';
-import { ActionButton, CommandButton, ContextLayout } from './common';
+import { ActionButton, ContextLayout } from './common';
 import { DeepControls } from './DeepControls';
 
 const CARGO_PRIORITIES: readonly CargoRoutingPriority[] = ['BALANCED', 'CORE', 'RESEARCH', 'ANCIENT'];
@@ -35,20 +35,6 @@ export function ElevatorContext({ state, guide }: { state: GameState; guide?: In
   </ContextLayout>;
 }
 
-export function WorkbenchContext({ state, objective }: { state: GameState; objective: string }) {
-  const run = state.run;
-  const items = run.phase5.equipment.inventory.slice(-8);
-  return <ContextLayout title="Workshop" meta={objective}>
-    {run.tool.level === 1 && <Upgrade command="upgrade-tool" label="STEEL PICK" cost={UPGRADE_COSTS.tool} state={state} />}
-    {run.boots.level === 1 && <Upgrade command="upgrade-boots" label="RUNNER BOOTS" cost={UPGRADE_COSTS.boots} state={state} />}
-    {!run.automation.autoSwing.unlocked
-      ? <Upgrade command="unlock-auto-swing" label="AUTO SWING" cost={UPGRADE_COSTS.autoSwing} state={state} />
-      : <ActionButton command={{ type: 'toggle-auto-swing' }} className={run.automation.autoSwing.enabled ? 'toggle-on' : ''}>AUTO SWING {run.automation.autoSwing.enabled ? 'ON' : 'OFF'}</ActionButton>}
-    {run.pack.level === 1 && <Upgrade command="upgrade-pack" label="FRAME PACK" cost={UPGRADE_COSTS.pack} state={state} />}
-    {!run.porter.enabled && !run.phase5.crew.unlocked && <Upgrade command="unlock-porter" label="HIRE PORTER" cost={UPGRADE_COSTS.porter} state={state} />}
-    {items.length > 0 && <div className="research-stack">{items.map((item) => <CommandButton key={item.id} command={{ type: 'equip-item', itemId: item.id }} className={`research-line ${run.phase5.equipment.equippedPlayer[item.slot] === item.id ? 'complete' : ''}`}><strong>{item.rarity} · {item.name}</strong><span>{item.slot} · {item.affixes.map((affix) => affix.name).join(' / ')}</span></CommandButton>)}</div>}
-  </ContextLayout>;
-}
 
 function Upgrade({ command, label, cost, state }: { command: UpgradeAction; label: string; cost: number; state: GameState }) {
   const reason = upgradeBlockReason(state, command);

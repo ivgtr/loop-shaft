@@ -31,7 +31,7 @@ import {
   unlockCrewOperations,
   updatePhase5,
 } from '../game/phase5';
-import { cancelPlayerAction, movePlayerTo, playerWalkBounds } from '../game/playerControls';
+import { cancelPlayerAction, movePlayerTo, playerInteraction, playerWalkBounds } from '../game/playerControls';
 import { loadFromStorage, saveToStorage } from '../game/save';
 import {
   chooseAnomaly,
@@ -48,7 +48,6 @@ import {
   selectNode,
   selectResearchTerminal,
   selectScanner,
-  selectWorkbench,
   sendElevator,
   startResearch,
   toggleAutoDispatch,
@@ -70,6 +69,7 @@ import { GameRenderer } from '../render/gameRenderer';
 import type { InteractionTarget, Point } from '../render/interactionTargets';
 import type { GameCommand } from './commands';
 import { MiningInput } from './MiningInput';
+import { nextWorkshopUpgrade, selectedWorkshopItem, workshopItems, type WorkshopState } from '../game/workshop';
 
 const FIXED_STEP = 1 / 60;
 const UI_UPDATE_INTERVAL = 100;
@@ -81,6 +81,7 @@ const RIGHT_KEYS = ['KeyD', 'ArrowRight'];
 export interface GameSnapshot {
   readonly revision: number;
   readonly state: GameState;
+  readonly workshop: WorkshopState | null;
 }
 
 type Listener = () => void;
@@ -104,10 +105,13 @@ export class GameRuntime {
   private pointerClient: Point | null = null;
   private pointerWorld: Point | null = null;
   private hoveredKey: string | null = null;
+  private workshop: WorkshopState | null = null;
 
   constructor(private readonly state: GameState) {
     // Held directional input must never continue after reloading a save.
     if (state.run.character.state === 'MOVING_TO_POINT' || state.run.character.state === 'WAITING_FOR_ELEVATOR') cancelPlayerAction(state);
+    // Old saves may contain a workbench selection; windows are deliberately not saved.
+    if (state.selection?.type === 'workbench') state.selection = null;
     this.miningInput = new MiningInput(state);
     this.snapshot = this.createSnapshot();
   }
@@ -168,6 +172,7 @@ export class GameRuntime {
   focusCanvas(): void { this.canvas?.focus({ preventScroll: true }); }
 
   setPointerMovement(direction: -1 | 0 | 1): void {
+    if (this.workshop) return;
     this.pointerDirection = direction;
     this.synchronizeMovement();
   }
@@ -191,6 +196,7 @@ export class GameRuntime {
   getHoveredTargetKey(): string | null { return this.hoveredKey; }
 
   selectCanvasTarget(clientX: number, clientY: number): void {
+    if (this.workshop) return;
     const point = this.renderer?.clientToWorld(clientX, clientY);
     const target = point ? this.renderer?.resolveTarget(point, this.state) : null;
     if (!target) {
@@ -229,7 +235,7 @@ export class GameRuntime {
     else if (ref.type === 'elevator') {
       selectElevator(this.state);
       if (this.state.run.character.carried.length > 0 && !['RETURNING', 'LOADING'].includes(this.state.run.character.state)) requestPlayerReturn(this.state);
-    } else if (ref.type === 'workbench') selectWorkbench(this.state);
+    } else if (ref.type === 'workbench') this.openWorkshop();
     else if (ref.type === 'scanner') selectScanner(this.state);
     else if (ref.type === 'archive') selectArchive(this.state);
     else if (ref.type === 'research') selectResearchTerminal(this.state);
@@ -237,7 +243,55 @@ export class GameRuntime {
     else selectCoreChamber(this.state);
   }
 
+  openWorkshop(): void {
+    if (this.workshop || this.state.run.elevator.travel) return;
+    this.releaseInputs();
+    this.clearPointer();
+    // Cancel only the player's instruction, retaining cargo and the selected vein.
+    // The lift, Porter, research and other autonomous work keep running.
+    cancelPlayerAction(this.state);
+    this.workshop = { selectedId: nextWorkshopUpgrade(this.state)?.id ?? 'upgrade-tool', notice: null,
+      runIndex: this.state.meta.runIndex, depth: this.state.run.depth.current };
+    this.publish();
+  }
+
+  closeWorkshop(): void {
+    if (!this.workshop) return;
+    this.releaseInputs();
+    this.workshop = null;
+    this.publish();
+    this.focusCanvas();
+  }
+
+  selectWorkshopItem(id: string): void {
+    if (!this.workshop || !workshopItems(this.state).some((item) => item.id === id)) return;
+    this.workshop = { ...this.workshop, selectedId: id, notice: null };
+    this.publish();
+  }
+
+  activateWorkshopItem(): void {
+    if (!this.workshop) return;
+    const item = selectedWorkshopItem(workshopItems(this.state), this.workshop.selectedId);
+    if (!item.command) return;
+    this.dispatch(item.command);
+    if (!this.workshop) return;
+    const current = selectedWorkshopItem(workshopItems(this.state), item.id);
+    this.workshop = { ...this.workshop, notice: item.owned
+      ? current.comparison : `${item.name} ${item.tab === 'automation' ? 'installed' : 'equipped'}. ${item.comparison}` };
+    this.publish();
+  }
+
   dispatch(command: GameCommand): void {
+    if (this.workshop) {
+      if (command.type === 'cancel') { this.closeWorkshop(); return; }
+      // Only the displayed item's validated command can cross the modal boundary.
+      const allowed = selectedWorkshopItem(workshopItems(this.state), this.workshop.selectedId).command;
+      if (!allowed || command.type !== allowed.type
+        || ('itemId' in allowed && (!('itemId' in command) || command.itemId !== allowed.itemId))) return;
+    }
+    if (command.type === 'interact' && playerInteraction(this.state).type === 'workbench') {
+      this.openWorkshop(); return;
+    }
     if (['move', 'walk', 'return', 'interact', 'cancel', 'travel', 'reboot'].includes(command.type)) this.releaseInputs();
     switch (command.type) {
       case 'move': moveToSelectedNode(this.state); break;
@@ -310,6 +364,8 @@ export class GameRuntime {
       saveToStorage(this.state);
       this.saveTimer = 0;
     }
+    if (this.workshop && (this.workshop.runIndex !== this.state.meta.runIndex
+      || this.workshop.depth !== this.state.run.depth.current || this.state.run.elevator.travel)) this.closeWorkshop();
     this.refreshPointerTarget();
     this.renderer?.render(this.state, now, this.hoveredKey);
     if (now - this.lastUiUpdate >= UI_UPDATE_INTERVAL) {
@@ -323,13 +379,13 @@ export class GameRuntime {
     if (event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
     const canvasFocused = this.canvas !== null && document.activeElement === this.canvas;
     const inGame = canvasFocused || Boolean(this.canvas?.closest('.game-root')?.contains(event.target as Node));
-    if (event.code === 'Escape' && inGame) {
+    if (event.code === 'Escape' && (inGame || this.workshop)) {
       event.preventDefault();
       if (!event.repeat) { this.dispatch({ type: 'cancel' }); this.focusCanvas(); }
       return;
     }
     // Native UI buttons retain Space/Enter activation; text editing never controls the miner.
-    if (!canvasFocused) return;
+    if (this.workshop || !canvasFocused) return;
     if (![...LEFT_KEYS, ...RIGHT_KEYS, 'Space', 'KeyE', 'KeyF'].includes(event.code)) return;
     event.preventDefault();
     if (event.repeat) return;
@@ -390,7 +446,7 @@ export class GameRuntime {
   }
 
   private refreshPointerTarget(): void {
-    if (!this.renderer || !this.pointerClient) {
+    if (this.workshop || !this.renderer || !this.pointerClient) {
       this.pointerWorld = null;
       this.setHoveredTarget(null);
       return;
@@ -422,6 +478,7 @@ export class GameRuntime {
   }
 
   private createSnapshot(): GameSnapshot {
-    return Object.freeze({ revision: this.revision, state: structuredClone(this.state) });
+    return Object.freeze({ revision: this.revision, state: structuredClone(this.state),
+      workshop: this.workshop ? { ...this.workshop } : null });
   }
 }

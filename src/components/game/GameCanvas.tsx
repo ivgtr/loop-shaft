@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { useGameRuntime, useGameState } from '../../app/GameProvider';
+import { useGameRuntime, useGameSnapshot } from '../../app/GameProvider';
 import { carriedWeight, currentFloor } from '../../game/simulation';
 
 export function GameCanvas() {
   const runtime = useGameRuntime();
-  const state = useGameState();
+  const { state, workshop } = useGameSnapshot();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -20,7 +20,8 @@ export function GameCanvas() {
       className="game-canvas"
       aria-label="LOOP SHAFT mining floor"
       aria-describedby="player-control-help"
-      tabIndex={0}
+      tabIndex={workshop ? -1 : 0}
+      data-workshop-open={workshop ? 'true' : 'false'}
       data-player-x={state.run.character.x.toFixed(2)}
       data-player-state={state.run.character.state}
       data-swing={state.run.character.swing ? 'active' : 'ready'}
@@ -37,7 +38,7 @@ export function GameCanvas() {
       onPointerLeave={() => runtime.clearCanvasPointer()}
       onClick={(event) => {
         runtime.selectCanvasTarget(event.clientX, event.clientY);
-        event.currentTarget.focus({ preventScroll: true });
+        if (!runtime.getSnapshot().workshop) event.currentTarget.focus({ preventScroll: true });
       }}
     />
   );

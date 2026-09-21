@@ -1,8 +1,7 @@
 import { useRef, type MouseEvent, type PointerEvent, type PropsWithChildren } from 'react';
 import { useGameRuntime, useGameState } from '../../app/GameProvider';
-import { deriveInitialLogisticsGuide } from '../../game/initialLogisticsGuide';
 import { miningTarget, playerControlAvailable, playerInteraction } from '../../game/playerControls';
-import { canDispatchElevator, canRequestMine, cargoWeight, carriedWeight, mineBlockReason } from '../../game/simulation';
+import { canRequestMine, carriedWeight, mineBlockReason } from '../../game/simulation';
 import type { GameCommand } from '../../runtime/commands';
 import './playerControls.css';
 
@@ -75,24 +74,4 @@ export function PlayerActions() {
       {interaction.type !== 'none' && <span>{interaction.reason ?? `E · ${interaction.label}`}</span>}
     </div>
   </section>;
-}
-
-export function WorldControls() {
-  const state = useGameState();
-  const canSend = canDispatchElevator(state);
-  const elevator = state.run.elevator;
-  const interaction = playerInteraction(state);
-  const showPrompt = !deriveInitialLogisticsGuide(state) && !elevator.travel && interaction.type !== 'none';
-  const liftReason = canSend ? null : elevator.cargo.length === 0 ? 'NO LOADED CARGO' : elevator.state.replaceAll('_', ' ');
-  return <>
-    <div className="lift-action">
-      <ControlButton command={{ type: 'send' }} label="SEND" shortcut="F" disabled={!canSend} reason={liftReason}>
-        SEND <kbd>F</kbd>
-      </ControlButton>
-      <span>{cargoWeight(elevator.cargo).toFixed(1)}/{elevator.maxLoad}kg</span>
-    </div>
-    {showPrompt && <span className="player-prompt" style={{ left: `${Math.max(18, Math.min(82, state.run.character.x / 480 * 100))}%` }}>
-      {interaction.reason ?? `E · ${interaction.label}`}
-    </span>}
-  </>;
 }

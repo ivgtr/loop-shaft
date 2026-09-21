@@ -18,6 +18,7 @@ export const LOAD_DURATION = 0.68;
 export const PORTER_LOAD_DURATION = 0.52;
 export const UNLOAD_DURATION = 0.95;
 export const SAVE_INTERVAL = 5;
+export const PLAYER_TOOL_DAMAGE = { 1: 10, 2: 16 } as const;
 export const PLAYER_MOVE_SPEED = { 1: 42, 2: 66 } as const;
 export const PLAYER_PACK_CAPACITY = { 1: 8, 2: 15 } as const;
 export const PORTER_MOVE_SPEED = 36;

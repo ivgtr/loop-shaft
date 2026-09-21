@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-React owns the HUD and contextual controls. The deterministic simulation, fixed-step loop, Canvas renderer, audio, and persistence remain in the external game runtime under `src/runtime`.
+React owns the HUD and contextual controls; the workshop and in-world pickup / SEND controls are painted on a separate Canvas layer inside the game viewport. The deterministic simulation, fixed-step loop, Canvas renderer, audio, and persistence remain in the external game runtime under `src/runtime`.
 
 ## Controls
 
@@ -23,12 +23,15 @@ React owns the HUD and contextual controls. The deterministic simulation, fixed-
 | Return and unload when possible | Walk to the lift, then E | RETURN or click the lift while carrying |
 | Send loaded cargo | F | SEND beside the shaft, without changing selection |
 | Stop / close context | Esc | STOP |
+| Workshop | E near the bench; arrows browse, Tab / Enter select | Click the bench; choose an item and BUY; close with X / Esc |
 
 Click or Tab to the game canvas for gameplay shortcuts. Focused UI buttons retain normal Space/Enter activation. Mining accepts one buffered input within 150ms of recovery or arrival; holding Space does not replace Auto Swing.
 
 Pickup and return are voluntary. Carrying cargo, a full pack, or an unavailable lift never prevents walking or mining. Uncollected ore stays on the floor. Ore is not currency until a Character or Porter carries it into the elevator and the elevator unloads it at the surface.
 
-Click the tool bench to progress Tool → Boots → Auto Swing → Pack → Porter. Inspect the lift to fit/toggle Auto Dispatch. Locked upgrades show their missing prerequisite or Scrap requirement.
+The workshop keeps Tool / Boots / Pack slots after purchase and shows current → upgraded effects, prerequisites and Scrap shortfalls. Its optional first-delivery guide leads to Tool → Boots → Auto Swing → Pack → Porter. Recovered gear remains available under FINDS. Inspect the lift to fit/toggle Auto Dispatch.
+
+Workshop input stays inside the window; closing restores the game focus and selected vein. Cargo is retained and autonomous transport / research continue. The window is not saved. Transparent native buttons share the painted Canvas layout for keyboard, touch and screen-reader access. Other HUD / context panels remain for later UI stages.
 
 ## Checks
 
@@ -40,7 +43,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The tests cover input buffering, cargo ownership and cancellation, upgrade prerequisites, visual hit targets, keyboard-only first delivery, focus changes, and touch controls. Progression timing and subjective game feel still require human playtesting; see sections 30 and 38 of the requirements.
+The tests cover input buffering, cargo ownership and cancellation, upgrade prerequisites, visual hit targets, keyboard-only first delivery, focus changes, touch controls, workshop comparisons / purchases, modal input isolation, stable viewport geometry, and save compatibility. Progression timing and subjective game feel still require human playtesting; see sections 30 and 38 of the requirements.
 
 ## GitHub Pages
 

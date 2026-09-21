@@ -14,7 +14,9 @@ export function useGameRuntime(): GameRuntime {
   return runtime;
 }
 
-export function useGameState(): GameState {
+export function useGameSnapshot() {
   const runtime = useGameRuntime();
-  return useSyncExternalStore(runtime.subscribe, runtime.getSnapshot).state;
+  return useSyncExternalStore(runtime.subscribe, runtime.getSnapshot);
 }
+
+export function useGameState(): GameState { return useGameSnapshot().state; }

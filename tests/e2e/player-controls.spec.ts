@@ -105,14 +105,19 @@ test('native button focus keeps Space activation without also mining', async ({ 
   const canvas = page.getByLabel('LOOP SHAFT mining floor');
   const box = (await canvas.boundingBox())!;
   await page.mouse.click(box.x + box.width * 200 / 480, box.y + box.height * 209 / 270);
-  const boots = page.getByRole('button', { name: /RUNNER BOOTS/ });
-  await expect(boots).toBeDisabled();
-  await expect(page.getByText('REQUIRES STEEL PICK', { exact: true })).toBeVisible();
-  const steel = page.getByRole('button', { name: /STEEL PICK ·/ });
-  await steel.focus();
+  const dialog = page.getByRole('dialog', { name: 'Workshop' });
+  await dialog.getByRole('button', { name: 'Runner Boots', exact: true }).click();
+  await expect(dialog).toContainText('REQUIRES STEEL PICK');
+  await expect(dialog.getByRole('button', { name: /Buy Runner Boots/ })).toBeDisabled();
+  const steel = dialog.getByRole('button', { name: 'Steel Pick', exact: true });
+  await steel.click();
+  await dialog.getByRole('button', { name: /Buy Steel Pick/ }).focus();
   await page.keyboard.press('Space');
-  await expect(steel).toHaveCount(0);
+  await expect(steel).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog).toContainText('Steel Pick equipped');
   await expect(canvas).toHaveAttribute('data-swing', 'ready');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
   await canvas.focus();
   await swing(page);
   // Only this explicit canvas key performs a swing, now using the purchased tool.
@@ -168,7 +173,7 @@ test.describe('compact touch controls', () => {
     await expect(send).toBeEnabled({ timeout: 10_000 });
     await send.tap();
     await expect(canvas).toHaveAttribute('data-elevator-state', 'ASCENDING');
-    const controls = page.locator('.player-buttons button, .lift-action button');
+    const controls = page.locator('.player-buttons button, .canvas-hit[data-ui-action=send]');
     for (const button of await controls.all()) {
       const box = (await button.boundingBox())!;
       expect(box.height).toBeGreaterThanOrEqual(44);
