@@ -1,0 +1,41 @@
+name: Visual workspace
+on:
+  push:
+    branches: [feat/discovery-visual-language]
+    paths: [.github/workflows/visual-workspace.yml, .visual-edit.py]
+permissions:
+  contents: write
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/discovery-visual-language
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply reviewed implementation
+        if: hashFiles('.visual-edit.py') != ''
+        run: |
+          python3 .visual-edit.py
+          rm .visual-edit.py .github/workflows/visual-workspace.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: render discoveries and cargo with state-driven pixel silhouettes'
+          git push origin HEAD:feat/discovery-visual-language
+      - run: npm ci
+      - name: Export source and installed dependencies
+        run: |
+          git bundle create /tmp/visual-source.bundle --all
+          tar -czf /tmp/visual-workspace.tar.gz --exclude=.git .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visual-workspace
+          path: |
+            /tmp/visual-source.bundle
+            /tmp/visual-workspace.tar.gz
+          retention-days: 2
