@@ -11,6 +11,7 @@ export function WorkshopCanvas() {
   const { state, workshop } = useGameSnapshot();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const inputsRef = useRef<HTMLDivElement>(null);
+  const focusSelectedItem = useRef(false);
   const [viewport, setViewport] = useState<UiViewport>({ width: 0, height: 0, world: { x: 0, y: 0, width: 0, height: 0 } });
   const [focused, setFocused] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
@@ -54,7 +55,12 @@ export function WorkshopCanvas() {
   }, [open, layout.compact]);
 
   useLayoutEffect(() => {
-    if (!open || !(document.activeElement instanceof HTMLButtonElement) || !document.activeElement.disabled) return;
+    if (!open) return;
+    const active = document.activeElement;
+    if (!focusSelectedItem.current && active !== document.body
+      && !(active instanceof HTMLButtonElement && active.disabled)) return;
+    // Paging can remove the previously focused slot; arrow navigation follows the new selection.
+    focusSelectedItem.current = false;
     inputsRef.current?.querySelector<HTMLButtonElement>('[data-selected="true"][data-item="true"]')?.focus({ preventScroll: true });
   }, [open, state, workshop]);
 
@@ -79,6 +85,7 @@ export function WorkshopCanvas() {
       const item = selectedWorkshopItem(items, workshop.selectedId);
       const group = layout.compact ? items : items.filter((candidate) => candidate.tab === item.tab);
       const offset = ['ArrowLeft', 'ArrowUp'].includes(event.code) ? -1 : 1;
+      focusSelectedItem.current = true;
       runtime.selectWorkshopItem(group[(group.indexOf(item) + offset + group.length) % group.length]!.id);
     }
     if (event.code === 'Tab') {

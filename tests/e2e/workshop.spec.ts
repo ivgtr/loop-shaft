@@ -18,9 +18,8 @@ async function saved(page: Page): Promise<GameState> {
 function atVein(): GameState {
   const state = createGameState(9301);
   state.run.character.x = 131;
-  state.run.character.state = 'MINING';
-  state.run.character.targetNodeId = 'scrap-ledge';
-  state.selection = { type: 'node', id: 'scrap-ledge' };
+  state.run.character.state = 'IDLE';
+  state.run.character.targetNodeId = null;
   return state;
 }
 function ore(id: string, value: number): LootStack {
@@ -90,6 +89,9 @@ test('keeps locked items inspectable, focus trapped, and all world inputs blocke
   const state = atVein(); state.run.scrap = 1000;
   await seed(page, state); await page.goto('/');
   const canvas = page.locator('.game-canvas');
+  // Selection is deliberately not restored by save loading; establish it through the real UI.
+  await clickWorld(page, 118, 214);
+  await expect(page.getByRole('heading', { name: 'Scrap Ledge', exact: true })).toBeVisible();
   await canvas.focus(); await page.keyboard.down('KeyD');
   await expect(canvas).toHaveAttribute('data-player-state', 'MOVING_TO_POINT');
   await ui(page, 'goal').click();
@@ -120,7 +122,10 @@ test('keeps locked items inspectable, focus trapped, and all world inputs blocke
 test('purchasing Auto Swing neither repeats on held Enter nor starts a hidden mining job', async ({ page }) => {
   const state = atVein(); state.run.scrap = 1000; state.run.tool.level = 2; state.run.tool.damage = 16;
   state.run.boots.level = 2; state.run.stats.manualSwings = 6;
-  await seed(page, state); await page.goto('/'); await ui(page, 'goal').click();
+  await seed(page, state); await page.goto('/');
+  await clickWorld(page, 118, 214);
+  await expect(page.locator('.context-meta')).toContainText('HP 30/30');
+  await ui(page, 'goal').click();
   await expect(dialog(page)).toContainText('Manual swings → repeated swings');
   await ui(page, 'buy').focus(); await page.keyboard.down('Enter');
   await expect(ui(page, 'buy')).toHaveAccessibleName('Switch Auto Swing OFF');
@@ -157,6 +162,12 @@ test('offers all recovered equipment, including items older than the last eight'
   expect((await saved(page)).run.phase5.equipment.equippedPlayer.TOOL).toBe('gear-0');
   await ui(page, 'previous').click();
   await expect(ui(page, 'item-gear-11')).toHaveAttribute('aria-pressed', 'true');
+  await ui(page, 'item-gear-11').focus();
+  for (let i = 0; i < 5; i++) {
+    await page.keyboard.press('ArrowRight');
+    await expect(ui(page, `item-gear-${i}`)).toHaveAttribute('aria-pressed', 'true');
+    await expect(ui(page, `item-gear-${i}`)).toBeFocused();
+  }
   await assertContained(page);
 });
 
