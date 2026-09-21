@@ -1,39 +1,10 @@
-import {
-  ANOMALY_KINDS,
-  ANOMALY_POOL,
-  AUTO_DISPATCH_MIN_WEIGHT,
-  CORE_KINDS,
-  COLLECT_DURATION,
-  CORE_PROTOCOLS,
-  D030_EXTENSION_COST,
-  D060_EXTENSION_COST,
-  D100_EXTENSION_COST,
-  FLOOR_TRAVEL_DURATION,
-  FLOOR_TRAVEL_VIA_SURFACE_DURATION,
-  FOSSIL_KINDS,
-  LOAD_DURATION,
-  LOOT,
-  PLAYER_PACK_CAPACITY,
-  PLAYER_TOOL_DAMAGE,
-  PORTER_COLLECT_DURATION,
-  PORTER_LOAD_DURATION,
-  RESEARCH,
-  RESEARCH_KINDS,
-  RELIC_KINDS,
-  SWING,
-  UNLOAD_DURATION,
-  UPGRADE_COSTS,
-  VALUABLE_KINDS,
-  WORLD,
-} from './config';
+import { ANOMALY_POOL, COLLECT_DURATION, CORE_PROTOCOLS, D030_EXTENSION_COST, D060_EXTENSION_COST, D100_EXTENSION_COST, FLOOR_TRAVEL_DURATION, FLOOR_TRAVEL_VIA_SURFACE_DURATION, LOAD_DURATION, LOOT, PLAYER_PACK_CAPACITY, PLAYER_TOOL_DAMAGE, PORTER_COLLECT_DURATION, PORTER_LOAD_DURATION, RESEARCH, SWING, UNLOAD_DURATION, UPGRADE_COSTS, WORLD } from './config';
 import { createNewRun } from './createGame';
+import { finishingDamage, rollMiningLoot, treasureChance } from './mining';
+import { shipmentDecision, updateShipmentWait } from './dispatch';
 import { appraisalMultiplier, getModifiers } from './modifiers';
-import {
-  atPlayerLoadingPoint, cancelPlayerAction, canMoveToNode, MINE_INPUT_BUFFER,
-  miningTarget, nearbyPlayerLoot, PLAYER_LOAD_X, PLAYER_MINE_REACH,
-  playerControlAvailable, playerInteraction, upgradeBlockReason,
-} from './playerControls';
-import { hashSeed, nextRandom, pick } from './rng';
+import { cancelPlayerAction, canMoveToNode, MINE_INPUT_BUFFER, miningTarget, nearbyPlayerLoot, PLAYER_LOAD_X, PLAYER_MINE_REACH, playerControlAvailable, playerInteraction, upgradeBlockReason } from './playerControls';
+import { hashSeed } from './rng';
 import type {
   AnomalyId,
   CoreProtocolId,
@@ -220,10 +191,7 @@ export function d030ExtensionCost(state: GameState): number {
 
 export function canExtendD030(state: GameState): boolean {
   const run = state.run;
-  const blueprint = state.meta.protocols.includes('SHAFT_BLUEPRINT');
-  const prerequisiteReady = blueprint
-    ? run.automation.autoSwing.unlocked
-    : run.automation.autoDispatch.unlocked && run.porter.enabled;
+  const prerequisiteReady = run.stats.elevatorTrips > 0;
   return run.depth.current === 'D-001'
     && !run.depth.unlocked.includes('D-030')
     && prerequisiteReady
@@ -359,9 +327,18 @@ export function startResearch(state: GameState, id: ResearchId): boolean {
   return true;
 }
 
+export function coreProtocolBlockReason(state: GameState, id: CoreProtocolId): string | null {
+  const definition = CORE_PROTOCOLS[id];
+  if (state.meta.protocols.includes(id)) return 'Protocol installed permanently.';
+  if (definition.requiredDepth && DEPTH_RANK[state.meta.bestDepth] < DEPTH_RANK[definition.requiredDepth]) {
+    return `Reach ${definition.requiredDepth} before installing this deep Protocol.`;
+  }
+  return state.meta.core < definition.cost ? `Need ${definition.cost - state.meta.core} more Core.` : null;
+}
+
 export function purchaseCoreProtocol(state: GameState, id: CoreProtocolId): boolean {
   const definition = CORE_PROTOCOLS[id];
-  if (state.selection?.type !== 'core-console' || state.meta.protocols.includes(id) || state.meta.core < definition.cost) return false;
+  if (state.selection?.type !== 'core-console' || coreProtocolBlockReason(state, id)) return false;
   state.meta.core -= definition.cost;
   state.meta.protocols.push(id);
   applyProtocolToCurrentRun(state, id);
@@ -435,7 +412,7 @@ export function porterWeight(state: GameState): number { return cargoWeight(stat
 export function drainEvents(state: GameState): GameEvent[] { return state.events.splice(0, state.events.length); }
 
 export function effectiveTreasureChance(state: GameState, node: MiningNode): number {
-  return Math.min(0.95, node.treasureChance * getModifiers(state).treasureChanceMultiplier);
+  return treasureChance(state, node);
 }
 
 function updateResearch(state: GameState, dt: number): void {
@@ -540,6 +517,7 @@ function updateNodes(state: GameState, dt: number): void {
 }
 
 function updateElevator(state: GameState, dt: number): void {
+  updateShipmentWait(state, dt);
   const elevator = state.run.elevator;
   elevator.stateTimer += dt;
   if (elevator.state === 'ASCENDING') {
@@ -578,7 +556,7 @@ function appraiseCargo(state: GameState, cargo: LootStack[]): void {
   let dataGain = 0;
   let coreGain = 0;
   for (const item of cargo) {
-    emit(state, 'LOOT_APPRAISE', { id: item.id, name: item.name, category: item.category, rarity: item.rarity });
+    emit(state, 'LOOT_APPRAISE', { id: item.id, kind: item.kind, name: item.name, category: item.category, rarity: item.rarity, depth: item.originDepth ?? state.run.depth.current });
     if (item.category === 'FOSSIL' || item.category === 'RELIC' || item.category === 'ANOMALY') registerCollection(state, item);
     if (item.category === 'RELIC') unlockPassiveFromLoot(state, item.kind);
     if (item.category === 'RESEARCH') dataGain += item.dataValue;
@@ -748,13 +726,9 @@ function updateAutomation(state: GameState): void {
     beginSwing(state, node);
   }
   if (!run.automation.autoDispatch.unlocked || !run.automation.autoDispatch.enabled || !canDispatchElevator(state)) return;
-  const weight = cargoWeight(run.elevator.cargo);
-  const full = weight >= run.elevator.maxLoad - 0.01;
-  const playerBlocked = atPlayerLoadingPoint(state) && run.character.carried.length > 0
-    && !canAnyFit(run.character.carried, availableElevatorCapacity(state));
-  const porterBlocked = run.porter.state === 'WAITING_FOR_ELEVATOR' && !canAnyFit(run.porter.carried, availableElevatorCapacity(state));
-  if (weight < Math.min(AUTO_DISPATCH_MIN_WEIGHT, run.elevator.maxLoad) && !full && !playerBlocked && !porterBlocked) return;
-  emit(state, 'AUTO_DISPATCH_TRIGGER', { weight, threshold: AUTO_DISPATCH_MIN_WEIGHT });
+  const decision = shipmentDecision(state);
+  if (!decision.send) return;
+  emit(state, 'AUTO_DISPATCH_TRIGGER', { weight: cargoWeight(run.elevator.cargo), threshold: decision.threshold, reason: decision.reason });
   dispatchElevator(state);
 }
 
@@ -774,133 +748,19 @@ function beginSwing(state: GameState, node: MiningNode): boolean {
 
 function applyMiningHit(state: GameState, node: MiningNode): void {
   const modifiers = getModifiers(state);
-  let damage = state.run.tool.damage * modifiers.miningDamageMultiplier;
-  if (state.meta.passives.active.includes('LAST_SWING') && node.hp / node.maxHp <= 0.1) damage *= 2.6;
-  damage = Math.max(1, Math.round(damage));
+  const damage = finishingDamage(state, node, state.run.tool.damage * modifiers.miningDamageMultiplier);
   emit(state, 'MINER_SWING_HIT', { nodeId: node.id, damage });
   node.hp = Math.max(0, node.hp - damage);
   emit(state, 'NODE_DAMAGE', { nodeId: node.id, hp: node.hp, maxHp: node.maxHp });
   if (node.hp > 0) return;
   node.respawnTimer = node.respawnDelay;
-  emit(state, 'NODE_BREAK', { nodeId: node.id });
+  emit(state, 'NODE_BREAK', { nodeId: node.id, depth: state.run.depth.current });
   spawnLoot(state, node);
 }
 
 function spawnLoot(state: GameState, node: MiningNode): void {
-  if (node.id === 'core-shell') {
-    spawnCoreLoot(state, node);
-    return;
-  }
-  const modifiers = getModifiers(state);
-  const baseRange = Math.max(1, node.yieldMax - node.yieldMin + 1);
-  const baseCommon = node.yieldMin + Math.floor(nextRandom(state) * baseRange);
-  const commonCount = Math.max(1, Math.round(baseCommon * modifiers.commonYieldMultiplier));
-  const spawned: LootStack[] = [];
-  for (let index = 0; index < commonCount; index += 1) {
-    const kind = pick(state, node.commonKinds);
-    spawned.push(createLoot(state, kind, node.x + (nextRandom(state) - 0.5) * 18, node.y - 4));
-  }
-
-  const depth = state.run.depth.current;
-  if (depth === 'D-030') state.run.discovery.d030NodeBreaks += 1;
-  if (depth === 'D-060') state.run.discovery.d060NodeBreaks += 1;
-  const chance = effectiveTreasureChance(state, node);
-  const roll = nextRandom(state);
-  const firstDiscoverySafeguard = depth === 'D-030' && state.run.discovery.foundThisRun === 0
-    && state.run.discovery.d030NodeBreaks >= state.run.discovery.firstDiscoveryBreak;
-  const fossilSeen = state.meta.collection.entries.some((entry) => entry.category === 'FOSSIL' && entry.discovered);
-  const fossilSafeguard = depth === 'D-030' && !fossilSeen
-    && state.run.discovery.d030NodeBreaks >= state.run.discovery.firstFossilBreak;
-  const relicSafeguard = depth === 'D-030' && state.meta.passives.unlocked.length === 0
-    && state.run.discovery.d030NodeBreaks >= state.run.discovery.firstRelicBreak;
-  const researchSafeguard = depth === 'D-060' && state.run.data === 0
-    && state.run.discovery.d060NodeBreaks >= state.run.discovery.firstResearchBreak;
-  const safeguard = firstDiscoverySafeguard || fossilSafeguard || relicSafeguard || researchSafeguard;
-  const found = roll < chance || safeguard;
-  emit(state, 'TREASURE_ROLL', { nodeId: node.id, roll: Number(roll.toFixed(5)), chance: Number(chance.toFixed(5)), found, safeguard });
-  emit(state, 'LOOT_ROLL', { nodeId: node.id, roll: Number(roll.toFixed(5)), chance: Number(chance.toFixed(5)), rare: found });
-  if (found) {
-    const category: LootCategory = researchSafeguard ? 'RESEARCH' : relicSafeguard ? 'RELIC' : fossilSafeguard ? 'FOSSIL' : chooseTreasureCategory(state, node);
-    const kind = pickTreasureKind(state, category);
-    const treasure = createLoot(state, kind, node.x + (nextRandom(state) - 0.5) * 14, node.y - 7);
-    spawned.push(treasure);
-    if (depth !== 'D-001') {
-      state.run.discovery.foundThisRun += 1;
-      emit(state, 'DISCOVERY_FOUND', { id: treasure.id, name: treasure.name, rarity: treasure.rarity, category: treasure.category, nodeId: node.id });
-    }
-  }
-  currentFloor(state).loot.push(...spawned);
-  for (const item of spawned) emitLootSpawn(state, item);
-}
-
-function spawnCoreLoot(state: GameState, node: MiningNode): void {
-  state.run.discovery.d100CoreBreaks += 1;
-  state.run.coreChamber.shellBroken = true;
-  const first = state.run.discovery.d100CoreBreaks === 1;
-  const kinds: LootKind[] = first ? ['CORE_FRAGMENT', 'CORE_FRAGMENT'] : ['CORE_FRAGMENT'];
-  if (!first && nextRandom(state) < 0.3) kinds.push('CORE_MATRIX');
-  const spawned = kinds.map((kind, index) => createLoot(state, kind, node.x - 7 + index * 10, node.y - 7));
-  currentFloor(state).loot.push(...spawned);
-  for (const item of spawned) {
-    emit(state, 'DISCOVERY_FOUND', { id: item.id, name: item.name, rarity: item.rarity, category: item.category, nodeId: node.id });
-    emitLootSpawn(state, item);
-  }
-}
-
-function chooseTreasureCategory(state: GameState, node: MiningNode): LootCategory {
-  const modifiers = getModifiers(state);
-  const weights: Array<[LootCategory, number]> = [
-    ['VALUABLE', node.valuableWeight * modifiers.valuableWeightMultiplier],
-    ['FOSSIL', node.fossilWeight * modifiers.fossilWeightMultiplier],
-    ['RELIC', node.relicWeight * modifiers.relicWeightMultiplier],
-    ['ANOMALY', node.anomalyWeight * modifiers.anomalyWeightMultiplier],
-    ['RESEARCH', node.researchWeight * modifiers.researchWeightMultiplier],
-    ['CORE', node.coreWeight],
-  ];
-  const total = weights.reduce((sum, [, weight]) => sum + weight, 0);
-  if (total <= 0) return 'VALUABLE';
-  let roll = nextRandom(state) * total;
-  for (const [category, weight] of weights) {
-    roll -= weight;
-    if (roll <= 0) return category;
-  }
-  return 'VALUABLE';
-}
-
-function pickTreasureKind(state: GameState, category: LootCategory): LootKind {
-  switch (category) {
-    case 'VALUABLE': return pick(state, VALUABLE_KINDS);
-    case 'FOSSIL': return pick(state, FOSSIL_KINDS);
-    case 'RELIC': return pick(state, RELIC_KINDS);
-    case 'ANOMALY': return pick(state, ANOMALY_KINDS);
-    case 'RESEARCH': return pick(state, RESEARCH_KINDS);
-    case 'CORE': return pick(state, CORE_KINDS);
-    case 'ORE': return 'IRON';
-  }
-}
-
-function createLoot(state: GameState, kind: LootKind, x: number, y: number): LootStack {
-  const definition = LOOT[kind];
-  return {
-    id: `loot-${state.meta.runIndex}-${state.run.nextLootId++}`,
-    kind,
-    name: definition.name,
-    rarity: definition.rarity,
-    category: definition.category,
-    weight: definition.weight,
-    value: definition.value,
-    dataValue: definition.dataValue ?? 0,
-    coreValue: definition.coreValue ?? 0,
-    x,
-    y,
-  };
-}
-
-function emitLootSpawn(state: GameState, item: LootStack): void {
-  emit(state, 'LOOT_SPAWN', {
-    id: item.id, name: item.name, rarity: item.rarity, category: item.category,
-    value: item.value, data: item.dataValue, core: item.coreValue, x: item.x, y: item.y,
-  });
+  const floor = currentFloor(state);
+  floor.loot.push(...rollMiningLoot(state, floor, node, (type, data) => emit(state, type, data)));
 }
 
 function pickUpNearbyLoot(state: GameState): void {

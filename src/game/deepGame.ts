@@ -30,8 +30,9 @@ import {
   WORLD,
 } from './config';
 import { deeperDepth } from './depth';
-import { appraisalMultiplier } from './modifiers';
-import { hashSeed, nextRandom, pick } from './rng';
+import { appraisalMultiplier, getModifiers } from './modifiers';
+import { finishingDamage, maximumMiningDropWeight, rollMiningLoot } from './mining';
+import { hashSeed, nextRandom } from './rng';
 import { cargoWeight } from './simulation';
 import type {
   CargoHub,
@@ -252,7 +253,7 @@ export function processDeepEvents(state: GameState, events: readonly GameEvent[]
     if (event.type === 'NODE_BREAK') handleDeepNodeBreak(state, event);
     if (event.type === 'LOOT_APPRAISE') handleDeepAppraisal(state, String(event.data?.id ?? ''));
     if (event.type === 'RESEARCH_COMPLETED') {
-      const id = String(event.data?.id ?? '');
+      const id = String(event.data?.research ?? '');
       if (id in state.run.deepProgress.instrumentation.researchUnlockedAt === false) {
         state.run.deepProgress.instrumentation.researchUnlockedAt[id as keyof typeof state.run.deepProgress.instrumentation.researchUnlockedAt] = state.elapsed;
       }
@@ -287,7 +288,7 @@ function handleDeepNodeBreak(state: GameState, event: GameEvent): void {
       floor.loot.push(item);
       emitLootSpawn(state, item, nodeId);
     }
-    if (nodeId === 'hanging-vein' && nextRandom(state) < 0.12) spawnDeepEquipmentCrate(state, floor.nodes[1]!, 'D-250');
+    if (nodeId === 'hanging-vein' && ((floor.nodes[1]?.minedCount ?? 0) === 1 || nextRandom(state) < 0.12)) spawnDeepEquipmentCrate(state, floor.nodes[1]!, 'D-250');
     return;
   }
   if (depth === 'D-400' && nodeId === 'fracture-well' && state.run.deepProgress.deepComponentsDelivered < DEEP_COMPONENTS_REQUIRED && !cargoExists(state, 'DEEP_COMPONENT')) {
@@ -562,7 +563,8 @@ function updateBores(state: GameState, dt: number): void {
     const line = bore.connectedLineId ? state.run.logistics.lines.find((candidate) => candidate.id === bore.connectedLineId) : undefined;
     const node = state.run.floors[bore.depth].nodes.find((candidate) => candidate.id === bore.targetNodeId);
     if (!line || line.state !== 'READY' || !node) { bore.state = 'BLOCKED'; continue; }
-    if (cargoWeight(bore.outputBuffer) >= bore.maxOutputWeight - 0.001 || cargoWeight(line.inputBuffer) >= line.maxInputWeight - 0.001) {
+    const reserved = maximumMiningDropWeight(state, state.run.floors[bore.depth], node) + (node.id === 'fracture-well' ? LOOT.DEEP_COMPONENT.weight : 0);
+    if (cargoWeight(bore.outputBuffer) + reserved > bore.maxOutputWeight + 0.001 || cargoWeight(line.inputBuffer) >= line.maxInputWeight - 0.001) {
       bore.state = 'BLOCKED';
       continue;
     }
@@ -583,24 +585,19 @@ function updateBores(state: GameState, dt: number): void {
 }
 
 function applyBoreHit(state: GameState, bore: RemoteBore, node: MiningNode): void {
-  let damage = bore.damage;
+  let damage = bore.damage * getModifiers(state).miningDamageMultiplier;
   const coupler = boreCouplerValue(state);
-  if (coupler > 0) damage = Math.round(damage * (1 + coupler));
+  if (coupler > 0) damage *= 1 + coupler;
+  damage = finishingDamage(state, node, damage);
   node.hp = Math.max(0, node.hp - damage);
   emit(state, 'BORE_HIT', { boreId: bore.id, nodeId: node.id, depth: bore.depth, damage, hp: node.hp });
   emit(state, 'NODE_DAMAGE', { boreId: bore.id, nodeId: node.id, depth: bore.depth, hp: node.hp, maxHp: node.maxHp });
   if (node.hp > 0) return;
   node.respawnTimer = node.respawnDelay;
   emit(state, 'NODE_BREAK', { boreId: bore.id, nodeId: node.id, depth: bore.depth });
-  const count = Math.max(1, Math.min(3, node.yieldMin + Math.floor(nextRandom(state) * Math.max(1, node.yieldMax - node.yieldMin + 1))));
-  for (let index = 0; index < count; index += 1) {
-    const loot = createDeepLoot(state, pick(state, node.commonKinds), node.x, bore.depth);
-    if (cargoWeight(bore.outputBuffer) + loot.weight <= bore.maxOutputWeight + 0.001) {
-      bore.outputBuffer.push(loot);
-      emit(state, 'BORE_OUTPUT', { boreId: bore.id, id: loot.id, kind: loot.kind, depth: bore.depth });
-      emitLootSpawn(state, loot, node.id);
-    }
-  }
+  const items = rollMiningLoot(state, state.run.floors[bore.depth], node, (type, data) => emit(state, type, data), { boreId: bore.id });
+  bore.outputBuffer.push(...items);
+  for (const loot of items) emit(state, 'BORE_OUTPUT', { boreId: bore.id, id: loot.id, kind: loot.kind, depth: bore.depth });
 }
 
 function appraiseDeepCargo(state: GameState, cargo: LootStack[], via: string): void {

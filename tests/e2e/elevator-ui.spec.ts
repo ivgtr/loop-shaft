@@ -3,16 +3,20 @@ import { createGameState } from '../../src/game/createGame';
 import { DEPTH_ORDER } from '../../src/game/depth';
 import { SAVE_KEY, serializeGameState } from '../../src/game/save';
 import type { GameState, LootStack } from '../../src/game/types';
+import { createD001Nodes } from '../../src/game/config';
+const SCRAP_X = createD001Nodes()[0]!.x;
+
 
 const ui = (page: Page, id: string) => page.locator(`.canvas-hit[data-ui-action="${id}"]`);
 const lift = (page: Page) => page.getByRole('dialog', { name: 'Elevator controls', exact: true });
-const ore = (): LootStack => ({ id: 'lift-ore', kind: 'IRON', name: 'Iron', rarity: 'COMMON', category: 'ORE', weight: 2, value: 12, dataValue: 0, coreValue: 0, x: 118, y: 210 });
+const ore = (): LootStack => ({ id: 'lift-ore', kind: 'IRON', name: 'Iron', rarity: 'COMMON', category: 'ORE', weight: 2, value: 12, dataValue: 0, coreValue: 0, x: SCRAP_X, y: 210 });
 async function seed(page: Page, state: GameState) {
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: SAVE_KEY, value: serializeGameState(state) });
 }
 function ready(): GameState {
   const state = createGameState(771); state.run.scrap = 5000;
   state.run.porter.enabled = true; state.run.automation.autoDispatch.unlocked = true;
+  state.run.stats.playerDeposits = 1; state.run.stats.elevatorTrips = 1;
   return state;
 }
 async function saved(page: Page): Promise<GameState> {
@@ -20,7 +24,7 @@ async function saved(page: Page): Promise<GameState> {
 }
 async function selectVein(page: Page) {
   const box = (await page.locator('.game-canvas').boundingBox())!;
-  await page.mouse.click(box.x + 118 / 480 * box.width, box.y + 214 / 270 * box.height);
+  await page.mouse.click(box.x + SCRAP_X / 480 * box.width, box.y + 214 / 270 * box.height);
   await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
 }
 async function contained(page: Page) {
@@ -51,13 +55,13 @@ test('opens D-030 once without moving, then travels explicitly without changing 
   await expect(ui(page, 'lift-activate')).toBeDisabled();
   await ui(page, 'lift-tab-extend').click();
   await expect(ui(page, 'lift-activate')).toHaveAccessibleName('OPEN D-030');
-  await expect(lift(page)).toContainText('2200 SCRAP');
+  await expect(lift(page)).toContainText('1200 SCRAP');
   await contained(page);
   await info.attach('stage-two-open-connection', { body: await page.screenshot(), contentType: 'image/png' });
   await ui(page, 'lift-activate').click();
   await expect(ui(page, 'lift-activate')).toHaveAccessibleName('D-030 CONNECTED');
   await expect(ui(page, 'lift-activate')).toBeDisabled();
-  expect((await saved(page)).run.scrap).toBe(2800);
+  expect((await saved(page)).run.scrap).toBe(3800);
   await expect(canvas).toHaveAttribute('data-depth', 'D-001');
   await expect(canvas).toHaveAttribute('data-elevator-state', 'IDLE_BOTTOM');
   await ui(page, 'lift-tab-travel').click();

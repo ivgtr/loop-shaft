@@ -77,12 +77,11 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
   const guide = workshopGuide(state);
   if (guide) buttons.push({ id: 'goal', label: 'Inspect next workshop upgrade', text: guide.label, action: { type: 'open' },
     x: 10, y: compact ? 56 : 46, width: Math.min(w - 100, 420), height: 44, selected: guide.ready });
-  else if (state.run.depth.current === 'D-001' && state.run.porter.enabled) {
-    const relay = state.run.automation.autoDispatch.unlocked;
+  else if (state.run.depth.current === 'D-001' && state.run.stats.elevatorTrips > 0) {
     const connected = state.run.depth.unlocked.includes('D-030');
     buttons.push({ id: 'shaft-goal', label: 'Inspect the next shaft connection',
-      text: !relay ? 'LIFT · FIT AUTO RELAY' : connected ? 'LIFT · TRAVEL TO D-030' : 'LIFT · OPEN D-030 CONNECTION',
-      action: { type: 'lift-open', tab: !relay ? 'dispatch' : connected ? 'travel' : 'extend', id: !relay ? 'relay' : 'D-030' },
+      text: connected ? 'LIFT · TRAVEL TO D-030' : 'LIFT · OPEN D-030 CONNECTION',
+      action: { type: 'lift-open', tab: connected ? 'travel' : 'extend', id: 'D-030' },
       x: 10, y: compact ? 56 : 46, width: Math.min(w - 100, 360), height: 44 });
   }
   buttons.push({ id: 'base', label: 'Open base facilities', text: 'BASE', action: { type: 'station-open', request: { station: 'facilities' } },
@@ -123,6 +122,7 @@ export function drawGameUi(ctx: CanvasRenderingContext2D, state: GameState, elev
     const readout = sceneReadout(state);
     if (!layout.buttons.some((button) => ['goal', 'shaft-goal'].includes(button.id))) lines(ctx, readout.goal, 12, compact ? 77 : 62, Math.min(w - 104, 440), 12, 2, C.gold);
     const top = h - (compact ? 132 : 88);
+    text(ctx, elide(ctx, readout.survey, w - 20, 11), 10, viewport.world.y + viewport.world.height - (compact ? 24 : 7), 11, C.gold);
     ctx.fillStyle = C.background; ctx.fillRect(0, top, w, h - top);
     ctx.fillStyle = C.line; ctx.fillRect(0, top, w, 1);
     const pack = `PACK ${Number(carriedWeight(state).toFixed(1))}/${run.character.backpackCapacity}kg`;

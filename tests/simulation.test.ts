@@ -57,6 +57,7 @@ function makeLoot(kind: LootKind, id = `test-${kind}`): LootStack {
 }
 
 function primeAutomation(state: GameState): void {
+  state.run.stats.playerDeposits = 1; state.run.stats.elevatorTrips = 1;
   state.run.scrap = 30000;
   state.run.stats.manualSwings = AUTO_SWING_MANUAL_SWINGS_REQUIRED;
   if (state.run.tool.level === 1) expect(upgradeTool(state)).toBe(true);

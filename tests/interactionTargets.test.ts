@@ -8,6 +8,9 @@ import {
   resolveInteractionTarget,
 } from '../src/render/interactionTargets';
 import { D001_VISUAL_GROUND_OFFSET, D001_WORKBENCH_FALLBACK_OFFSET } from '../src/render/semanticRenderState';
+import { createD001Nodes } from '../src/game/config';
+const SCRAP_X = createD001Nodes()[0]!.x;
+
 
 describe('interaction targets', () => {
   it('converts CSS client coordinates to the 480x270 logical canvas', () => {
@@ -20,12 +23,12 @@ describe('interaction targets', () => {
     const state = createGameState(8101);
     const targets = deriveInteractionTargets(state);
     const centerY = 201 + D001_VISUAL_GROUND_OFFSET;
-    expect(resolveInteractionTarget({ x: 140, y: centerY }, targets)?.key).toBe('node:scrap-ledge');
-    expect(resolveInteractionTarget({ x: 140.01, y: centerY }, targets)?.key).not.toBe('node:scrap-ledge');
-    // The rendered Scrap Ledge ends around x=131; the display-aligned hit remains forgiving.
-    expect(resolveInteractionTarget({ x: 136, y: centerY }, targets)?.key).toBe('node:scrap-ledge');
-    expect(resolveInteractionTarget({ x: 118, y: centerY + 22 }, targets)?.key).toBe('node:scrap-ledge');
-    expect(resolveInteractionTarget({ x: 118, y: centerY + 22.01 }, targets)?.key).not.toBe('node:scrap-ledge');
+    expect(resolveInteractionTarget({ x: SCRAP_X + 22, y: centerY }, targets)?.key).toBe('node:scrap-ledge');
+    expect(resolveInteractionTarget({ x: SCRAP_X + 22.01, y: centerY }, targets)?.key).not.toBe('node:scrap-ledge');
+    // Display-aligned hit padding extends beyond the rendered rock body.
+    expect(resolveInteractionTarget({ x: SCRAP_X + 18, y: centerY }, targets)?.key).toBe('node:scrap-ledge');
+    expect(resolveInteractionTarget({ x: SCRAP_X, y: centerY + 22 }, targets)?.key).toBe('node:scrap-ledge');
+    expect(resolveInteractionTarget({ x: SCRAP_X, y: centerY + 22.01 }, targets)?.key).not.toBe('node:scrap-ledge');
   });
 
   it('tracks the moving elevator cage while retaining the fixed control panel', () => {

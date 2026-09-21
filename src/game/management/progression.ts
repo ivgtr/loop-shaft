@@ -1,7 +1,8 @@
 import { ANOMALIES, CORE_PROTOCOLS, PASSIVES, RESEARCH } from '../config';
 import { createNewRun } from '../createGame';
 import { legacyEquipmentForReboot } from '../phase5';
-import { researchBlockReason } from '../simulation';
+import { coreProtocolBlockReason, researchBlockReason } from '../simulation';
+import { coreReserveRemaining } from '../mining';
 import type { CoreProtocolId, GameState, PassiveId, ResearchId } from '../types';
 import { commandAction, information, type ManagementState, type StationItem, type StationView } from './types';
 
@@ -64,9 +65,9 @@ export function coreView(state: GameState, ui: ManagementState): StationView {
   const ids = Object.keys(CORE_PROTOCOLS) as CoreProtocolId[];
   const items = ids.filter((id) => ui.tab === 'owned' ? state.meta.protocols.includes(id) : !state.meta.protocols.includes(id) || id === ui.selectedId).map((id): StationItem => {
     const definition = CORE_PROTOCOLS[id]; const owned = state.meta.protocols.includes(id);
-    const reason = owned ? 'Protocol installed permanently.' : state.meta.core < definition.cost ? `Need ${definition.cost - state.meta.core} more Core.` : null;
+    const reason = coreProtocolBlockReason(state, id);
     return { id, name: definition.name, summary: `${owned ? 'INSTALLED' : `${definition.cost} Core`} · owned ${state.meta.core}`,
-      lines: [definition.description, 'Permanent. Applies again at the start of each Run.'], active: owned, badge: owned ? 'INSTALLED' : reason ? 'LOCKED' : 'READY', reason,
+      lines: [definition.description, definition.requiredDepth ? `Requires the ${definition.requiredDepth} expedition record.` : 'Available from the first Core expedition.', 'Permanent. Applies again at the start of each Run.'], active: owned, badge: owned ? 'INSTALLED' : reason ? 'LOCKED' : 'READY', reason,
       actionLabel: owned ? 'INSTALLED' : `INSTALL · ${definition.cost} CORE`, action: reason ? null : commandAction({ type: 'protocol', protocol: id }) };
   });
   return { title: 'CORE CONSOLE', tabs: [{ id: 'available', label: 'PROTOCOLS' }, { id: 'owned', label: 'INSTALLED' }],
@@ -77,7 +78,9 @@ export function rebootView(state: GameState): StationView {
   const { run, meta } = state; const legacy = legacyEquipmentForReboot(state);
   const next = createNewRun({ ...meta, runIndex: meta.runIndex + 1, core: meta.core + run.pendingCore, legacyEquipment: legacy });
   const reason = !run.coreChamber.rebootAvailable || run.pendingCore <= 0 ? 'Appraise Core cargo at Surface before Reboot.' : null;
+  const shell = run.floors['D-100'].nodes.find((node) => node.id === 'core-shell')!;
   const lines = [
+    `CORE SHELL: ${coreReserveRemaining(shell)}/4 still in the rock this Run. Other depths have their own finite reserves.`,
     `KEEP: ${meta.core} Core + ${run.pendingCore} appraised charge = ${meta.core + run.pendingCore} Core.`,
     `KEEP: ${meta.protocols.length} Core Protocols, ${meta.collection.entries.filter((entry) => entry.discovered).length} collection discoveries and Best Depth ${meta.bestDepth}.`,
     `KEEP: ${meta.passives.unlocked.length} unlocked / ${meta.passives.active.length} active passives, equipment and deep discovery records.`,

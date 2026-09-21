@@ -14,6 +14,7 @@ const ore = (): LootStack => ({ id: 'ore', kind: 'IRON', name: 'Iron', rarity: '
 function ready(): GameState {
   const state = createGameState(650);
   state.run.scrap = 5000; state.run.porter.enabled = true; state.run.automation.autoDispatch.unlocked = true;
+  state.run.stats.playerDeposits = 1; state.run.stats.elevatorTrips = 1;
   return state;
 }
 function windowState(state: GameState, tab: ElevatorTab, selectedId = elevatorItems(state, tab)[0]!.id): ElevatorUiState {
@@ -28,7 +29,7 @@ beforeEach(() => {
 describe('elevator presentation follows the simulation', () => {
   it('keeps shipment, destinations, and new connections in separate views', () => {
     const state = ready();
-    expect(elevatorItems(state, 'dispatch').map((i) => i.id)).toEqual(['shipment', 'relay']);
+    expect(elevatorItems(state, 'dispatch').map((i) => i.id)).toEqual(['shipment', 'relay', 'dispatch-BALANCED', 'dispatch-BULK', 'dispatch-PRIORITY']);
     expect(elevatorItems(state, 'travel').map((i) => i.id)).toEqual(['D-001']);
     expect(elevatorItems(state, 'extend').map((i) => i.id)).toEqual(['D-030']);
     expect(elevatorItems(state, 'extend')[0]!.command).toEqual({ type: 'extend-d030' });
@@ -54,10 +55,10 @@ describe('elevator presentation follows the simulation', () => {
 
   it('exposes prerequisites and exact missing amounts including Shaft Blueprint pricing', () => {
     const state = createGameState(651);
-    expect(elevatorItems(state, 'extend')[0]!.reason).toContain('Porter and Auto Dispatch');
-    state.meta.protocols.push('SHAFT_BLUEPRINT'); state.run.automation.autoSwing.unlocked = true;
-    expect(elevatorItems(state, 'extend')[0]).toMatchObject({ summary: '660 SCRAP · NEW CONNECTION', reason: 'Need 660 more Scrap.' });
-    state.run.scrap = 660;
+    expect(elevatorItems(state, 'extend')[0]!.reason).toContain('Deliver one shipment');
+    state.run.stats.elevatorTrips = 1; state.meta.protocols.push('SHAFT_BLUEPRINT'); state.run.automation.autoSwing.unlocked = true;
+    expect(elevatorItems(state, 'extend')[0]).toMatchObject({ summary: '360 SCRAP · NEW CONNECTION', reason: 'Need 360 more Scrap.' });
+    state.run.scrap = 360;
     expect(elevatorItems(state, 'extend')[0]!.command).not.toBeNull();
   });
 
@@ -95,9 +96,9 @@ describe('elevator input boundary', () => {
     const state = ready(); selectNode(state, 'scrap-ledge');
     const runtime = new GameRuntime(state); runtime.openElevator('extend'); runtime.activateElevatorItem();
     expect(state.run.depth.unlocked).toContain('D-030'); expect(state.run.depth.current).toBe('D-001');
-    expect(state.run.elevator.travel).toBeNull(); expect(state.run.scrap).toBe(2800);
+    expect(state.run.elevator.travel).toBeNull(); expect(state.run.scrap).toBe(3800);
     expect(runtime.getSnapshot().elevatorUi?.selectedId).toBe('D-030');
-    runtime.activateElevatorItem(); expect(state.run.scrap).toBe(2800);
+    runtime.activateElevatorItem(); expect(state.run.scrap).toBe(3800);
     expect(selectedElevatorItem(state, runtime.getSnapshot().elevatorUi!).complete).toBe(true);
     runtime.selectElevatorTab('travel'); runtime.activateElevatorItem();
     expect(state.run.elevator.travel?.to).toBe('D-030'); expect(state.run.depth.current).toBe('D-001');

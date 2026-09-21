@@ -132,6 +132,7 @@ export function createNewRun(meta: MetaProgression): RunState {
       cargo: [],
       stateTimer: 0,
       rhythmBoostTrips: 0,
+      cargoWaitSeconds: 0,
       travel: null,
     },
     tool: experienced
@@ -140,6 +141,7 @@ export function createNewRun(meta: MetaProgression): RunState {
     boots: { id: 'player-boots', slot: 'BOOTS', level: 1, name: 'Work Boots' },
     pack: { id: 'player-pack', slot: 'PACK', level: 1, name: 'Canvas Pack' },
     automation: {
+      dispatchPolicy: 'BALANCED',
       autoSwing: { unlocked: experienced, enabled: experienced },
       autoDispatch: { unlocked: veteranElevator, enabled: veteranElevator },
     },
@@ -154,6 +156,7 @@ export function createNewRun(meta: MetaProgression): RunState {
       d060NodeBreaks: 0,
       d100CoreBreaks: 0,
       foundThisRun: 0,
+      categoriesFound: [],
       firstDiscoveryBreak: 3 + (hashSeed(seed ^ 0xd030f1) % 4),
       firstFossilBreak: 5 + (hashSeed(seed ^ 0xf05511) % 3),
       firstRelicBreak: 8 + (hashSeed(seed ^ 0x5e11c) % 4),

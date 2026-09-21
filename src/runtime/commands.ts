@@ -27,6 +27,7 @@ export type GameCommand =
   | { type: 'unlock-porter' }
   | { type: 'unlock-auto-dispatch' }
   | { type: 'toggle-auto-dispatch' }
+  | { type: 'dispatch-policy'; policy: import('../game/dispatch').DispatchPolicy }
   | { type: 'extend-d030' }
   | { type: 'extend-d060' }
   | { type: 'extend-d100' }

@@ -3,6 +3,7 @@ import {
   D400_EXTENSION_COST, D650_SHAFT_COST, DEEP_COMPONENTS_REQUIRED, UPGRADE_COSTS,
 } from './config';
 import { DEPTH_ORDER } from './depth';
+import { DISPATCH_POLICIES, DISPATCH_RULES, dispatchPolicy, shipmentDecision } from './dispatch';
 import { canStartD650Construction, canUnlockD250, canUnlockD400 } from './deepGame';
 import { canPushD180, canTravelPhase5 } from './phase5';
 import { upgradeBlockReason } from './playerControls';
@@ -30,7 +31,7 @@ export function shipmentStatus(state: GameState): string {
   if (elevator.state === 'DESCENDING') return 'RETURNING TO FLOOR';
   if (character.state === 'LOADING' || porter.state === 'LOADING' || elevator.state === 'LOADING') return 'LOADING CARGO';
   if (elevator.state !== 'IDLE_BOTTOM') return elevator.state.replaceAll('_', ' ');
-  return elevator.cargo.length ? 'READY TO SEND' : 'LIFT EMPTY';
+  return elevator.cargo.length ? state.run.automation.autoDispatch.enabled ? shipmentDecision(state).reason : 'READY TO SEND' : 'LIFT EMPTY';
 }
 
 export function travelBlockReason(state: GameState, depth: DepthId): string | null {
@@ -73,6 +74,12 @@ export function elevatorItems(state: GameState, tab: ElevatorTab): ElevatorItem[
     description: 'Automatically dispatches eligible shipments. Turn it off when clearing the lift for a floor trip.',
     reason: relayReason, complete: relay.unlocked, actionLabel: relay.unlocked ? `AUTO DISPATCH ${relay.enabled ? 'OFF' : 'ON'}` : 'FIT AUTO RELAY',
     command: relayReason ? null : { type: relay.unlocked ? 'toggle-auto-dispatch' : 'unlock-auto-dispatch' } });
+  if (relay.unlocked) for (const policy of DISPATCH_POLICIES) {
+    const selected = dispatchPolicy(state) === policy;
+    items.push({ id: `dispatch-${policy}`, name: `${policy} shipments`, summary: selected ? 'ACTIVE SHIPMENT POLICY' : 'SHIPMENT POLICY',
+      description: DISPATCH_RULES[policy].description, reason: selected ? 'Already active.' : null,
+      actionLabel: `USE ${policy}`, complete: selected, command: selected ? null : { type: 'dispatch-policy', policy } });
+  }
   if (run.phase5.cargo.unlocked) for (const priority of ['BALANCED', 'CORE', 'RESEARCH', 'ANCIENT'] as const) {
     const selected = run.phase5.cargo.priority === priority;
     items.push({ id: `priority-${priority}`, name: `${priority} priority`, summary: selected ? 'ACTIVE ROUTING POLICY' : `ROUTE ${priority} FIRST`,
@@ -90,13 +97,11 @@ export function selectedElevatorItem(state: GameState, ui: ElevatorUiState): Ele
 
 function extensionItems(state: GameState): ElevatorItem[] {
   const { run, meta } = state;
-  const blueprint = meta.protocols.includes('SHAFT_BLUEPRINT');
   type Check = readonly [boolean, string];
   const definitions: { depth: DepthId; cost: number; command: GameCommand; ready: boolean; checks: Check[] }[] = [
     { depth: 'D-030', cost: d030ExtensionCost(state), command: { type: 'extend-d030' }, ready: canExtendD030(state), checks: [
       [run.depth.current === 'D-001', 'Return to D-001 to open this connection.'],
-      [blueprint ? run.automation.autoSwing.unlocked : run.automation.autoDispatch.unlocked && run.porter.enabled,
-        blueprint ? 'Requires Auto Swing (Shaft Blueprint route).' : 'Requires Porter and Auto Dispatch.'],
+      [run.stats.elevatorTrips > 0, 'Deliver one shipment to Surface. Automation is optional for D-030.'],
       [!emptyLiftReason(state), emptyLiftReason(state) ?? '']] },
     { depth: 'D-060', cost: D060_EXTENSION_COST, command: { type: 'extend-d060' }, ready: canExtendD060(state), checks: [
       [run.depth.current === 'D-030', 'Travel to D-030 to open this connection.'],

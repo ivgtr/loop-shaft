@@ -1,4 +1,5 @@
 import { DEPTH_ORDER } from './depth';
+import { nodeSurvey, nodeTripEstimate } from './mining';
 import { elevatorItems } from './elevatorUi';
 import { workshopGuide } from './workshop';
 import { deriveInitialLogisticsGuide } from './initialLogisticsGuide';
@@ -16,10 +17,13 @@ export function sceneReadout(state: GameState) {
   const health = node ? node.hp > 0 ? `HP ${node.hp}/${node.maxHp}` : `DEPLETED · ${Math.ceil(node.respawnTimer)}s` : '';
   const action = playerInteraction(state);
   const reason = action.reason && action.type !== 'none' ? action.reason : mineBlockReason(state);
+  const survey = node ? nodeSurvey(state, currentFloor(state), node) : '';
+  const trip = node ? nodeTripEstimate(state, node) : null;
   return {
+    survey,
     title: node?.name ?? `${state.run.depth.current} · SHAFT`,
     short: [node?.name, health, reason ?? 'READY TO MINE'].filter(Boolean).join(' · '),
-    detail: [guide?.context ?? goal, node?.name, health, reason].filter(Boolean).join(' · '),
+    detail: [survey, trip ? `Haul about ${trip.walkSeconds.toFixed(1)}s round trip; average ore ${trip.averageWeight.toFixed(1)}kg` : '', guide?.context ?? goal, node?.name, health, reason].filter(Boolean).join(' · '),
     goal,
   };
 }

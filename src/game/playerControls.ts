@@ -111,13 +111,10 @@ export function upgradeBlockReason(state: GameState, action: UpgradeAction): str
   }[action];
   if ((action === 'upgrade-tool' && run.tool.level !== 1) || (action === 'upgrade-boots' && run.boots.level !== 1)
     || (action === 'unlock-auto-swing' && run.automation.autoSwing.unlocked) || (action === 'upgrade-pack' && run.pack.level !== 1)
-    || (action === 'unlock-porter' && run.porter.enabled) || (action === 'unlock-auto-dispatch' && run.automation.autoDispatch.unlocked)) return 'ALREADY OWNED';
-  if (action === 'upgrade-boots' && run.tool.level !== 2) return 'REQUIRES STEEL PICK';
-  if (action === 'unlock-auto-swing' && run.boots.level !== 2) return 'REQUIRES RUNNER BOOTS';
+    || (action === 'unlock-porter' && (run.porter.enabled || run.phase5.crew.members.some((member) => member.role === 'PORTER'))) || (action === 'unlock-auto-dispatch' && run.automation.autoDispatch.unlocked)) return 'ALREADY OWNED';
   if (action === 'unlock-auto-swing' && run.stats.manualSwings < AUTO_SWING_MANUAL_SWINGS_REQUIRED) return `MINE ${AUTO_SWING_MANUAL_SWINGS_REQUIRED - run.stats.manualSwings} MORE TIMES`;
-  if (action === 'upgrade-pack' && !run.automation.autoSwing.unlocked) return 'REQUIRES AUTO SWING';
-  if (action === 'unlock-porter' && run.pack.level !== 2) return 'REQUIRES FRAME PACK';
-  if (action === 'unlock-auto-dispatch' && !run.porter.enabled) return 'REQUIRES PORTER';
+  if (action === 'unlock-porter' && run.stats.playerDeposits === 0 && run.stats.porterDeposits === 0) return 'DELIVER ONE LOAD FIRST';
+  if (action === 'unlock-auto-dispatch' && run.stats.elevatorTrips === 0) return 'SEND ONE SHIPMENT FIRST';
   return run.scrap < cost ? `NEED ${cost - run.scrap} MORE SCRAP` : null;
 }
 

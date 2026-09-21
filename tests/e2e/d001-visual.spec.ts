@@ -5,6 +5,9 @@ import { SAVE_KEY, serializeGameState } from '../../src/game/save';
 import { D001_ASSET_VERSION } from '../../src/render/assets/d001Manifest';
 
 const colors: string[] = JSON.parse(readFileSync(new URL('../../art/d001/palette.json', import.meta.url), 'utf8')).colors;
+import { createD001Nodes } from '../../src/game/config';
+const SCRAP_X = createD001Nodes()[0]!.x;
+
 
 test('D-001 PNGs keep their palette, binary alpha and logical dimensions', async ({ page }) => {
   await page.goto('/');
@@ -65,7 +68,7 @@ test('keeps D-001 readable through the first real manual delivery', async ({ pag
   }, D001_ASSET_VERSION);
   await testInfo.attach('d001-initial', { body: await page.screenshot(), contentType: 'image/png' });
   const point = (x: number, y: number) => ({ x: box!.x + x * 2, y: box!.y + y * 2 });
-  await page.mouse.click(point(118, 201).x, point(118, 201).y);
+  await page.mouse.click(point(SCRAP_X, 201).x, point(SCRAP_X, 201).y);
   const mine = page.getByRole('button', { name: 'MINE', exact: true });
   await expect(mine).toBeEnabled({ timeout: 10_000 });
   await page.mouse.move(0, 0);

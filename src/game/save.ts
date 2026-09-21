@@ -1,6 +1,8 @@
 import { COLLECTIBLE_KINDS, LOOT, PLAYER_PACK_CAPACITY } from './config';
 import { createGameState, createStateFromMeta } from './createGame';
 import { DEPTH_ORDER } from './depth';
+import { CORE_RESERVES } from './mining';
+import { DISPATCH_POLICIES, type DispatchPolicy } from './dispatch';
 import { getModifiers } from './modifiers';
 import type {
   CollectionState,
@@ -174,8 +176,17 @@ function restoreStructured(raw: Record<string, unknown>, hasPhase5: boolean, has
   }
   const chamber = asRecord(rawRun.coreChamber); if (chamber) run.coreChamber = { ...run.coreChamber, ...(chamber as Partial<typeof run.coreChamber>) };
   const discovery = asRecord(rawRun.discovery); if (discovery) run.discovery = { ...run.discovery, ...(discovery as Partial<typeof run.discovery>) };
+  run.discovery.categoriesFound = normalizeStringArray(discovery?.categoriesFound, ['VALUABLE', 'FOSSIL', 'RELIC', 'ANOMALY', 'RESEARCH', 'CORE'] as const);
+  if (!discovery?.categoriesFound) {
+    if (run.data > 0 || run.research.completed.length) run.discovery.categoriesFound.push('RESEARCH');
+    if (meta.passives.unlocked.length) run.discovery.categoriesFound.push('RELIC');
+    if (meta.collection.entries.some((entry) => entry.discovered && entry.category === 'FOSSIL')) run.discovery.categoriesFound.push('FOSSIL');
+  }
   if (hasPhase5) normalizePhase5Run(run, rawRun.phase5);
   if (hasDeep) normalizeDeepRun(run, rawRun);
+  run.automation.dispatchPolicy = DISPATCH_POLICIES.includes(automation?.dispatchPolicy as DispatchPolicy) ? automation!.dispatchPolicy as DispatchPolicy : 'BALANCED';
+  run.elevator.cargoWaitSeconds = Math.min(60, Math.max(0, numberOr(elevator?.cargoWaitSeconds, 0)));
+  migrateMineralProgress(base, rawFloors);
 
   base.elapsed = Math.max(0, numberOr(raw.elapsed, 0));
   base.selection = null;
@@ -560,14 +571,43 @@ function normalizeFloor(saved: Record<string, unknown>, fallback: FloorState): F
 function normalizeNode(value: unknown, fallback: MiningNode): MiningNode {
   const saved = asRecord(value);
   if (!saved) return fallback;
+  const fraction = Math.max(0, Math.min(1, numberOr(saved.hp, fallback.maxHp) / Math.max(1, numberOr(saved.maxHp, fallback.maxHp))));
   return {
     ...fallback,
-    ...(saved as Partial<MiningNode>),
-    treasureChance: typeof saved.treasureChance === 'number' ? saved.treasureChance : numberOr(saved.rareChance, fallback.treasureChance),
-    researchWeight: numberOr(saved.researchWeight, fallback.researchWeight),
-    coreWeight: numberOr(saved.coreWeight, fallback.coreWeight),
-    access: saved.access === 'REMOTE_ONLY' ? 'REMOTE_ONLY' : fallback.access,
+    hp: Math.ceil(fraction * fallback.maxHp - 1e-9),
+    respawnTimer: Math.min(1, Math.max(0, numberOr(saved.respawnTimer, 0)) / Math.max(0.1, numberOr(saved.respawnDelay, fallback.respawnDelay))) * fallback.respawnDelay,
+    minedCount: Math.min(1e9, Math.max(0, Math.floor(numberOr(saved.minedCount, 0)))),
+    coreExtracted: Math.min(CORE_RESERVES[fallback.id] ?? 0, Math.max(0, Math.floor(numberOr(saved.coreExtracted, 0)))),
   };
+}
+
+function migrateMineralProgress(state: GameState, rawFloors: Record<string, unknown> | null): void {
+  if (!rawFloors) return;
+  const run = state.run;
+  const started = run.lootRoll > 0 || run.stats.manualSwings > 0 || run.stats.elevatorTrips > 0;
+  for (const floor of Object.values(run.floors)) {
+    const saved = asRecord(rawFloors[floor.id]);
+    const nodes = Array.isArray(saved?.nodes) ? saved.nodes : [];
+    for (const node of floor.nodes) {
+      const old = asRecord(nodes.find((entry) => asRecord(entry)?.id === node.id));
+      if (!old) continue;
+      const visited = started && run.depth.unlocked.includes(floor.id);
+      if (old.minedCount === undefined) node.minedCount = visited ? 99 : 0;
+      if (old.coreExtracted === undefined) {
+        node.coreExtracted = visited ? CORE_RESERVES[node.id] ?? 0 : 0;
+        if (node.id === 'core-shell') {
+          const breaks = run.discovery.d100CoreBreaks;
+          node.coreExtracted = breaks > 0 ? Math.min(4, breaks + 1) : run.pendingCore > 0 && visited ? 4 : 0;
+        }
+      }
+    }
+  }
+  const character = run.character;
+  const target = run.floors[run.depth.current].nodes.find((node) => node.id === character.targetNodeId);
+  if (target && character.state === 'MINING' && Math.abs(target.x - character.x) > 26) {
+    character.state = 'MOVING_TO_NODE';
+    character.swing = null;
+  }
 }
 
 function normalizeLootArray(value: unknown): LootStack[] {

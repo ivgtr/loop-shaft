@@ -22,25 +22,25 @@ describe('workshop presentation', () => {
   it('describes unaffordable and locked items without hiding or mutating them', () => {
     const state = createGameState(10); const before = serializeGameState(state);
     expect(item(state, 'upgrade-tool')).toMatchObject({ cost: UPGRADE_COSTS.tool, reason: 'NEED 90 MORE SCRAP', command: null });
-    expect(item(state, 'upgrade-boots')).toMatchObject({ reason: 'REQUIRES STEEL PICK', command: null });
-    expect(item(state, 'upgrade-pack')).toMatchObject({ reason: 'REQUIRES AUTO SWING', command: null });
+    expect(item(state, 'upgrade-boots')).toMatchObject({ reason: 'NEED 160 MORE SCRAP', command: null });
+    expect(item(state, 'upgrade-pack')).toMatchObject({ reason: 'NEED 240 MORE SCRAP', command: null });
     expect(serializeGameState(state)).toBe(before);
   });
 
   it('compares current and upgraded hit power with the real modifiers', () => {
     const state = createGameState(11); state.run.scrap = 1000; state.run.anomaly.selected = 'FRAGILE_REALITY';
-    expect(item(state, 'upgrade-tool').comparison).toBe('Hit power  18 → 29');
+    expect(item(state, 'upgrade-tool').comparison).toBe('Hit power  16 → 26');
     upgradeTool(state);
-    expect(item(state, 'upgrade-tool')).toMatchObject({ owned: true, comparison: 'Hit power  29', actionLabel: 'Equipped' });
+    expect(item(state, 'upgrade-tool')).toMatchObject({ owned: true, comparison: 'Hit power  26', actionLabel: 'Equipped' });
   });
 
   it('keeps movement modifiers in its before/after comparison', () => {
     const state = createGameState(12); state.run.scrap = 1000; upgradeTool(state);
     state.run.anomaly.selected = 'HEAVY_WORLD'; state.meta.passives.active.push('LONG_STRIDE');
-    expect(item(state, 'upgrade-boots').comparison).toBe('Walk speed  49.9 → 78.4 px/s');
+    expect(item(state, 'upgrade-boots').comparison).toBe('Walk speed  55.4 → 87.1 px/s');
     upgradeBoots(state);
-    expect(state.run.character.moveSpeed).toBeCloseTo(78.408);
-    expect(item(state, 'upgrade-boots').comparison).toBe('Walk speed  78.4 px/s');
+    expect(state.run.character.moveSpeed).toBeCloseTo(87.12);
+    expect(item(state, 'upgrade-boots').comparison).toBe('Walk speed  87.1 px/s');
   });
 
   it('compares and installs the actual backpack capacity', () => {
