@@ -152,6 +152,9 @@ describe('Canvas HUD and lift geometry', () => {
     const windows = [null, ...(['dispatch', 'travel', 'extend'] as const).map((tab) => windowState(state, tab))];
     for (const ui of windows) {
       const layout = layoutGameUi(state, ui, false, viewport);
+      const send = layout.buttons.find((button) => button.id === 'send');
+      // Regression: the fixed-height shipping cabinet covered appraisal text on narrow screens.
+      if (send) expect(send.y - 36).toBeGreaterThan(viewport.world.y + viewport.world.height * .30);
       for (const b of layout.buttons) {
         expect(b.x).toBeGreaterThanOrEqual(0); expect(b.y).toBeGreaterThanOrEqual(0);
         expect(b.x + b.width).toBeLessThanOrEqual(width); expect(b.y + b.height).toBeLessThanOrEqual(viewport.height);
