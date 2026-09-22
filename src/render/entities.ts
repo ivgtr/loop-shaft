@@ -49,14 +49,14 @@ export function drawEntities(
     drawElevatorCargoFallback(ctx, state, semantic!);
   }
   if (state.run.porter.enabled) {
-    if (state.run.depth.current === 'D-001' && semantic?.porter && assets?.ready('npcPorter')) {
+    if (semantic?.porter && assets?.ready('npcPorter')) {
       drawD001ActorShadow(ctx, semantic.porter);
     }
-    const porterImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets && drawD001Porter(ctx, semantic, assets));
+    const porterImage = Boolean(semantic && assets && drawD001Porter(ctx, semantic, assets));
     if (!porterImage) drawWithD001GroundOffset(ctx, state.run.depth.current, () => drawPorter(ctx, state, now));
     if (semantic?.porter && assets && !drawD001CarriedCargo(ctx, semantic.porter, assets)) drawFallbackCarriedCargo(ctx, semantic.porter);
   }
-  const playerImage = Boolean(state.run.depth.current === 'D-001' && semantic && assets && canDrawD001Player(assets));
+  const playerImage = Boolean(semantic && assets && canDrawD001Player(assets));
   if (playerImage) {
     drawD001ActorShadow(ctx, semantic!.character);
     drawD001Player(ctx, semantic!, assets!);
@@ -65,7 +65,7 @@ export function drawEntities(
     drawWithD001GroundOffset(ctx, state.run.depth.current, () => drawCharacter(ctx, state, now));
     if (semantic && assets && !drawD001CarriedCargo(ctx, semantic.character, assets)) drawFallbackCarriedCargo(ctx, semantic.character);
   }
-  drawLoot(ctx, state, now, assets);
+  drawLoot(ctx, state, now, assets, semantic);
   if (!d001) {
     drawElevator(ctx, state, now, assets);
     drawLiftControl(ctx, state, false);
@@ -137,19 +137,21 @@ function drawNode(ctx: CanvasRenderingContext2D, node: MiningNode, depth: DepthI
   if (ratio < 0.4) { ctx.fillRect(node.x - 7, node.y - 8, 8, 1); ctx.fillRect(node.x - 3, node.y - 13, 1, 6); }
 }
 
-function drawLoot(ctx: CanvasRenderingContext2D, state: GameState, now: number, assets?: D001AssetStore): void {
+function drawLoot(ctx: CanvasRenderingContext2D, state: GameState, now: number, assets?: D001AssetStore, semantic?: SemanticRenderState): void {
   for (const item of visibleCargo(currentFloor(state).loot, currentFloor(state).loot.length).reverse()) {
-    const special = rarityRank(item.rarity) >= 2;
+    const moving = semantic?.floorCargoPositions?.get(item.id);
+    const x = moving?.x ?? item.x;
+    const special = !moving && !assets?.ready('discoveryCargo') && rarityRank(item.rarity) >= 2;
     const bob = special && Math.floor(now / 180) % 2 === 0 ? -1 : 0;
-    const anchorY = state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_Y : item.y + 1;
-    if (state.run.depth.current === 'D-001' && assets?.ready('cargoItems')) {
-      drawD001CargoShadow(ctx, item.x, anchorY);
+    const anchorY = moving?.y ?? (state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_Y : item.y + 1);
+    if (!moving && state.run.depth.current === 'D-001' && assets?.ready('cargoItems')) {
+      drawD001CargoShadow(ctx, x, anchorY);
     }
-    const cargoImage = Boolean(assets && drawD001Cargo(ctx, item, item.x, anchorY + bob, assets));
+    const cargoImage = Boolean(assets && drawD001Cargo(ctx, item, x, anchorY + bob, assets));
     if (!cargoImage) {
       ctx.fillStyle = lootColor(item.kind);
-      ctx.fillRect(Math.round(item.x) - 2, Math.round(anchorY) - 4 + bob, 5, 4);
-      drawCargoMark(ctx, item, item.x, anchorY + bob);
+      ctx.fillRect(Math.round(x) - 2, Math.round(anchorY) - 4 + bob, 5, 4);
+      drawCargoMark(ctx, item, x, anchorY + bob);
     }
     if (special) { ctx.fillStyle = rarityColor(item.rarity); ctx.fillRect(Math.round(item.x), Math.round(anchorY) - 7 + bob, 1, 1); }
   }
@@ -206,6 +208,7 @@ function drawPorter(ctx: CanvasRenderingContext2D, state: GameState, now: number
 }
 
 function drawPickaxe(ctx: CanvasRenderingContext2D, state: GameState, x: number, y: number, dir: -1 | 1): void {
+  if (state.run.character.state !== 'MINING') return;
   const swing = state.run.character.swing; const metal = state.run.tool.level === 1 ? PALETTE.rust : PALETTE.steel; ctx.strokeStyle = '#805c3d'; ctx.lineWidth = 1;
   if (!swing) { ctx.beginPath(); ctx.moveTo(x + dir * 3, y - 2); ctx.lineTo(x + dir * 9, y - 8); ctx.stroke(); ctx.fillStyle = metal; ctx.fillRect(x + dir * 8 - (dir < 0 ? 4 : 0), y - 10, 5, 2); return; }
   const progress = Math.min(1, swing.elapsed / 0.44); const phase = progress < 0.45 ? progress / 0.45 : 1 - (progress - 0.45) / 0.55; const headX = x + dir * (5 + Math.round(phase * 9)); const headY = y - 12 + Math.round(phase * 8);

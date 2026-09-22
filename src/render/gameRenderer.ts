@@ -1,3 +1,4 @@
+import { drawWorksite } from './worksiteRenderer';
 import { visibleCargo } from './discoveryVisuals';
 import { gameAssets } from './assets/gameAssets';
 import { drawCargoMark } from './discoveryCues';
@@ -47,8 +48,8 @@ export class GameRenderer {
   }
 
   render(state: GameState, now: number, hoveredKey: string | null = null): void {
-    this.base.render(state, now);
     const semantic = deriveSemanticRenderState(state, now);
+    this.base.render(state, now, semantic);
     if (state.run.elevator.travel) {
       this.base.drawForegroundFx(now);
       return;
@@ -58,14 +59,16 @@ export class GameRenderer {
     if (depth === 'D-250') drawTheLost(this.ctx, state);
     if (depth === 'D-400') drawNullStrata(this.ctx, state, now);
     if (depth === 'D-650') drawD650(this.ctx, now);
-    drawTransportLine(this.ctx, state, this.assets);
-    drawFreightCage(this.ctx, state, this.assets);
-    drawBores(this.ctx, state, now, this.assets);
+    if (!drawWorksite(this.ctx, state, this.assets)) {
+      drawTransportLine(this.ctx, state, this.assets);
+      drawFreightCage(this.ctx, state, this.assets);
+      drawBores(this.ctx, state, now, this.assets);
+    }
     const engineer = semantic.engineer;
-    if (engineer?.visible && state.run.depth.current === 'D-001' && this.assets.ready('npcEngineer')) {
+    if (engineer?.visible && this.assets.ready('npcEngineer')) {
       drawD001ActorShadow(this.ctx, engineer);
     }
-    if (!engineer || state.run.depth.current !== 'D-001' || !drawD001Engineer(this.ctx, engineer, this.assets)) {
+    if (!engineer || !drawD001Engineer(this.ctx, engineer, this.assets)) {
       this.ctx.save();
       if (state.run.depth.current === 'D-001') this.ctx.translate(0, D001_VISUAL_GROUND_OFFSET);
       drawEngineer(this.ctx, state, now);

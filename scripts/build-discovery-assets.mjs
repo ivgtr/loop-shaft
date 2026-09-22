@@ -6,7 +6,8 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 import { resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
-const source = JSON.parse(readFileSync(resolve(root, 'art/d001/discovery-sprites.json'), 'utf8'));
+const sourcePath = process.argv.find((arg) => arg.endsWith('-sprites.json')) ?? 'art/d001/discovery-sprites.json';
+const source = JSON.parse(readFileSync(resolve(root, sourcePath), 'utf8'));
 const palette = Object.fromEntries(Object.entries(source.palette).map(([key, color]) => [key,
   [...color.slice(1).match(/../g).map((hex) => parseInt(hex, 16)), ...(color.length === 7 ? [255] : [])]]));
 const crcTable = Array.from({ length: 256 }, (_, n) => {
@@ -43,7 +44,7 @@ for (const [name, sheet] of Object.entries(source.sheets)) {
     chunk('IDAT', deflateSync(scanlines, { level: 9 })), chunk('IEND', Buffer.alloc(0))]);
   const path = resolve(root, 'public/assets/d001/runtime', `${name}.png`);
   if (process.argv.includes('--check')) {
-    if (!png.equals(readFileSync(path))) throw new Error(`${name}: PNG differs from editable pixels. Run npm run assets:discoveries.`);
+    if (!png.equals(readFileSync(path))) throw new Error(`${name}: PNG differs from editable pixels. Regenerate the corresponding asset source.`);
   } else writeFileSync(path, png);
   console.log(`${name}: ${sheet.frames.length} cells, ${width}x${height}, ${png.length} bytes`);
 }

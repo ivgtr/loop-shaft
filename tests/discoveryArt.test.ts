@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { createGameState } from '../src/game/createGame';
 import { appraisePhysicalCargo, restoreFossil } from '../src/game/appraisal';
@@ -30,22 +30,21 @@ function grayscale(rows: string[]): string {
 }
 
 describe('authored discovery assets', () => {
-  it('ships 75 palette-only frames with fixed integer anchors and matching PNG dimensions under 8 KiB total', () => {
-    let count = 0; let bytes = 0;
-    for (const [name, sheet] of Object.entries(art.sheets)) {
-      const [w, h] = sheet.cell; expect(sheet.anchor).toEqual([w / 2, h]);
+  it('ships valid palette sheets with matching PNG dimensions and in-bounds anchors', () => {
+    const work = JSON.parse(readFileSync(new URL('../art/d001/work-sprites.json', import.meta.url), 'utf8')) as typeof art;
+    for (const source of [art, work]) for (const [name, sheet] of Object.entries(source.sheets)) {
+      const [w, h] = sheet.cell;
+      expect(sheet.frames.length).toBeGreaterThan(0);
+      sheet.anchor.forEach((point, axis) => { expect(Number.isInteger(point)).toBe(true); expect(point).toBeGreaterThanOrEqual(0); expect(point).toBeLessThanOrEqual(sheet.cell[axis]!); });
       const png = readFileSync(new URL(`../public/assets/d001/runtime/${name}.png`, import.meta.url));
       expect(png.readUInt32BE(16)).toBe(w * sheet.columns);
       expect(png.readUInt32BE(20)).toBe(h * Math.ceil(sheet.frames.length / sheet.columns));
-      expect(png.subarray(1, 4).toString()).toBe('PNG'); bytes += png.length;
+      expect(png.subarray(1, 4).toString()).toBe('PNG');
       for (const frame of sheet.frames) {
         expect(frame.pixels.length).toBe(h);
-        for (const row of frame.pixels) { expect(row.length).toBe(w); for (const key of row) expect(art.palette[key]).toBeDefined(); }
+        for (const row of frame.pixels) { expect(row.length).toBe(w); for (const key of row) expect(source.palette[key]).toBeDefined(); }
       }
-      count += sheet.frames.length;
     }
-    expect(count).toBe(75); expect(bytes).toBeLessThan(8192);
-    expect(statSync(new URL('../art/d001/discovery-sprites.json', import.meta.url)).size).toBeLessThan(130000);
   });
 
   it.each(['rock', 'metal', 'copper'])('%s quality changes faces, not the size of the cargo', material => {

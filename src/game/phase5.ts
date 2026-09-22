@@ -1,3 +1,4 @@
+import { partitionCargo } from './cargoSelection';
 import { CARGO_ROUTE_DURATION, COLLECT_DURATION, CREW_BOARD_COST, CREW_HIRE_COSTS, CREW_MINER_MOVE_SPEED, CREW_PORTER_CAPACITY, CREW_PORTER_MOVE_SPEED, CREW_SLOT_COSTS, CREW_TRAVEL_DURATION, D180_EXTENSION_COST, LOOT, OFFLINE_CAP_SECONDS, OFFLINE_STEP_SECONDS, PLAYER_PACK_CAPACITY, PORTER_COLLECT_DURATION, SWING, WORLD } from './config';
 import { canPlayerAccessNode, localCargoDropX, processDeepEvents, updateDeepGame } from './deepGame';
 import { depthDistance } from './depth';
@@ -435,12 +436,14 @@ function findCrewLoot(member: CrewMember, floor: FloorState): LootStack | undefi
   return member.targetLootId ? floor.loot.find((item) => item.id === member.targetLootId) : undefined;
 }
 
-function pickUpCrewLoot(state: GameState, member: CrewMember, floor: FloorState, target: LootStack): void {
+export function crewPickupItems(member: CrewMember, floor: FloorState, target: LootStack): LootStack[] {
   const candidates = [target, ...floor.loot.filter((item) => item.id !== target.id && Math.abs(item.x - target.x) <= 14)
     .sort((a, b) => LOOT_RARITY_RANK[b.rarity] - LOOT_RARITY_RANK[a.rarity] || a.id.localeCompare(b.id))];
-  for (const item of candidates) {
-    if (!floor.loot.some((candidate) => candidate.id === item.id)) continue;
-    if (cargoWeight(member.body.carried) + item.weight > member.capacity + 0.001) continue;
+  return partitionCargo(candidates, member.capacity - cargoWeight(member.body.carried)).deposited;
+}
+
+function pickUpCrewLoot(state: GameState, member: CrewMember, floor: FloorState, target: LootStack): void {
+  for (const item of crewPickupItems(member, floor, target)) {
     member.body.carried.push(item);
     const index = floor.loot.findIndex((candidate) => candidate.id === item.id);
     if (index >= 0) floor.loot.splice(index, 1);

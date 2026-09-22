@@ -1,3 +1,4 @@
+import { miningContact } from './workEquipment';
 import { collectionSpriteFrame } from './discoveryVisuals';
 import { rewardNotice, RewardNoticeQueue } from '../game/rewardFeedback';
 import { WORLD } from '../game/config';
@@ -7,7 +8,7 @@ import { drawD001ElevatorFrontLayer, drawEntities } from './entities';
 import { drawEnvironment } from './environment';
 import { PALETTE } from './palette';
 import type { D001AssetStore } from './d001ImageRenderer';
-import { deriveSemanticRenderState } from './semanticRenderState';
+import { deriveSemanticRenderState, type SemanticRenderState } from './semanticRenderState';
 import { drawPixelText } from './pixelText';
 
 type DebrisFx = { x: number; y: number; startedAt: number };
@@ -32,9 +33,10 @@ export class CanvasRenderer {
   }
 
   handleEvent(event: GameEvent, state: GameState, now: number): void {
-    if (event.type === 'MINER_SWING_HIT') {
+    if (event.type === 'MINER_SWING_HIT' && (!event.data?.depth || event.data.depth === state.run.depth.current)) {
       const node = currentFloor(state).nodes.find((candidate) => candidate.id === event.data?.nodeId);
-      if (node) this.debris.push({ x: node.x, y: node.y - 8, startedAt: now });
+      const contact = event.data?.crewId ? null : miningContact(state);
+      if (node) this.debris.push({ x: contact?.x ?? node.x, y: contact?.y ?? node.y - 8 + (state.run.depth.current === 'D-001' ? 13 : 0), startedAt: now });
       this.shakeUntil = Math.max(this.shakeUntil, now + 110);
     }
     if (event.type === 'REBOOT_COMMITTED') this.notices.clear();
@@ -46,11 +48,11 @@ export class CanvasRenderer {
     if (event.type === 'CORE_GAINED') this.gain = { label: `CORE +${Number(event.data?.amount ?? 0)}`, startedAt: now };
   }
 
-  render(state: GameState, now: number): void {
+  render(state: GameState, now: number, frame?: SemanticRenderState): void {
     this.ctx.save();
     const shake = now < this.shakeUntil ? (Math.floor(now / 28) % 2 === 0 ? 1 : -1) : 0;
     this.ctx.translate(shake, 0);
-    const semantic = deriveSemanticRenderState(state, now);
+    const semantic = frame ?? deriveSemanticRenderState(state, now);
     drawEnvironment(this.ctx, state, this.assets);
     drawEntities(this.ctx, state, now, semantic, this.assets);
     if (state.run.depth.current === 'D-001' && state.run.elevator.travel) {

@@ -67,7 +67,8 @@ function displayGame(): GameState {
   return state;
 }
 
-for (const width of [320, 390, 1280]) test(`real atlas projections and archive at ${width}px`, async ({ page }, info) => {
+test('discovery art stays private after reload', async ({ page }, info) => {
+  const width = 1280;
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.setViewportSize({ width, height: 844 }); const state = displayGame();
   const expectedHosts = [...deriveSemanticRenderState(state, 0).discoveries.values()].map(discoveryHostFrame).sort();

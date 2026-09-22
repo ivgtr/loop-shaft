@@ -3,7 +3,7 @@ export type D001AssetKey = keyof typeof D001_ASSET_FILES;
 // Public runtime PNGs keep stable filenames for the fallback manifest. Bump this
 // value whenever those files change so a deployed browser cannot reuse an older
 // atlas from its HTTP cache.
-export const D001_ASSET_VERSION = 'd001-discoveries-1';
+export const D001_ASSET_VERSION = 'd001-work-1';
 
 export const D001_ASSET_FILES = {
   backgroundRock: 'background-rock-base.png',
@@ -19,6 +19,11 @@ export const D001_ASSET_FILES = {
   playerHelmet: 'player-helmet-atlas.png',
   playerTool: 'player-tool-atlas.png',
   playerPack: 'player-pack-atlas.png',
+  workMachines: 'work-machines-atlas.png',
+  workPorterRest: 'work-porter-rest-atlas.png',
+  workTools: 'work-tools-atlas.png',
+  workPacks: 'work-packs-atlas.png',
+  workLamps: 'work-lamps-atlas.png',
   playerBoots: 'player-boots-atlas.png',
   npcPorter: 'npc-porter-atlas.png',
   npcCrewMiner: 'npc-crew-miner-atlas.png',

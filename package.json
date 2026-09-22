@@ -9,11 +9,12 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "assets:d001": "node scripts/process-d001-assets.mjs && node scripts/refine-d001-assets.mjs && npm run assets:discoveries",
+    "assets:d001": "node scripts/process-d001-assets.mjs && node scripts/refine-d001-assets.mjs && npm run assets:discoveries && npm run assets:work",
     "assets:discoveries": "node scripts/build-discovery-assets.mjs",
-    "assets:check": "node scripts/build-discovery-assets.mjs --check",
+    "assets:check": "node scripts/build-discovery-assets.mjs --check && npm run assets:work -- --check",
     "test:balance": "vitest run tests/balance.test.ts tests/balanceSimulation.test.ts",
-    "balance:report": "node scripts/balance-report.mjs"
+    "balance:report": "node scripts/balance-report.mjs",
+    "assets:work": "node scripts/build-discovery-assets.mjs art/d001/work-sprites.json"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
