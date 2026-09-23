@@ -4,31 +4,67 @@ on:
     branches: [feat/discovery-visuals]
     paths: [.github/workflows/pr18-conflict-workspace.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
-  workspace:
+  integrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Export source and locked dependencies
+      - name: Verify exact integration tree against both merge parents
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/pr18-workspace
-          git bundle create /tmp/pr18-workspace/loop-shaft.bundle --all
-          git worktree add --detach /tmp/pr18-main origin/main
-          cd /tmp/pr18-main
-          npm ci
-          tar -czf /tmp/pr18-workspace/node_modules.tar.gz node_modules
-          git rev-parse HEAD
+          test "$GITHUB_REF" = refs/heads/feat/discovery-visuals
+          test "$(git rev-parse origin/main)" = f176248c01ebff350baa37a1b2d0d698c8d0d58c
+          test "$(git rev-parse origin/feat/meaningful-discoveries)" = 7351f22077045bf16734bf9cb0b6cd45c31be058
+          cp .github/pr18-integration.b64 /tmp/pr18-transfer.b64
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, gzip, hashlib, re
+          text = Path('/tmp/pr18-transfer.b64').read_text().strip()
+          # Normalize two transport transcription errors; the complete diff is independently hashed.
+          text = re.sub(r'wo5wp0OmU85K.{0,8}xeE8Xbs', 'wo5wp0OmU85KAm5Y5xeE8Xbs', text)
+          text = re.sub(r'wdeHDJ{1,3}4th', 'wdeHDJ4th', text)
+          data = gzip.decompress(base64.b64decode(text, validate=True))
+          assert hashlib.sha256(data).hexdigest() == '922b14a84b1697cefef08776959b8266ed799c42c19bbcec6606d4d97d623431'
+          Path('/tmp/pr18-integration.patch').write_bytes(data)
+          PY
+          git read-tree --reset -u f176248c01ebff350baa37a1b2d0d698c8d0d58c
+          git apply --index /tmp/pr18-integration.patch
+          git diff --cached --check
+          test "$(git write-tree)" = 83fe2b2b78bfc398d547e3083df44241b24c1055
+          test ! -e .github/workflows/pr18-conflict-workspace.yml
+          test ! -e .github/pr18-integration.b64
+      - run: npm ci
+      - run: npm run assets:check && npm run typecheck
+      - run: npx playwright install chromium --with-deps
+      - name: Verify fixed-time renderer integration
+        run: npx playwright test tests/e2e/mining-impact.spec.ts
+      - name: Publish merge on PR18 only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git write-tree)" = 83fe2b2b78bfc398d547e3083df44241b24c1055
+          test "$(git ls-remote origin refs/heads/feat/discovery-visuals | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          commit=$(git commit-tree 83fe2b2b78bfc398d547e3083df44241b24c1055 -p "$GITHUB_SHA" -p f176248c01ebff350baa37a1b2d0d698c8d0d58c -p 7351f22077045bf16734bf9cb0b6cd45c31be058 -m 'fix: reconcile discovery visuals with main and preserve scoped mining impacts')
+          git push origin "$commit:refs/heads/feat/discovery-visuals"
+          echo "PR18_HEAD=$commit" >> "$GITHUB_STEP_SUMMARY"
+          echo 'PR18_TREE=83fe2b2b78bfc398d547e3083df44241b24c1055' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: pr18-workspace
-          path: /tmp/pr18-workspace/
+          name: pr18-integration-validation
+          path: |
+            /tmp/pr18-transfer.b64
+            /tmp/pr18-integration.patch
+            playwright-report/
+            test-results/
           retention-days: 1
