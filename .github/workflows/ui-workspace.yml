@@ -1,0 +1,28 @@
+name: UI review workspace
+on:
+  push:
+    branches: [feat/quiet-worksite-ui]
+    paths: [.github/workflows/ui-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Bundle tracked source and installed dependencies
+        run: |
+          mkdir -p /tmp/ui-workspace
+          git archive HEAD | tar -x -C /tmp/ui-workspace
+          cp -a node_modules /tmp/ui-workspace/
+          tar -czf /tmp/ui-workspace.tar.gz -C /tmp/ui-workspace .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-workspace
+          path: /tmp/ui-workspace.tar.gz
+          retention-days: 1
