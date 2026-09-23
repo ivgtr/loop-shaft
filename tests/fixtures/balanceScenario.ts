@@ -1,3 +1,6 @@
+import { togglePorterHold } from '../../src/game/simulation';
+import { activeProspect } from '../../src/game/prospecting';
+import { equipPlayerItem, processPhase5Events, updatePhase5 } from '../../src/game/phase5';
 import { createGameState } from '../../src/game/createGame';
 import { D030_EXTENSION_COST, D060_EXTENSION_COST, D100_EXTENSION_COST, PLAYER_PACK_CAPACITY, PLAYER_TOOL_DAMAGE } from '../../src/game/config';
 import { nodeTripEstimate, visibleSeams } from '../../src/game/mining';
@@ -38,7 +41,11 @@ function work(state: GameState, node: MiningNode, haul: boolean): number {
 
 function selectedNode(state: GameState, strategy: string): MiningNode {
   const floor = currentFloor(state);
-  if (strategy !== 'discover') return floor.nodes.find((node) => node.id === strategy)!;
+  if (strategy !== 'discover' && strategy !== 'prospect') return floor.nodes.find((node) => node.id === strategy)!;
+  if (strategy === 'prospect') {
+    const active = floor.nodes.filter((node) => activeProspect(floor, node));
+    if (active.length) return active.sort((a, b) => Math.abs(a.x - state.run.character.x) - Math.abs(b.x - state.run.character.x))[0]!;
+  }
   const remaining = floor.nodes.filter((node) => visibleSeams(floor, node).length > 0);
   if (remaining.length) return remaining.sort((a, b) => Math.abs(a.x - state.run.character.x) - Math.abs(b.x - state.run.character.x))[0]!;
   return [...floor.nodes].sort((a, b) => {
@@ -78,16 +85,31 @@ export interface ProgressionResult {
   seed: number; firstDelivery: number | null; firstFossil: number | null; autoSwing: number | null;
   porter: number | null; d030: number | null; d060: number | null; coreDelivered: number | null;
   anomaly: AnomalyId | null; elapsed: number; manualSwings: number;
+  firstQuality: number | null; maxQualityDroughtSeconds: number; firstGear: number | null; gearAppraisals: number;
 }
 
 /** Fresh-save reference route. An efficient scripted policy, not a prediction of human play time. */
 export function runFirstCoreScenario(seed: number, exploreEarly: boolean, capSeconds = 5400): ProgressionResult {
   const state = createGameState(seed);
   const result: ProgressionResult = { seed, firstDelivery: null, firstFossil: null, autoSwing: null, porter: null,
-    d030: null, d060: null, coreDelivered: null, anomaly: null, elapsed: 0, manualSwings: 0 };
+    d030: null, d060: null, coreDelivered: null, anomaly: null, elapsed: 0, manualSwings: 0, firstQuality: null, maxQualityDroughtSeconds: 0, firstGear: null, gearAppraisals: 0 };
+  let lastQualityAt = 0;
   let fossilVisitDone = false;
   for (let tick = 0; tick < capSeconds * 10; tick++) {
-    updateGame(state, 0.1); drainEvents(state);
+    updateGame(state, 0.1); updatePhase5(state, 0.1);
+    const events = drainEvents(state); processPhase5Events(state, events);
+    for (const event of [...events, ...drainEvents(state)]) {
+      if (event.type === 'ORE_QUALITY_FOUND') {
+        result.firstQuality ??= state.elapsed;
+        result.maxQualityDroughtSeconds = Math.max(result.maxQualityDroughtSeconds, state.elapsed - lastQualityAt);
+        lastQualityAt = state.elapsed;
+      }
+      if (event.type === 'EQUIPMENT_APPRAISED') {
+        result.firstGear ??= state.elapsed; result.gearAppraisals++;
+        // Deliberately simple policy: equip the first delivered tool, no clairvoyant rerolls.
+        if (!state.run.phase5.equipment.equippedPlayer.TOOL) equipPlayerItem(state, String(event.data?.id));
+      }
+    }
     const run = state.run;
     if (run.stats.elevatorTrips > 0) result.firstDelivery ??= state.elapsed;
     if (state.meta.collection.entries.some((entry) => entry.category === 'FOSSIL' && entry.discovered)) result.firstFossil ??= state.elapsed;
@@ -136,6 +158,7 @@ export function runFirstCoreScenario(seed: number, exploreEarly: boolean, capSec
     if (run.depth.current === 'D-030' && run.depth.unlocked.includes('D-060')) { transition = true; destination = 'D-060'; }
     if (run.depth.current === 'D-060' && run.depth.unlocked.includes('D-100')) { transition = true; destination = 'D-100'; }
     if (transition && destination) {
+      if (run.porter.enabled && !run.porter.holdForTravel) togglePorterHold(state);
       if (canTravelToDepth(state, destination)) requestFloorTravel(state, destination);
       else if (!run.elevator.travel) {
         if (run.character.carried.length && !['RETURNING', 'LOADING'].includes(run.character.state)) requestPlayerReturn(state);
@@ -157,6 +180,7 @@ export function runFirstCoreScenario(seed: number, exploreEarly: boolean, capSec
     work(state, target, !run.porter.enabled);
   }
   result.elapsed = state.elapsed; result.manualSwings = state.run.stats.manualSwings;
+  result.maxQualityDroughtSeconds = Math.max(result.maxQualityDroughtSeconds, state.elapsed - lastQualityAt);
   return result;
 }
 

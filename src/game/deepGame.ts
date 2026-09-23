@@ -30,7 +30,8 @@ import {
   WORLD,
 } from './config';
 import { deeperDepth } from './depth';
-import { appraisalMultiplier, getModifiers } from './modifiers';
+import { appraisePhysicalCargo } from './appraisal';
+import { getModifiers } from './modifiers';
 import { finishingDamage, maximumMiningDropWeight, rollMiningLoot } from './mining';
 import { hashSeed, nextRandom } from './rng';
 import { cargoWeight } from './simulation';
@@ -601,49 +602,7 @@ function applyBoreHit(state: GameState, bore: RemoteBore, node: MiningNode): voi
 }
 
 function appraiseDeepCargo(state: GameState, cargo: LootStack[], via: string): void {
-  let scrapGain = 0;
-  let dataGain = 0;
-  let coreGain = 0;
-  for (const item of cargo) {
-    emit(state, 'LOOT_APPRAISE', { id: item.id, kind: item.kind, name: item.name, category: item.category, rarity: item.rarity, depth: item.originDepth ?? 'D-001', via });
-    registerCollection(state, item);
-    unlockPassive(state, item);
-    if (item.category === 'RESEARCH') dataGain += item.dataValue;
-    if (item.category === 'CORE') coreGain += item.coreValue;
-    if (item.category !== 'CORE') scrapGain += Math.round(item.value * appraisalMultiplier(state, item.category));
-  }
-  if (scrapGain > 0) {
-    state.run.scrap += scrapGain;
-    emit(state, 'RESOURCE_GAIN', { resource: 'Scrap', amount: scrapGain, total: state.run.scrap, via });
-  }
-  if (dataGain > 0) {
-    state.run.data += dataGain;
-    emit(state, 'DATA_GAIN', { amount: dataGain, total: state.run.data, via });
-  }
-  if (coreGain > 0) {
-    state.run.pendingCore += coreGain;
-    emit(state, 'CORE_CHARGE_GAINED', { amount: coreGain, pendingCore: state.run.pendingCore, via });
-    if (!state.run.coreChamber.rebootAvailable) state.run.coreChamber.rebootAvailable = true;
-  }
-}
-
-function registerCollection(state: GameState, item: LootStack): void {
-  if (item.category !== 'FOSSIL' && item.category !== 'RELIC' && item.category !== 'ANOMALY') return;
-  let entry = state.meta.collection.entries.find((candidate) => candidate.kind === item.kind);
-  if (!entry) {
-    entry = { kind: item.kind, name: item.name, rarity: item.rarity, category: item.category, discovered: true, count: 0 };
-    state.meta.collection.entries.push(entry);
-  }
-  entry.count += 1;
-  if (!entry.discovered) entry.discovered = true;
-}
-
-function unlockPassive(state: GameState, item: LootStack): void {
-  const passive = LOOT[item.kind].passive;
-  if (!passive || state.meta.passives.unlocked.includes(passive)) return;
-  state.meta.passives.unlocked.push(passive);
-  emit(state, 'PASSIVE_UNLOCKED', { passive, source: item.kind });
-  if (state.meta.passives.active.length < 2) state.meta.passives.active.push(passive);
+  appraisePhysicalCargo(state, cargo, (type, data) => emit(state, type, data), via);
 }
 
 function ensureD400Line(state: GameState): void {

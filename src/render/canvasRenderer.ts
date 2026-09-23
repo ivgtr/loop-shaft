@@ -1,15 +1,17 @@
+import { miningContact } from './workEquipment';
+import { collectionSpriteFrame } from './discoveryVisuals';
+import { rewardNotice, RewardNoticeQueue } from '../game/rewardFeedback';
 import { WORLD } from '../game/config';
 import { currentFloor } from '../game/simulation';
-import type { GameEvent, GameState, Rarity } from '../game/types';
+import type { GameEvent, GameState } from '../game/types';
 import { drawD001ElevatorFrontLayer, drawEntities } from './entities';
 import { drawEnvironment } from './environment';
 import { PALETTE } from './palette';
 import type { D001AssetStore } from './d001ImageRenderer';
-import { deriveSemanticRenderState } from './semanticRenderState';
+import { deriveSemanticRenderState, type SemanticRenderState } from './semanticRenderState';
 import { drawPixelText } from './pixelText';
 
 type DebrisFx = { x: number; y: number; startedAt: number };
-type BannerFx = { label: string; sub: string; rarity: Rarity; startedAt: number };
 type GainFx = { label: string; startedAt: number };
 
 export class CanvasRenderer {
@@ -17,7 +19,7 @@ export class CanvasRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private shakeUntil = 0;
   private debris: DebrisFx[] = [];
-  private banner: BannerFx | null = null;
+  private readonly notices = new RewardNoticeQueue();
   private gain: GainFx | null = null;
 
   constructor(canvas: HTMLCanvasElement, private readonly assets: D001AssetStore) {
@@ -31,30 +33,26 @@ export class CanvasRenderer {
   }
 
   handleEvent(event: GameEvent, state: GameState, now: number): void {
-    if (event.type === 'MINER_SWING_HIT') {
+    if (event.type === 'MINER_SWING_HIT' && (!event.data?.depth || event.data.depth === state.run.depth.current)) {
       const node = currentFloor(state).nodes.find((candidate) => candidate.id === event.data?.nodeId);
-      if (node) this.debris.push({ x: node.x, y: node.y - 8, startedAt: now });
+      const contact = event.data?.crewId ? null : miningContact(state);
+      if (node) this.debris.push({ x: contact?.x ?? node.x, y: contact?.y ?? node.y - 8 + (state.run.depth.current === 'D-001' ? 13 : 0), startedAt: now });
       this.shakeUntil = Math.max(this.shakeUntil, now + 110);
     }
-    if (event.type === 'DISCOVERY_FOUND') {
-      this.banner = {
-        label: String(event.data?.name ?? 'Unknown find'),
-        sub: `${String(event.data?.rarity ?? 'RARE')} · ${String(event.data?.category ?? '')}`,
-        rarity: String(event.data?.rarity ?? 'RARE') as Rarity,
-        startedAt: now,
-      };
-    }
+    if (event.type === 'REBOOT_COMMITTED') this.notices.clear();
+    const notice = rewardNotice(event);
+    if (notice) this.notices.push(notice, now);
     if (event.type === 'RESEARCH_COMPLETED') this.gain = { label: `RESEARCH COMPLETE · ${String(event.data?.research ?? '')}`, startedAt: now };
     if (event.type === 'CORE_CHARGE_GAINED') this.gain = { label: `CORE CHARGE +${Number(event.data?.amount ?? 0)}`, startedAt: now };
     if (event.type === 'DATA_GAIN') this.gain = { label: `DATA +${Number(event.data?.amount ?? 0)}`, startedAt: now };
     if (event.type === 'CORE_GAINED') this.gain = { label: `CORE +${Number(event.data?.amount ?? 0)}`, startedAt: now };
   }
 
-  render(state: GameState, now: number): void {
+  render(state: GameState, now: number, frame?: SemanticRenderState): void {
     this.ctx.save();
     const shake = now < this.shakeUntil ? (Math.floor(now / 28) % 2 === 0 ? 1 : -1) : 0;
     this.ctx.translate(shake, 0);
-    const semantic = deriveSemanticRenderState(state, now);
+    const semantic = frame ?? deriveSemanticRenderState(state, now);
     drawEnvironment(this.ctx, state, this.assets);
     drawEntities(this.ctx, state, now, semantic, this.assets);
     if (state.run.depth.current === 'D-001' && state.run.elevator.travel) {
@@ -96,28 +94,26 @@ export class CanvasRenderer {
         this.ctx.fillRect(Math.round(fx.x + dx), Math.round(fx.y + dy + index % 2), 2, 2);
       });
     }
-    if (this.banner && now - this.banner.startedAt < 1200) {
-      this.ctx.fillStyle = '#111014'; this.ctx.fillRect(157, 53, 166, 23);
-      this.ctx.strokeStyle = rarityColor(this.banner.rarity); this.ctx.strokeRect(157.5, 53.5, 165, 22);
-      this.ctx.fillStyle = rarityColor(this.banner.rarity);
-      drawPixelText(this.ctx, this.banner.sub.toUpperCase(), 240, 62, { font: 'standard', align: 'center', baseline: 'bottom' });
+    const notice = this.notices.at(now);
+    if (notice) {
+      const accent = notice.priority >= 4 ? '#dcc79f' : PALETTE.rare;
+      this.ctx.fillStyle = '#111014'; this.ctx.fillRect(87, 53, 306, 26);
+      this.ctx.strokeStyle = accent; this.ctx.strokeRect(87.5, 53.5, 305, 25);
+      const image = notice.specimen && this.assets.ready('discoveryCollection');
+      if (image && notice.specimen) {
+        const frame = collectionSpriteFrame({ kind: notice.specimen.kind, discovered: true, count: 1, bestSpecimenGrade: notice.specimen.grade });
+        this.ctx.drawImage(image, frame % 5 * 24, Math.floor(frame / 5) * 24, 24, 24, 90, 54, 24, 24);
+      }
+      const center = image ? 254 : 240; const limit = image ? 43 : 48;
+      this.ctx.fillStyle = accent;
+      drawPixelText(this.ctx, notice.detail.toUpperCase().slice(0, limit), center, 64, { font: 'standard', align: 'center', baseline: 'bottom' });
       this.ctx.fillStyle = PALETTE.white;
-      drawPixelText(this.ctx, this.banner.label.toUpperCase(), 240, 72, { font: 'standard', align: 'center', baseline: 'bottom' });
-    } else if (this.banner) this.banner = null;
+      drawPixelText(this.ctx, notice.label.toUpperCase().slice(0, limit), center, 75, { font: 'standard', align: 'center', baseline: 'bottom' });
+    }
     if (this.gain && now - this.gain.startedAt < 1200) {
       this.ctx.fillStyle = '#101214e8'; this.ctx.fillRect(147, 9, 186, 16);
       this.ctx.fillStyle = PALETTE.d060Lamp;
       drawPixelText(this.ctx, this.gain.label, 240, 19, { font: 'standard', align: 'center', baseline: 'bottom' });
     } else if (this.gain) this.gain = null;
-  }
-}
-
-function rarityColor(rarity: Rarity): string {
-  switch (rarity) {
-    case 'ANOMALY': return '#a392aa';
-    case 'RELIC': return '#c6a36b';
-    case 'EPIC': return '#a991bc';
-    case 'RARE': return PALETTE.rare;
-    default: return PALETTE.white;
   }
 }

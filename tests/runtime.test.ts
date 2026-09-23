@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { UPGRADE_COSTS } from '../src/game/config';
 import { createGameState } from '../src/game/createGame';
-import { serializeGameState } from '../src/game/save';
+import { restoreGameState, serializeGameState } from '../src/game/save';
 import { updateGame } from '../src/game/simulation';
+import { advanceProspecting, floorProspects } from '../src/game/prospecting';
+import { sceneReadout } from '../src/game/hud';
+import { deriveInteractionTargets } from '../src/render/interactionTargets';
 import { GameRuntime } from '../src/runtime/GameRuntime';
 import { createD001Nodes } from '../src/game/config';
 const SCRAP_X = createD001Nodes()[0]!.x;
@@ -72,6 +75,29 @@ describe('GameRuntime', () => {
 
     runtime.selectCanvasTarget(20, 100);
     expect(state.selection).toEqual({ type: 'node', id: 'scrap-ledge' });
+  });
+
+  it('restores inspection when clicking the same depleted mining job after reload', () => {
+    const initial = createGameState(771);
+    const floor = initial.run.floors['D-001'];
+    for (let index = 0; index < 6; index++) advanceProspecting(floor, floor.nodes[0]!);
+    const prospect = floorProspects(floor)[0]!;
+    const node = floor.nodes.find((candidate) => candidate.id === prospect.nodeId)!;
+    advanceProspecting(floor, node);
+    node.hp = 0; node.respawnTimer = node.respawnDelay;
+    initial.run.character.targetNodeId = node.id;
+    initial.run.character.state = 'MINING';
+    initial.run.character.x = node.x - 13;
+    const state = restoreGameState(serializeGameState(initial))!;
+    state.selection = null;
+    const runtime = new GameRuntime(state);
+    runtime.attachCanvas(fakeCanvas());
+    const target = deriveInteractionTargets(state).find((candidate) => candidate.key === `node:${node.id}`)!;
+    runtime.selectCanvasTarget(target.position.x, target.position.y);
+    expect(state.selection).toEqual({ type: 'node', id: node.id });
+    expect(sceneReadout(state).detail).toContain('1 breaks to extract');
+    expect(state.run.character.swing).toBeNull();
+    expect(state.run.floors['D-001'].prospecting?.prospectWork[0]).toBe(1);
   });
 
   it('preserves D-001 selection, movement, and same-node click mining', () => {

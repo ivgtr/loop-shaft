@@ -31,7 +31,7 @@ export function shipmentStatus(state: GameState): string {
   if (elevator.state === 'DESCENDING') return 'RETURNING TO FLOOR';
   if (character.state === 'LOADING' || porter.state === 'LOADING' || elevator.state === 'LOADING') return 'LOADING CARGO';
   if (elevator.state !== 'IDLE_BOTTOM') return elevator.state.replaceAll('_', ' ');
-  return elevator.cargo.length ? state.run.automation.autoDispatch.enabled ? shipmentDecision(state).reason : 'READY TO SEND' : 'LIFT EMPTY';
+  return elevator.cargo.length ? state.run.automation.autoDispatch.enabled ? shipmentDecision(state).reason : 'READY TO SEND' : porter.holdForTravel ? 'LIFT EMPTY · PICKUPS PAUSED' : 'LIFT EMPTY';
 }
 
 export function travelBlockReason(state: GameState, depth: DepthId): string | null {
@@ -49,7 +49,7 @@ function emptyLiftReason(state: GameState): string | null {
   if (character.state === 'LOADING' || porter.state === 'LOADING') return 'Wait until cargo loading finishes.';
   if (elevator.cargo.length) return 'Send the loaded cargo to Surface first.';
   if (character.carried.length) return 'Unload your backpack, then send the cargo.';
-  if (porter.carried.length) return 'Wait for the Porter to unload, then send the cargo.';
+  if (porter.carried.length) return 'Hold Porter pickups in SHIP, then unload and send the cargo.';
   return null;
 }
 
@@ -87,6 +87,11 @@ export function elevatorItems(state: GameState, tab: ElevatorTab): ElevatorItem[
       reason: selected ? 'Already active.' : null, actionLabel: `USE ${priority}`, complete: selected,
       command: selected ? null : { type: 'cargo-priority', priority } });
   }
+  if (run.porter.enabled) items.push({ id: 'porter-hold', name: 'Porter pickup hold',
+    summary: run.porter.holdForTravel ? 'NEW PICKUPS PAUSED' : 'PORTER COLLECTING',
+    description: 'Finish carried cargo, then stop new pickups to clear the lift for travel. Floor loot stays here. Resume manually or automatically after floor travel.',
+    reason: null, actionLabel: run.porter.holdForTravel ? 'RESUME PICKUPS' : 'HOLD PICKUPS FOR TRAVEL',
+    command: { type: 'toggle-porter-hold' }, complete: Boolean(run.porter.holdForTravel) });
   return items;
 }
 

@@ -110,6 +110,19 @@ export type CoreProtocolId =
   | 'BORE_MEMORY'
   | 'DEEP_SURVEY_ARCHIVE';
 
+export type OreQuality = 'NORMAL' | 'FINE' | 'PURE';
+export type SpecimenGrade = 'INTACT' | 'PRISTINE';
+export type ProspectSignal = 'METAL' | 'FOSSIL' | 'RESEARCH';
+/** A bounded, Run-local prospect. -1 means not yet revealed; work >= required means spent. */
+export interface ProspectingState {
+  breaks: number;
+  qualityMisses: number;
+  gearMisses: number;
+  gearFound: number;
+  prospectWork: number[];
+}
+export interface SpecimenContents { grade: SpecimenGrade; value: number; }
+
 export interface LootStack {
   id: string;
   kind: LootKind;
@@ -125,6 +138,10 @@ export interface LootStack {
   originDepth?: DepthId;
   sourceCrewId?: string;
   equipmentSeed?: number;
+  /** Quality affects ordinary ore value only, never weight, Data or Core. */
+  quality?: OreQuality;
+  /** Locked when unearthed; name and final value are revealed only at Surface. */
+  specimen?: SpecimenContents;
 }
 
 export interface MiningNode {
@@ -152,6 +169,7 @@ export interface MiningNode {
   /** Finite deposits consumed this Run; absent only in pre-balance v6 saves. */
   minedCount?: number;
   coreExtracted?: number;
+  fossilMisses?: number;
 }
 
 export interface SwingState { elapsed: number; hitApplied: boolean; }
@@ -176,6 +194,8 @@ export interface Character extends WorkerBody {
 }
 
 export interface Porter extends WorkerBody {
+  /** Finish held cargo, then stop new pickups until resumed or floor travel completes. */
+  holdForTravel?: boolean;
   enabled: boolean;
   state: PorterState;
   targetLootId: string | null;
@@ -215,6 +235,7 @@ export interface AutomationState { autoSwing: AutomationToggle; autoDispatch: Au
 export interface ProgressionStats { manualSwings: number; playerDeposits: number; porterDeposits: number; elevatorTrips: number; floorTrips: number; }
 
 export interface FloorState {
+  prospecting?: ProspectingState;
   id: DepthId;
   seed: number;
   nodes: MiningNode[];
@@ -239,11 +260,21 @@ export interface CollectionEntry {
   category: LootCategory;
   discovered: boolean;
   count: number;
+  restorationSpent?: number;
+  restored?: boolean;
+  /** Best physically appraised specimen, not inferred from restoration or rarity. */
+  bestSpecimenGrade?: SpecimenGrade;
 }
 export interface CollectionState { entries: CollectionEntry[]; }
 export interface PassiveState { unlocked: PassiveId[]; active: PassiveId[]; }
 
+export interface FindReceipt {
+  id: string; name: string; depth: DepthId; value: number; at: number;
+  reason: 'NEW' | 'PRISTINE' | 'PURE' | 'GEAR' | 'RESTORED';
+}
+
 export interface DiscoveryState {
+  recentFinds?: FindReceipt[];
   d030NodeBreaks: number;
   d060NodeBreaks: number;
   d100CoreBreaks: number;
@@ -610,6 +641,8 @@ export type Selection =
   | null;
 
 export type GameEventType =
+  | 'ORE_QUALITY_FOUND' | 'PROSPECT_REVEALED' | 'PROSPECT_EXTRACTED'
+  | 'SPECIMEN_APPRAISED' | 'COLLECTION_RESTORED'
   | 'PLAYER_INPUT_MOVE' | 'MINER_MOVE_START' | 'MINER_ARRIVE' | 'PLAYER_INPUT_MINE'
   | 'AUTO_SWING_TRIGGER' | 'MINER_SWING_START' | 'MINER_SWING_HIT' | 'NODE_DAMAGE' | 'NODE_BREAK'
   | 'LOOT_ROLL' | 'TREASURE_ROLL' | 'DISCOVERY_FOUND' | 'LOOT_SPAWN' | 'LOOT_PICKUP' | 'MINER_RETURN'

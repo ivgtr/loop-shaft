@@ -1,7 +1,10 @@
+import { rewardNotice } from './rewardFeedback';
 import type { GameEvent } from './types';
 
 export class GameAudio {
   private context: AudioContext | null = null;
+  private rewardSoundUntil = 0;
+  private rewardPriority = 0;
 
   unlock(): void {
     if (!this.context) this.context = new AudioContext();
@@ -21,9 +24,11 @@ export class GameAudio {
     if (event.type === 'REBOOT_COMMITTED') this.sequence([147, 110, 82], 0.12, 0.04);
     if (event.type === 'CORE_PROTOCOL_PURCHASED') this.sequence([330, 440, 523], 0.07, 0.026);
     if (event.type === 'DEPTH_ENTERED') this.sequence([220, 196, 165], 0.1, 0.025);
-    if (event.type === 'DISCOVERY_FOUND') {
-      const rarity = String(event.data?.rarity ?? 'RARE');
-      this.sequence(rarity === 'ANOMALY' ? [659, 831, 1047] : rarity === 'RELIC' ? [587, 784, 988] : [740, 988], 0.07, 0.026);
+    const notice = rewardNotice(event);
+    if (notice && (this.context.currentTime >= this.rewardSoundUntil || notice.priority > this.rewardPriority)) {
+      this.rewardPriority = notice.priority;
+      this.rewardSoundUntil = this.context.currentTime + (notice.priority >= 4 ? 1.2 : 0.45);
+      this.sequence(notice.priority >= 4 ? [587, 784, 988] : notice.priority >= 2 ? [740, 988] : [660], 0.07, 0.024);
     }
   }
 

@@ -1,4 +1,5 @@
 import { getModifiers } from '../modifiers';
+import { playerMiningDamage } from '../mining';
 import { crewMiningDamage, crewMoveSpeed, equipCrewItem, equipPlayerItem } from '../phase5';
 import type { EquipmentItem, EquipmentSlot, GameState } from '../types';
 import { commandAction, information, number, type EquipmentMetric, type EquipmentPreview, type ManagementState, type StationItem, type StationView } from './types';
@@ -78,6 +79,8 @@ export function equipmentPreview(state: GameState, item: EquipmentItem, crewId?:
     metrics = [
       { label: 'Base hit', before: Math.max(1, Math.round(state.run.tool.damage * before.miningDamageMultiplier)), after: Math.max(1, Math.round(after.run.tool.damage * next.miningDamageMultiplier)) },
       { label: 'Walk speed', before: before.playerMoveSpeed, after: next.playerMoveSpeed, unit: 'px/s' },
+      { label: 'Loaded speed', before: getModifiers(state, true).playerMoveSpeed, after: getModifiers(after, true).playerMoveSpeed, unit: 'px/s' },
+      ...state.run.floors[state.run.depth.current].nodes.filter((node) => node.fossilWeight >= 0.45).slice(0, 1).map((node) => ({ label: `Hit on ${node.name}`, before: playerMiningDamage(state, node), after: playerMiningDamage(after, node) })),
       { label: 'Pack', before: state.run.character.backpackCapacity, after: after.run.character.backpackCapacity, unit: 'kg' },
       { label: 'Research weight', before: before.researchWeightMultiplier, after: next.researchWeightMultiplier, unit: 'x' },
       { label: 'Treasure modifier', before: before.treasureChanceMultiplier, after: next.treasureChanceMultiplier, unit: 'x' },

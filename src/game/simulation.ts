@@ -1,8 +1,10 @@
-import { ANOMALY_POOL, COLLECT_DURATION, CORE_PROTOCOLS, D030_EXTENSION_COST, D060_EXTENSION_COST, D100_EXTENSION_COST, FLOOR_TRAVEL_DURATION, FLOOR_TRAVEL_VIA_SURFACE_DURATION, LOAD_DURATION, LOOT, PLAYER_PACK_CAPACITY, PLAYER_TOOL_DAMAGE, PORTER_COLLECT_DURATION, PORTER_LOAD_DURATION, RESEARCH, SWING, UNLOAD_DURATION, UPGRADE_COSTS, WORLD } from './config';
+import { partitionCargo } from './cargoSelection';
+import { ANOMALY_POOL, COLLECT_DURATION, CORE_PROTOCOLS, D030_EXTENSION_COST, D060_EXTENSION_COST, D100_EXTENSION_COST, FLOOR_TRAVEL_DURATION, FLOOR_TRAVEL_VIA_SURFACE_DURATION, LOAD_DURATION, PLAYER_PACK_CAPACITY, PLAYER_TOOL_DAMAGE, PORTER_COLLECT_DURATION, PORTER_LOAD_DURATION, RESEARCH, SWING, UNLOAD_DURATION, UPGRADE_COSTS, WORLD } from './config';
 import { createNewRun } from './createGame';
-import { finishingDamage, rollMiningLoot, treasureChance } from './mining';
+import { playerMiningDamage, rollMiningLoot, treasureChance } from './mining';
+import { appraisePhysicalCargo } from './appraisal';
 import { shipmentDecision, updateShipmentWait } from './dispatch';
-import { appraisalMultiplier, getModifiers } from './modifiers';
+import { getModifiers } from './modifiers';
 import { cancelPlayerAction, canMoveToNode, MINE_INPUT_BUFFER, miningTarget, nearbyPlayerLoot, PLAYER_LOAD_X, PLAYER_MINE_REACH, playerControlAvailable, playerInteraction, upgradeBlockReason } from './playerControls';
 import { hashSeed } from './rng';
 import type {
@@ -14,7 +16,6 @@ import type {
   GameEventType,
   GameState,
   LootCategory,
-  LootKind,
   LootStack,
   MiningNode,
   PassiveId,
@@ -24,7 +25,7 @@ import type {
 } from './types';
 
 const NODE_STOP_DISTANCE = 13;
-const PORTER_LOAD_X = WORLD.elevatorX + 28;
+export const PORTER_LOAD_X = WORLD.elevatorX + 28;
 const RARITY_RANK: Record<Rarity, number> = { COMMON: 0, UNCOMMON: 1, RARE: 2, EPIC: 3, RELIC: 4, ANOMALY: 5 };
 const DEPTH_RANK: Record<DepthId, number> = { 'D-001': 1, 'D-030': 30, 'D-060': 60, 'D-100': 100, 'D-180': 180, 'D-250': 250, 'D-400': 400, 'D-650': 650 };
 
@@ -167,6 +168,16 @@ export function unlockPorter(state: GameState): boolean {
   run.porter.enabled = true;
   run.porter.state = 'FIND_LOOT';
   emit(state, 'PORTER_UNLOCKED', { capacity: run.porter.capacity, moveSpeed: run.porter.moveSpeed });
+  return true;
+}
+
+export function togglePorterHold(state: GameState): boolean {
+  const porter = state.run.porter;
+  if (!porter.enabled) return false;
+  porter.holdForTravel = !porter.holdForTravel;
+  if (!porter.carried.length && porter.state !== 'LOADING') {
+    porter.state = 'IDLE'; porter.targetLootId = null; porter.collectTimer = 0;
+  }
   return true;
 }
 
@@ -451,6 +462,7 @@ function enterDepth(state: GameState, depth: DepthId): void {
   run.character.targetNodeId = null;
   run.character.moveTargetX = null;
   run.character.swing = null;
+  run.porter.holdForTravel = false;
   run.porter.x = WORLD.elevatorX + 28;
   run.porter.state = run.porter.enabled ? 'FIND_LOOT' : 'IDLE';
   run.porter.targetLootId = null;
@@ -552,59 +564,8 @@ function updateElevator(state: GameState, dt: number): void {
 }
 
 function appraiseCargo(state: GameState, cargo: LootStack[]): void {
-  let scrapGain = 0;
-  let dataGain = 0;
-  let coreGain = 0;
-  for (const item of cargo) {
-    emit(state, 'LOOT_APPRAISE', { id: item.id, kind: item.kind, name: item.name, category: item.category, rarity: item.rarity, depth: item.originDepth ?? state.run.depth.current });
-    if (item.category === 'FOSSIL' || item.category === 'RELIC' || item.category === 'ANOMALY') registerCollection(state, item);
-    if (item.category === 'RELIC') unlockPassiveFromLoot(state, item.kind);
-    if (item.category === 'RESEARCH') dataGain += item.dataValue;
-    if (item.category === 'CORE') coreGain += item.coreValue;
-    if (item.category !== 'CORE') scrapGain += Math.round(item.value * appraisalMultiplier(state, item.category));
-  }
-  if (scrapGain > 0) {
-    state.run.scrap += scrapGain;
-    emit(state, 'RESOURCE_GAIN', { resource: 'Scrap', amount: scrapGain, total: state.run.scrap });
-  }
-  if (dataGain > 0) {
-    state.run.data += dataGain;
-    emit(state, 'DATA_GAIN', { amount: dataGain, total: state.run.data });
-  }
-  if (coreGain > 0) {
-    state.run.pendingCore += coreGain;
-    emit(state, 'CORE_CHARGE_GAINED', { amount: coreGain, pendingCore: state.run.pendingCore });
-    if (!state.run.coreChamber.rebootAvailable) {
-      state.run.coreChamber.rebootAvailable = true;
-      emit(state, 'REBOOT_AVAILABLE', { pendingCore: state.run.pendingCore });
-    }
-  }
-}
-
-function registerCollection(state: GameState, item: LootStack): void {
-  const existing = state.meta.collection.entries.find((entry) => entry.kind === item.kind);
-  if (existing) {
-    existing.count += 1;
-    if (!existing.discovered) {
-      existing.discovered = true;
-      emit(state, 'COLLECTION_REGISTERED', { kind: item.kind, name: item.name, rarity: item.rarity, category: item.category });
-    } else emit(state, 'COLLECTION_DUPLICATE', { kind: item.kind, name: item.name, count: existing.count });
-    return;
-  }
-  state.meta.collection.entries.push({ kind: item.kind, name: item.name, rarity: item.rarity, category: item.category, discovered: true, count: 1 });
-  emit(state, 'COLLECTION_REGISTERED', { kind: item.kind, name: item.name, rarity: item.rarity, category: item.category });
-}
-
-function unlockPassiveFromLoot(state: GameState, kind: LootKind): void {
-  const passive = LOOT[kind].passive;
-  if (!passive || state.meta.passives.unlocked.includes(passive)) return;
-  state.meta.passives.unlocked.push(passive);
-  emit(state, 'PASSIVE_UNLOCKED', { passive, source: kind });
-  if (state.meta.passives.active.length < 2) {
-    state.meta.passives.active.push(passive);
-    applyEffectiveParameters(state);
-    emit(state, 'PASSIVE_EQUIPPED', { passive, enabled: true, auto: true });
-  }
+  appraisePhysicalCargo(state, cargo, (type, data) => emit(state, type, data));
+  applyEffectiveParameters(state);
 }
 
 function updateCharacter(state: GameState, dt: number): void {
@@ -669,6 +630,9 @@ function updateCharacter(state: GameState, dt: number): void {
 function updatePorter(state: GameState, dt: number): void {
   const porter = state.run.porter;
   if (!porter.enabled) return;
+  if (porter.holdForTravel && porter.carried.length === 0 && porter.state !== 'LOADING') {
+    porter.state = 'IDLE'; porter.targetLootId = null; return;
+  }
   switch (porter.state) {
     case 'IDLE':
       porter.state = 'FIND_LOOT';
@@ -747,8 +711,7 @@ function beginSwing(state: GameState, node: MiningNode): boolean {
 }
 
 function applyMiningHit(state: GameState, node: MiningNode): void {
-  const modifiers = getModifiers(state);
-  const damage = finishingDamage(state, node, state.run.tool.damage * modifiers.miningDamageMultiplier);
+  const damage = playerMiningDamage(state, node);
   emit(state, 'MINER_SWING_HIT', { nodeId: node.id, damage });
   node.hp = Math.max(0, node.hp - damage);
   emit(state, 'NODE_DAMAGE', { nodeId: node.id, hp: node.hp, maxHp: node.maxHp });
@@ -763,12 +726,16 @@ function spawnLoot(state: GameState, node: MiningNode): void {
   floor.loot.push(...rollMiningLoot(state, floor, node, (type, data) => emit(state, type, data)));
 }
 
-function pickUpNearbyLoot(state: GameState): void {
+export function playerPickupItems(state: GameState): LootStack[] {
   const character = state.run.character;
   const nearby = nearbyPlayerLoot(state)
     .sort((a, b) => RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity] || a.id.localeCompare(b.id));
-  for (const item of nearby) {
-    if (cargoWeight(character.carried) + item.weight > character.backpackCapacity + 0.001) continue;
+  return partitionCargo(nearby, character.backpackCapacity - cargoWeight(character.carried)).deposited;
+}
+
+function pickUpNearbyLoot(state: GameState): void {
+  const character = state.run.character;
+  for (const item of playerPickupItems(state)) {
     character.carried.push(item);
     removeFloorLoot(state, item.id);
     emit(state, 'LOOT_PICKUP', { id: item.id, name: item.name, weight: item.weight, value: item.value, rarity: item.rarity });
@@ -802,13 +769,16 @@ function findPorterTargetById(state: GameState): LootStack | undefined {
   return id ? currentFloor(state).loot.find((item) => item.id === id) : undefined;
 }
 
-function pickUpPorterLoot(state: GameState, target: LootStack): void {
+export function porterPickupItems(state: GameState, target: LootStack): LootStack[] {
   const porter = state.run.porter;
   const candidates = [target, ...currentFloor(state).loot.filter((item) => item.id !== target.id && Math.abs(item.x - target.x) <= 16)
     .sort((a, b) => cargoPriority(b.category) - cargoPriority(a.category) || RARITY_RANK[b.rarity] - RARITY_RANK[a.rarity] || a.id.localeCompare(b.id))];
-  for (const item of candidates) {
-    if (!currentFloor(state).loot.some((candidate) => candidate.id === item.id)) continue;
-    if (cargoWeight(porter.carried) + item.weight > porter.capacity + 0.001) continue;
+  return partitionCargo(candidates, porter.capacity - cargoWeight(porter.carried)).deposited;
+}
+
+function pickUpPorterLoot(state: GameState, target: LootStack): void {
+  const porter = state.run.porter;
+  for (const item of porterPickupItems(state, target)) {
     porter.carried.push(item);
     removeFloorLoot(state, item.id);
     emit(state, 'PORTER_PICKUP', { id: item.id, name: item.name, weight: item.weight, value: item.value, rarity: item.rarity });
@@ -869,15 +839,7 @@ function finishPorterLoading(state: GameState): void {
 }
 
 function depositIntoElevator(state: GameState, carried: readonly LootStack[]): { deposited: LootStack[]; remaining: LootStack[] } {
-  let remainingCapacity = availableElevatorCapacity(state);
-  const deposited: LootStack[] = [];
-  const remaining: LootStack[] = [];
-  for (const item of carried) {
-    if (item.weight <= remainingCapacity + 0.001) {
-      deposited.push(item);
-      remainingCapacity -= item.weight;
-    } else remaining.push(item);
-  }
+  const { deposited, remaining } = partitionCargo(carried, availableElevatorCapacity(state));
   state.run.elevator.cargo.push(...deposited);
   return { deposited, remaining };
 }

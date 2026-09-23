@@ -1,3 +1,7 @@
+import { carriedCargoPoint, liftCargoPoint } from './cargoMotion';
+import { equipmentAttachment } from './workEquipment';
+import { cargoSpriteFrame, DISCOVERY_ATLAS, visibleCargo } from './discoveryVisuals';
+import { drawCargoMark } from './discoveryCues';
 import { WORLD } from '../game/config';
 import type { GameState, LootKind, LootStack, MiningNode } from '../game/types';
 import type { AssetStore } from './assets/assetStore';
@@ -108,18 +112,46 @@ export function drawD001Player(
   ctx.save();
   ctx.translate(character.worldAnchor.x, 0);
   if (character.facing < 0) ctx.scale(-1, 1);
+  const attachment = equipmentAttachment(character);
+  const gear = character.equipment;
+  const tools = assets.ready('workTools');
+  const working = character.clip === 'mine-ready' || character.clip === 'mine-swing';
+  // A recovered pick is strapped to the back between jobs, never swinging while idle/carrying.
+  if (tools && gear.stowed && !working) {
+    ctx.drawImage(tools, 0, gear.tool * 40, 40, 40, destinationX + attachment.pack.x, destinationY + attachment.pack.y, 40, 40);
+  }
+  const pack = assets.ready('workPacks');
+  if (pack && gear.pack !== null) {
+    ctx.drawImage(pack, gear.pack * 14, 0, 14, 20, destinationX + 8 + attachment.pack.x, destinationY + 15 + attachment.pack.y, 14, 20);
+  }
   drawPlayerLayer(ctx, assets, 'playerPack', character.packBank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
-  drawPlayerLayer(ctx, assets, 'playerBody', character.frame * 40, character.row * 40, destinationX, destinationY);
+  drawPlayerLayer(ctx, assets, 'playerBody', character.frame * 40, character.row * 40, destinationX, destinationY, character.clip === 'mine-ready' ? 8 : 0);
   drawPlayerLayer(ctx, assets, 'playerBoots', character.bootsBank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
-  drawPlayerLayer(ctx, assets, 'playerTool', character.toolBank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
+  if (tools && working) {
+    const frame = character.clip === 'mine-ready' ? 1 + character.frame : 3 + character.frame;
+    // Only the contact/follow-through parts need correction for a manually chosen stopping distance.
+    const contact = character.contact;
+    const reaching = character.clip === 'mine-swing' && (character.frame === 3 || character.frame === 4);
+    const dx = reaching && contact ? (contact.x - character.worldAnchor.x) * character.facing - 13 : 0;
+    const dy = reaching && contact ? contact.y - (destinationY + 26) : 0;
+    ctx.drawImage(tools, frame * 40, gear.tool * 40, 40, 40, destinationX + dx, destinationY + dy, 40, 40);
+  } else if (!tools && working) {
+    drawPlayerLayer(ctx, assets, 'playerTool', character.toolBank * 320 + character.frame * 40, character.row * 40, destinationX, destinationY);
+  }
   drawPlayerLayer(ctx, assets, 'playerHelmet', character.frame * 40, character.row * 40, destinationX, destinationY);
+  const lamp = assets.ready('workLamps');
+  if (lamp && gear.lamp !== null && attachment.lamp) {
+    ctx.drawImage(lamp, gear.lamp * 10, 0, 10, 9, destinationX + attachment.lamp.x, destinationY + attachment.lamp.y, 10, 9);
+  }
   ctx.restore();
 }
 
 export function drawD001Porter(ctx: CanvasRenderingContext2D, semantic: SemanticRenderState, assets: D001AssetStore): boolean {
   const porter = semantic.porter;
   if (!porter || !assets.ready('npcPorter')) return false;
-  drawActor(ctx, assets, 'npcPorter', porter);
+  if (porter.pause && assets.ready('workPorterRest')) {
+    drawActor(ctx, assets, 'workPorterRest', { ...porter, row: 0, frame: porter.pause === 'travel' ? 0 : 1 });
+  } else drawActor(ctx, assets, 'npcPorter', porter);
   return true;
 }
 
@@ -159,15 +191,23 @@ const CARGO_FRAME = {
 
 export function drawD001Cargo(
   ctx: CanvasRenderingContext2D,
-  item: Pick<LootStack, 'kind' | 'category' | 'equipmentSeed'>,
+  item: Pick<LootStack, 'kind' | 'category' | 'equipmentSeed' | 'quality' | 'specimen'>,
   anchorX: number,
   anchorY: number,
   assets: D001AssetStore,
 ): boolean {
+  const sprite = assets.ready('discoveryCargo');
+  if (sprite) {
+    const frame = cargoSpriteFrame(item); const cell = DISCOVERY_ATLAS.cargo;
+    ctx.drawImage(sprite, frame % cell.columns * cell.width, Math.floor(frame / cell.columns) * cell.height,
+      cell.width, cell.height, Math.round(anchorX) - cell.anchorX, Math.round(anchorY) - cell.anchorY, cell.width, cell.height);
+    return true;
+  }
   const image = assets.ready('cargoItems');
   if (!image) return false;
   const frame = CARGO_FRAME[cargoVisualClass(item)];
   ctx.drawImage(image, frame * 12, 0, 12, 10, Math.round(anchorX) - 6, Math.round(anchorY) - 10, 12, 10);
+  drawCargoMark(ctx, item, anchorX, anchorY);
   return true;
 }
 
@@ -176,11 +216,12 @@ export function drawD001CarriedCargo(
   actor: ActorRenderState<string>,
   assets: D001AssetStore,
 ): boolean {
-  if (actor.carried.length === 0 || !assets.ready('cargoItems')) return false;
-  const visible = actor.carried.slice(0, 3);
-  visible.forEach((item, index) => {
-    const forward = actor.worldAnchor.x + actor.facing * (8 + index * 2);
-    drawD001Cargo(ctx, item, forward, actor.worldAnchor.y - 7 - index * 3, assets);
+  if (actor.carried.length === 0 || !(assets.ready('discoveryCargo') || assets.ready('cargoItems'))) return false;
+  const visible = visibleCargo(actor.carried, 3);
+  visible.slice().reverse().forEach((item, reversed) => {
+    const index = visible.length - reversed - 1;
+    const point = actor.cargoPositions?.get(item.id) ?? carriedCargoPoint(actor, index);
+    drawD001Cargo(ctx, item, point.x, point.y, assets);
   });
   return true;
 }
@@ -206,9 +247,10 @@ function drawPlayerLayer(
   sy: number,
   dx: number,
   dy: number,
+  cropTop = 0,
 ): void {
   const image = assets.ready(key);
-  if (image) ctx.drawImage(image, sx, sy, 40, 40, dx, dy, 40, 40);
+  if (image) ctx.drawImage(image, sx, sy + cropTop, 40, 40 - cropTop, dx, dy + cropTop, 40, 40 - cropTop);
 }
 
 export function drawD001ElevatorBack(
@@ -230,14 +272,15 @@ export function drawD001ElevatorCargo(
   semantic: SemanticRenderState,
   assets: D001AssetStore,
 ): boolean {
-  if (!assets.ready('cargoItems')) return false;
-  const count = Math.min(9, state.run.elevator.cargo.length);
+  if (!(assets.ready('discoveryCargo') || assets.ready('cargoItems'))) return false;
+  const visible = visibleCargo(state.run.elevator.cargo, 9);
+  const count = visible.length;
   for (let index = count - 1; index >= 0; index -= 1) {
     const row = Math.floor(index / 3);
     const column = index % 3;
-    const item = state.run.elevator.cargo[index]!;
-    if (!drawD001Cargo(ctx, item, WORLD.elevatorX - 8 + column * 9,
-      Math.round(semantic.elevator.y) + 13 - row * 6, assets)) {
+    const item = visible[index]!;
+    const point = liftCargoPoint(index, semantic.elevator.y);
+    if (!drawD001Cargo(ctx, item, point.x, point.y, assets)) {
       ctx.fillStyle = lootColor(item.kind);
       ctx.fillRect(WORLD.elevatorX - 12 + column * 9, Math.round(semantic.elevator.y) + 8 - row * 6, 7, 5);
     }
@@ -258,7 +301,11 @@ export function drawD001ElevatorFront(
   const y = Math.round(semantic.elevator.y) - 20;
   const variant = narrow ? 1 : 0;
   ctx.drawImage(image, (2 + variant) * 56, 0, 56, 44, x, y, 56, 44);
-  if (semantic.elevator.door === 'closed') ctx.drawImage(image, variant * 56, 44, 56, 44, x, y, 56, 44);
+  if (semantic.elevator.door === 'closed') {
+    const gate = assets.ready('discoveryGate');
+    if (gate) ctx.drawImage(gate, variant * 56, 0, 56, 44, x, y, 56, 44);
+    else ctx.drawImage(image, variant * 56, 44, 56, 44, x, y, 56, 44);
+  }
   ctx.drawImage(image, 2 * 56, 44, 56, 44, 269 - 28, 198 - 20, 56, 44);
 
   ctx.fillStyle = state.run.elevator.state !== 'IDLE_BOTTOM' || state.run.elevator.cargo.length > 0 ? '#e6a02b' : '#564537';

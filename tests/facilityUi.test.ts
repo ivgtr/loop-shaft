@@ -103,7 +103,7 @@ describe('facility-specific information', () => {
     const state = managementGame(); const item = state.run.phase5.equipment.inventory[0]!; const before = structuredClone(state);
     const preview = equipmentPreview(state, item); const ui = createManagementState(state, { station: 'equipment' });
     const layout = layoutManagementUi(state, ui, viewport(960));
-    expect(preview.metrics).toHaveLength(5); expect(layout.gear).toHaveLength(2);
+    expect(preview.metrics.map((metric) => metric.label)).toEqual(expect.arrayContaining(['Base hit', 'Walk speed', 'Loaded speed', 'Pack', 'Research weight', 'Treasure modifier'])); expect(layout.gear).toHaveLength(2);
     expect(layout.texts.some((run) => run.label.includes('Base hit:'))).toBe(true);
     expect(layout.texts.some((run) => run.label.includes('42 → 42'))).toBe(false);
     expect(state).toEqual(before);

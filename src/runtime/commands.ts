@@ -1,5 +1,6 @@
 import type {
   AnomalyId,
+  LootKind,
   CargoRoutingPriority,
   CoreProtocolId,
   DepthId,
@@ -25,6 +26,7 @@ export type GameCommand =
   | { type: 'toggle-auto-swing' }
   | { type: 'upgrade-pack' }
   | { type: 'unlock-porter' }
+  | { type: 'toggle-porter-hold' }
   | { type: 'unlock-auto-dispatch' }
   | { type: 'toggle-auto-dispatch' }
   | { type: 'dispatch-policy'; policy: import('../game/dispatch').DispatchPolicy }
@@ -52,6 +54,7 @@ export type GameCommand =
   | { type: 'travel'; depth: DepthId }
   | { type: 'choose-anomaly'; anomaly: AnomalyId }
   | { type: 'toggle-passive'; passive: PassiveId }
+  | { type: 'restore-fossil'; kind: LootKind }
   | { type: 'research'; research: ResearchId }
   | { type: 'protocol'; protocol: CoreProtocolId }
   | { type: 'reboot' };

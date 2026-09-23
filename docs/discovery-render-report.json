@@ -1,0 +1,24 @@
+{
+  "environment": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/144.0.0.0 Safari/537.36",
+  "viewport": {
+    "width": 1440,
+    "height": 810
+  },
+  "note": "Headless local Chromium; render-call CPU submission only, not presentation FPS or physical mobile performance.",
+  "runs": [
+    {
+      "floorCargo": 0,
+      "frames": 240,
+      "p50Ms": 0.30000000004656613,
+      "p95Ms": 1.3000000000465661,
+      "meanMs": 0.41499999999941795
+    },
+    {
+      "floorCargo": 500,
+      "frames": 240,
+      "p50Ms": 1.3000000000465661,
+      "p95Ms": 6.300000000046566,
+      "meanMs": 2.1541666666656965
+    }
+  ]
+}

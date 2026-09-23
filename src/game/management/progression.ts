@@ -1,4 +1,5 @@
 import { ANOMALIES, CORE_PROTOCOLS, PASSIVES, RESEARCH } from '../config';
+import { duplicateFossilsAvailable, fossilFamilyName, RESTORATION_COST, restorationBlockReason } from '../appraisal';
 import { createNewRun } from '../createGame';
 import { legacyEquipmentForReboot } from '../phase5';
 import { coreProtocolBlockReason, researchBlockReason } from '../simulation';
@@ -29,7 +30,7 @@ export function researchView(state: GameState, ui: ManagementState): StationView
 }
 
 export function archiveView(state: GameState, ui: ManagementState): StationView {
-  const tabs = [{ id: 'finds', label: 'FINDS' }, { id: 'passives', label: 'PASSIVES' }, { id: 'records', label: 'RECORDS' }];
+  const tabs = [{ id: 'finds', label: 'FINDS' }, { id: 'passives', label: 'PASSIVES' }, { id: 'records', label: 'RECORDS' }, { id: 'recent', label: 'RECENT' }];
   let items: StationItem[];
   if (ui.tab === 'passives') items = (Object.keys(PASSIVES) as PassiveId[]).map((id) => {
     const unlocked = state.meta.passives.unlocked.includes(id); const active = state.meta.passives.active.includes(id);
@@ -38,15 +39,39 @@ export function archiveView(state: GameState, ui: ManagementState): StationView 
       lines: unlocked ? [PASSIVES[id].description, 'Unlocked and active passives persist across Reboot.'] : ['Find and appraise more relics to reveal this passive.'],
       active, badge: active ? 'ACTIVE' : unlocked ? 'INACTIVE' : 'LOCKED', reason, actionLabel: active ? 'DEACTIVATE' : 'ACTIVATE PASSIVE', action: reason ? null : commandAction({ type: 'toggle-passive', passive: id }) };
   });
+  else if (ui.tab === 'recent') {
+    items = (state.run.discovery.recentFinds ?? []).map((entry) => information(entry.id, entry.name,
+      `${entry.reason} · ${entry.depth}${entry.value ? ` · ${entry.value} Scrap` : ''}`,
+      ['Delivered or restored this Run. No manual opening is required.', 'Equip recovered tools at the Workshop; collection records survive Reboot.']));
+    if (!items.length) items = [information('empty', 'No appraised finds yet', 'Bring unusual cargo to Surface. The last 12 results stay here.')];
+  }
   else if (ui.tab === 'records') {
     items = [information('depth', 'Expedition record', `Best depth ${state.meta.bestDepth} · Run ${state.meta.runIndex}`,
       ['Collection, equipment discoveries and deep records persist across Reboot.']),
     ...state.meta.equipmentDiscoveries.map((id) => information(`equipment:${id}`, recordName(id), 'Equipment discovered')),
     ...state.meta.ancientDiscoveries.map((id) => information(`ancient:${id}`, recordName(id), 'Ancient discovery')),
     ...state.meta.deepDiscoveries.map((id) => information(`deep:${id}`, recordName(id), 'Deep discovery'))];
-  } else items = state.meta.collection.entries.map((entry) => ({ ...information(entry.kind, entry.discovered ? entry.name : '????',
-    entry.discovered ? `${entry.rarity} · ${entry.category} · ${entry.count} appraised` : `UNDISCOVERED · ${entry.category}`,
-    [entry.discovered ? 'Recorded at Surface. This discovery survives Reboot.' : 'Bring this discovery to Surface to identify it.']), discovery: { category: entry.category, discovered: entry.discovered }, badge: entry.discovered ? `×${entry.count}` : '?' }));
+  } else items = state.meta.collection.entries.map((entry): StationItem => {
+    const fossil = entry.category === 'FOSSIL';
+    const available = fossil ? duplicateFossilsAvailable(state, entry.kind) : 0;
+    const restorable = fossil && !entry.discovered;
+    const reason = restorable ? restorationBlockReason(state, entry.kind) : null;
+    return { ...information(entry.kind, entry.discovered ? entry.name : '????',
+      entry.discovered ? `${entry.rarity} · ${entry.category} · ${entry.count} appraised${entry.restored ? ' · RESTORED' : ''}${entry.bestSpecimenGrade ? ` · ${entry.bestSpecimenGrade}` : ''}` : `UNDISCOVERED · ${entry.category}`,
+      [entry.discovered ? 'Collection records survive Reboot.' : 'Bring this discovery to Surface to identify it.',
+        ...(fossil ? [`${available} duplicate ${fossilFamilyName(entry.kind)} available. Restore a missing relative with ${RESTORATION_COST}. Your first specimen is never spent.`,
+          'Restoration records a fossil only: no Scrap, Data, Core or passive reward.'] : [])]),
+      discovery: { kind: entry.kind, category: entry.category, discovered: entry.discovered, count: entry.count, restored: entry.restored, bestSpecimenGrade: entry.bestSpecimenGrade }, badge: entry.restored ? 'RESTORED' : entry.discovered ? `×${entry.count}` : '?',
+      reason, actionLabel: restorable ? `RESTORE · ${RESTORATION_COST} DUPLICATES` : 'INFORMATION',
+      action: restorable && !reason ? commandAction({ type: 'restore-fossil', kind: entry.kind }) : null,
+      decision: restorable ? { confirmLabel: 'RESTORE SPECIMEN', cancelLabel: 'KEEP DUPLICATES', facts: [
+        { label: 'SPEND', value: `${RESTORATION_COST} duplicate ${fossilFamilyName(entry.kind)}.`, warning: true },
+        { label: 'KEEP', value: 'First specimens and collection history.' },
+        { label: 'GAIN', value: 'One missing fossil record, no resources.' },
+      ] } : undefined,
+      confirmKey: restorable ? JSON.stringify([entry.kind, entry.discovered, available, state.meta.bestDepth]) : undefined,
+    };
+  });
   return { title: 'ARCHIVE TERMINAL', tabs, items, gallery: ui.tab === 'finds' };
 }
 
