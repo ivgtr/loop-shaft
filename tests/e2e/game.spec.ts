@@ -4,64 +4,13 @@ import { SAVE_KEY, serializeGameState } from '../../src/game/save';
 import { createD001Nodes } from '../../src/game/config';
 const SCRAP_X = createD001Nodes()[0]!.x;
 
-
+// The normal delivery and reload paths live in tests/smoke/game.spec.ts.
+// These are opt-in pointer, fallback and later-game regressions.
 async function clickWorld(page: Page, x: number, y: number): Promise<void> {
   const box = await page.getByLabel('LOOP SHAFT mining floor').boundingBox();
   expect(box).not.toBeNull();
   await page.mouse.click(box!.x + box!.width * x / 480, box!.y + box!.height * y / 270);
 }
-
-async function swing(page: Page): Promise<void> {
-  const canvas = page.getByLabel('LOOP SHAFT mining floor');
-  await expect(canvas).toHaveAttribute('data-swing', 'ready');
-  await page.keyboard.press('Space');
-  await expect(canvas).toHaveAttribute('data-swing', 'active');
-  await expect(canvas).toHaveAttribute('data-swing', 'ready');
-}
-
-test('guides a new game through optional pickup, return, and first physical delivery', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByTestId('scene-detail')).toContainText('Scrap Ledge · click or tap');
-  const canvas = page.getByLabel('LOOP SHAFT mining floor');
-  await clickWorld(page, SCRAP_X, 214);
-  await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
-  await expect(canvas).toHaveAttribute('data-player-state', 'MINING', { timeout: 10_000 });
-  await expect(page.getByTestId('scene-detail')).toContainText('clicking / tapping the vein again, pressing Space, or using MINE');
-  for (let index = 0; index < 3; index += 1) await swing(page);
-  await expect(canvas).not.toHaveAttribute('data-floor-loot', '0');
-  await expect(canvas).toHaveAttribute('data-carried-weight', '0.00');
-  await expect(page.getByTestId('scene-detail')).toContainText('collect it later');
-  await page.keyboard.press('KeyE');
-  await expect(canvas).not.toHaveAttribute('data-carried-weight', '0.00');
-  await expect(canvas).toHaveAttribute('data-player-state', 'IDLE');
-  await expect(page.getByTestId('scene-detail')).toContainText('Keep mining with cargo');
-  await page.getByRole('button', { name: 'RETURN', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'SEND', exact: true })).toBeEnabled({ timeout: 10_000 });
-  await expect(canvas).toHaveAttribute('data-carried-weight', '0.00');
-  await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
-  await page.keyboard.press('KeyF');
-  await expect(canvas).toHaveAttribute('data-elevator-state', 'ASCENDING');
-  await expect(page.getByTestId('scene-detail')).toContainText('carrying cargo to Surface');
-  await expect(page.getByTestId('resource-status')).toContainText(/SCRAP [1-9]/, { timeout: 15_000 });
-});
-
-test('selects, moves to, and mines a visible node through the Canvas controls', async ({ page }) => {
-  const pageErrors: Error[] = [];
-  page.on('pageerror', (error) => pageErrors.push(error));
-  await page.goto('/');
-  await expect(page.getByTestId('scene-title')).toHaveText('D-001 · SHAFT');
-  await clickWorld(page, SCRAP_X, 214);
-  await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
-  const canvas = page.getByLabel('LOOP SHAFT mining floor');
-  await expect(canvas).toHaveAttribute('data-player-state', 'MINING', { timeout: 10_000 });
-  await swing(page);
-  await expect(page.getByTestId('scene-detail')).toContainText('HP 20/30');
-  await page.reload();
-  await clickWorld(page, SCRAP_X, 214);
-  await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
-  await expect(page.getByTestId('scene-detail')).toContainText('HP 20/30');
-  expect(pageErrors).toEqual([]);
-});
 
 test('uses a pointer cursor only on targets and selects the hovered target', async ({ page }) => {
   await page.goto('/');

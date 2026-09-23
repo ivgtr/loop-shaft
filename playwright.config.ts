@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Opt-in browser regressions and rendering tools. Some specs import /src modules,
+// so these deliberately use Vite dev, not the production smoke configuration.
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,

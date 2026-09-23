@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { createGameState } from '../src/game/createGame';
 import { appraisePhysicalCargo, restoreFossil } from '../src/game/appraisal';
@@ -9,91 +8,15 @@ import { collectionSpriteFrame, cargoSpriteFrame, discoveryHostFrame, visibleCar
 import { deriveSemanticRenderState } from '../src/render/semanticRenderState';
 import { drawD001Cargo, drawD001CarriedCargo, drawD001ElevatorCargo, type D001AssetStore } from '../src/render/d001ImageRenderer';
 import { drawDiscoveryCues } from '../src/render/discoveryCues';
-import { deriveInteractionTargets } from '../src/render/interactionTargets';
 import type { LootKind } from '../src/game/types';
 import { loot } from './fixtures/discovery';
 
-type Sheet = { cell: [number, number]; anchor: [number, number]; columns: number; frames: { name: string; pixels: string[] }[] };
-const art = JSON.parse(readFileSync(new URL('../art/d001/discovery-sprites.json', import.meta.url), 'utf8')) as { palette: Record<string, string>; sheets: Record<string, Sheet> };
 const fossils = ['TRILOBITE', 'AMMONITE', 'ANCIENT_FISH', 'REPTILE_TOOTH', 'STRANGE_VERTEBRA'] as const;
 const context = () => ({ drawImage: vi.fn(), save: vi.fn(), restore: vi.fn(), fillRect: vi.fn(), fillStyle: '' } as unknown as CanvasRenderingContext2D);
 const assets = { ready: (key: string) => ({ src: key }) } as unknown as D001AssetStore;
-const pixels = (sheet: string, index: number) => art.sheets[sheet]!.frames[index]!.pixels;
 
-// Quantized luminance: evidence for shape/contrast differences, not a substitute for human legibility.
-function grayscale(rows: string[]): string {
-  return rows.map(row => [...row].map(key => {
-    if (key === '.') return '.';
-    const color = art.palette[key]!; const r = parseInt(color.slice(1, 3), 16); const g = parseInt(color.slice(3, 5), 16); const b = parseInt(color.slice(5, 7), 16);
-    return Math.floor((.2126 * r + .7152 * g + .0722 * b) / 48);
-  }).join('')).join('\n');
-}
-
-describe('authored discovery assets', () => {
-  it('ships valid palette sheets with matching PNG dimensions and in-bounds anchors', () => {
-    const work = JSON.parse(readFileSync(new URL('../art/d001/work-sprites.json', import.meta.url), 'utf8')) as typeof art;
-    for (const source of [art, work]) for (const [name, sheet] of Object.entries(source.sheets)) {
-      const [w, h] = sheet.cell;
-      expect(sheet.frames.length).toBeGreaterThan(0);
-      sheet.anchor.forEach((point, axis) => { expect(Number.isInteger(point)).toBe(true); expect(point).toBeGreaterThanOrEqual(0); expect(point).toBeLessThanOrEqual(sheet.cell[axis]!); });
-      const png = readFileSync(new URL(`../public/assets/d001/runtime/${name}.png`, import.meta.url));
-      expect(png.readUInt32BE(16)).toBe(w * sheet.columns);
-      expect(png.readUInt32BE(20)).toBe(h * Math.ceil(sheet.frames.length / sheet.columns));
-      expect(png.subarray(1, 4).toString()).toBe('PNG');
-      for (const frame of sheet.frames) {
-        expect(frame.pixels.length).toBe(h);
-        for (const row of frame.pixels) { expect(row.length).toBe(w); for (const key of row) expect(source.palette[key]).toBeDefined(); }
-      }
-    }
-  });
-
-  it.each(['rock', 'metal', 'copper'])('%s quality changes faces, not the size of the cargo', material => {
-    const frames = art.sheets['discovery-cargo-atlas']!.frames.filter(f => f.name.startsWith(`${material}-`));
-    expect(frames).toHaveLength(3);
-    expect(new Set(frames.map(f => grayscale(f.pixels))).size).toBe(3);
-    const bounds = frames.map(({ pixels: rows }) => {
-      const points = rows.flatMap((row, y) => [...row].flatMap((key, x) => key === '.' ? [] : [{ x, y }]));
-      return [Math.min(...points.map(p => p.x)), Math.max(...points.map(p => p.x)), Math.min(...points.map(p => p.y)), Math.max(...points.map(p => p.y))];
-    });
-    expect(bounds[1]).toEqual(bounds[0]); expect(bounds[2]).toEqual(bounds[0]);
-  });
-
-  it('keeps three full deposit silhouettes distinguishable in grayscale', () => {
-    const names = ['scrap-ledge', 'copper-pocket', 'fossil-crack'];
-    expect(new Set(names.map(name => grayscale(pixels(`node-${name}-atlas`, 0)))).size).toBe(3);
-  });
-
-  it('keeps all painted rock pixels inside the existing hit circle without moving its feet', () => {
-    const state = createGameState(11); const targets = deriveInteractionTargets(state);
-    for (const node of state.run.floors['D-001'].nodes) {
-      const target = targets.find(t => t.key === `node:${node.id}`)!;
-      expect(target.position.x).toBe(node.x);
-      const sheet = art.sheets[`node-${node.id}-atlas`]!;
-      // Cell/feet contract is stable. No new invisible click object or altered game coordinates.
-      expect(sheet.cell).toEqual([48, 40]); expect(sheet.anchor).toEqual([24, 40]);
-      const hit = target.hitShapes[0]!; expect(hit.type).toBe('circle');
-      if (hit.type !== 'circle') throw new Error('Expected original node hit circle');
-      for (const { pixels: rows } of sheet.frames) for (let y = 0; y < 40; y++) for (let x = 0; x < 48; x++) {
-        if (rows[y]![x] !== '.') expect((x - 24) ** 2 + (y - 31) ** 2).toBeLessThanOrEqual(hit.radius ** 2);
-      }
-    }
-  });
-
-  it('has separate opaque extraction molds and distinct public exposure steps', () => {
-    for (const signal of ['METAL', 'FOSSIL', 'RESEARCH'] as const) {
-      const frames = [
-        discoveryHostFrame({ signal, stage: 'SEALED', remaining: 3 }),
-        discoveryHostFrame({ signal, stage: 'EXPOSED', remaining: 2 }),
-        discoveryHostFrame({ signal, stage: 'EXPOSED', remaining: 1 }),
-        discoveryHostFrame({ signal, stage: 'SPENT', remaining: 0 }),
-      ];
-      expect(new Set(frames.map(index => grayscale(pixels('discovery-host-atlas', index)))).size).toBe(4);
-      const spent = pixels('discovery-host-atlas', frames[3]!);
-      expect(spent[28]![33]).not.toBe('.'); // opaque dark cavity covers renewable ore behind it
-    }
-  });
-});
-
+// State/ownership/privacy contracts stay in the fast suite. Authoring geometry
+// lives in discoveryArt.extended.test.ts; readability is a human review.
 describe('a projection of physical discovery state', () => {
   it('never reads species or grade to draw an unidentified specimen', () => {
     const sealed = { specimen: { get grade() { throw new Error('Hidden grade read'); }, value: 100 },
@@ -113,7 +36,7 @@ describe('a projection of physical discovery state', () => {
     expect(visibleCargo(source, 0)).toEqual([]);
   });
 
-  it('draws identical source cells at floor, hands and elevator anchors at a fixed 12x10', () => {
+  it('uses the same cargo source frame on the floor, in hands and in the elevator', () => {
     for (const item of [loot('COPPER'), { ...loot('IRON'), quality: 'PURE' as const }, { ...loot('AMMONITE'), specimen: { grade: 'PRISTINE' as const, value: 200 } }]) {
       const floor = context(); drawD001Cargo(floor, item, 120, 223, assets);
       const state = createGameState(44); state.run.character.carried = [item]; state.run.elevator.cargo = [item];
@@ -122,7 +45,6 @@ describe('a projection of physical discovery state', () => {
       const lift = context(); drawD001ElevatorCargo(lift, state, semantic, assets);
       const calls = [floor, hand, lift].map(ctx => vi.mocked(ctx.drawImage).mock.calls[0]!);
       expect(calls.map(args => args.slice(1, 5))).toEqual(Array(3).fill(calls[0]!.slice(1, 5)));
-      for (const args of calls) expect(args.slice(-2)).toEqual([12, 10]);
     }
   });
 

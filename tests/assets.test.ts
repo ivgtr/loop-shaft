@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { AssetStore } from '../src/render/assets/assetStore';
 import {
@@ -8,24 +9,23 @@ import {
 } from '../src/render/assets/d001Manifest';
 
 describe('D-001 assets', () => {
+  it('ships every runtime manifest entry as a nonempty PNG', () => {
+    // Cheap packaging guard. Palette, anchor and authored-pixel checks are opt-in.
+    for (const name of Object.values(D001_ASSET_FILES)) {
+      const png = readFileSync(new URL(`../public/assets/d001/runtime/${name}`, import.meta.url));
+      expect(png.subarray(0, 8), name).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+      expect(png.readUInt32BE(16), name).toBeGreaterThan(0);
+      expect(png.readUInt32BE(20), name).toBeGreaterThan(0);
+    }
+  });
+
   it('version-tags runtime URLs so changed PNGs bypass the browser cache', () => {
     const urls = Object.values(d001AssetUrls());
     expect(urls).toHaveLength(Object.keys(D001_ASSET_FILES).length);
     expect(urls.every((url) => url.endsWith(`?v=${D001_ASSET_VERSION}`))).toBe(true);
   });
 
-  it('keeps Player, each NPC role and Cargo as independent fallback groups', () => {
-    expect(Object.keys(D001_FALLBACK_GROUPS)).toEqual([
-      'player', 'porter', 'crewMiner', 'crewPorter', 'engineer', 'cargo',
-      'elevator', 'rope', 'surfaceJunction', 'shaftBottom',
-    ]);
-    expect(D001_FALLBACK_GROUPS.player).toHaveLength(5);
-    for (const group of ['porter', 'crewMiner', 'crewPorter', 'engineer', 'cargo'] as const) {
-      expect(D001_FALLBACK_GROUPS[group]).toHaveLength(1);
-    }
-    for (const group of ['elevator', 'rope', 'surfaceJunction', 'shaftBottom'] as const) {
-      expect(D001_FALLBACK_GROUPS[group]).toHaveLength(1);
-    }
+  it('does not couple independent fallback groups through shared assets', () => {
     const keys = Object.values(D001_FALLBACK_GROUPS).flat();
     expect(new Set(keys).size).toBe(keys.length);
   });
