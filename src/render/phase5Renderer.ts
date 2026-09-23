@@ -1,3 +1,4 @@
+import type { FeedbackOutput } from '../game/rewardFeedback';
 import { floorCargoDropX } from './cargoMotion';
 import { visibleCargo } from './discoveryVisuals';
 import { drawCargoMark } from './discoveryCues';
@@ -28,16 +29,18 @@ export class Phase5Renderer {
   private readonly base: CanvasRenderer;
   private readonly ctx: CanvasRenderingContext2D;
 
-  constructor(canvas: HTMLCanvasElement, private readonly assets: D001AssetStore) {
-    this.base = new CanvasRenderer(canvas, assets);
+  constructor(canvas: HTMLCanvasElement, private readonly assets: D001AssetStore, output?: FeedbackOutput) {
+    this.base = new CanvasRenderer(canvas, assets, output);
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas 2D context is required.');
     context.imageSmoothingEnabled = false;
     this.ctx = context;
   }
 
-  handleEvent(event: GameEvent, state: GameState, now: number): void {
-    this.base.handleEvent(event, state, now);
+  clearFeedback(): void { this.base.clearFeedback(); }
+
+  handleEvent(event: GameEvent, state: GameState, now: number, batch: readonly GameEvent[] = [event]): void {
+    this.base.handleEvent(event, state, now, batch);
   }
 
   worldShake(state: GameState, now: number): number {

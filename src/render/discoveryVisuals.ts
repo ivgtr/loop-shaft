@@ -21,6 +21,8 @@ export function cargoSpriteFrame(item: Cargo): number {
   // Do this BEFORE reading kind, rarity, seed or grade: all sealed outcomes share one cell.
   if (item.specimen) return 9;
   if (item.equipmentSeed !== undefined) return 21;
+  if (item.kind === 'CHORUS_GEODE') return 23;
+  if (item.kind === 'GRAVITY_KNOT') return 24;
   if (item.category === 'ORE' && ['STONE', 'IRON', 'COPPER'].includes(item.kind)) {
     const material = item.kind === 'STONE' ? 0 : item.kind === 'IRON' ? 1 : 2;
     return material * 3 + (item.quality === 'PURE' ? 2 : item.quality === 'FINE' ? 1 : 0);
@@ -31,6 +33,8 @@ export function cargoSpriteFrame(item: Cargo): number {
 }
 export function collectionSpriteFrame(entry: Pick<CollectionEntry, 'kind' | 'discovered' | 'restored' | 'count' | 'bestSpecimenGrade'>): number {
   if (!entry.discovered) return 0; // No species silhouettes leak an undiscovered entry.
+  if (entry.kind === 'CHORUS_GEODE') return 26;
+  if (entry.kind === 'GRAVITY_KNOT') return 27;
   if (entry.kind in FOSSIL_FRAME) {
     const condition = entry.count === 0 && entry.restored ? 3 : entry.bestSpecimenGrade === 'PRISTINE' ? 2 : 1;
     return condition * 5 + FOSSIL_FRAME[entry.kind as keyof typeof FOSSIL_FRAME];
@@ -41,6 +45,6 @@ export function collectionSpriteFrame(entry: Pick<CollectionEntry, 'kind' | 'dis
  * read a sealed outcome, sort/mutate the source, or change a loading priority. */
 export function visibleCargo<T extends Cargo>(items: readonly T[], limit: number): T[] {
   return items.map((item, index) => ({ item, index, priority: item.specimen ? 5 : item.equipmentSeed !== undefined ? 6
-    : item.category === 'CORE' ? 7 : item.quality === 'PURE' ? 4 : item.category !== 'ORE' ? 3 : item.quality === 'FINE' ? 2 : 0 }))
+    : item.kind === 'CHORUS_GEODE' || item.kind === 'GRAVITY_KNOT' ? 8 : item.category === 'CORE' ? 7 : item.quality === 'PURE' ? 4 : item.category !== 'ORE' ? 3 : item.quality === 'FINE' ? 2 : 0 }))
     .sort((a, b) => b.priority - a.priority || a.index - b.index).slice(0, Math.max(0, limit)).map(({ item }) => item);
 }

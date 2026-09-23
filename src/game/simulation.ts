@@ -1,3 +1,4 @@
+import { cargoTransfer } from './cargoFeedback';
 import { partitionCargo } from './cargoSelection';
 import { ANOMALY_POOL, COLLECT_DURATION, CORE_PROTOCOLS, D030_EXTENSION_COST, D060_EXTENSION_COST, D100_EXTENSION_COST, FLOOR_TRAVEL_DURATION, FLOOR_TRAVEL_VIA_SURFACE_DURATION, LOAD_DURATION, PLAYER_PACK_CAPACITY, PLAYER_TOOL_DAMAGE, PORTER_COLLECT_DURATION, PORTER_LOAD_DURATION, RESEARCH, SWING, UNLOAD_DURATION, UPGRADE_COSTS, WORLD } from './config';
 import { createNewRun } from './createGame';
@@ -692,7 +693,7 @@ function updateAutomation(state: GameState): void {
   if (!run.automation.autoDispatch.unlocked || !run.automation.autoDispatch.enabled || !canDispatchElevator(state)) return;
   const decision = shipmentDecision(state);
   if (!decision.send) return;
-  emit(state, 'AUTO_DISPATCH_TRIGGER', { weight: cargoWeight(run.elevator.cargo), threshold: decision.threshold, reason: decision.reason });
+  emit(state, 'AUTO_DISPATCH_TRIGGER', { shipmentId: `CENTRAL:${run.elevator.cargo[0]!.id}`, weight: cargoWeight(run.elevator.cargo), threshold: decision.threshold, reason: decision.reason });
   dispatchElevator(state);
 }
 
@@ -735,11 +736,13 @@ export function playerPickupItems(state: GameState): LootStack[] {
 
 function pickUpNearbyLoot(state: GameState): void {
   const character = state.run.character;
-  for (const item of playerPickupItems(state)) {
+  const picked = playerPickupItems(state);
+  for (const item of picked) {
     character.carried.push(item);
     removeFloorLoot(state, item.id);
     emit(state, 'LOOT_PICKUP', { id: item.id, name: item.name, weight: item.weight, value: item.value, rarity: item.rarity });
   }
+  if (picked.length) emit(state, 'CARGO_TRANSFERRED', cargoTransfer('PICKUP', 'PLAYER', state.run.depth.current, picked, character.x));
 }
 
 function findPorterTarget(state: GameState): LootStack | undefined {
@@ -778,11 +781,13 @@ export function porterPickupItems(state: GameState, target: LootStack): LootStac
 
 function pickUpPorterLoot(state: GameState, target: LootStack): void {
   const porter = state.run.porter;
-  for (const item of porterPickupItems(state, target)) {
+  const picked = porterPickupItems(state, target);
+  for (const item of picked) {
     porter.carried.push(item);
     removeFloorLoot(state, item.id);
     emit(state, 'PORTER_PICKUP', { id: item.id, name: item.name, weight: item.weight, value: item.value, rarity: item.rarity });
   }
+  if (picked.length) emit(state, 'CARGO_TRANSFERRED', cargoTransfer('PICKUP', 'PORTER', state.run.depth.current, picked, porter.x));
 }
 
 function removeFloorLoot(state: GameState, id: string): void {
@@ -809,6 +814,7 @@ function finishCharacterLoading(state: GameState): void {
   state.run.elevator.stateTimer = 0;
   if (deposited.length > 0) {
     state.run.stats.playerDeposits += 1;
+    emit(state, 'CARGO_TRANSFERRED', cargoTransfer('DEPOSIT', 'PLAYER', state.run.depth.current, deposited, WORLD.elevatorX));
     emit(state, 'LOOT_DEPOSIT', { carrier: 'PLAYER', items: deposited.length, weight: cargoWeight(deposited), estimatedValue: cargoValue(deposited) });
   }
   state.run.character.state = 'IDLE';
@@ -831,6 +837,7 @@ function finishPorterLoading(state: GameState): void {
   state.run.elevator.stateTimer = 0;
   if (deposited.length > 0) {
     state.run.stats.porterDeposits += 1;
+    emit(state, 'CARGO_TRANSFERRED', cargoTransfer('DEPOSIT', 'PORTER', state.run.depth.current, deposited, WORLD.elevatorX));
     const payload = { carrier: 'PORTER', items: deposited.length, weight: cargoWeight(deposited), estimatedValue: cargoValue(deposited) };
     emit(state, 'PORTER_DEPOSIT', payload);
     emit(state, 'LOOT_DEPOSIT', payload);

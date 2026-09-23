@@ -1,3 +1,4 @@
+import type { FeedbackOutput } from '../game/rewardFeedback';
 import { drawWorksite } from './worksiteRenderer';
 import { visibleCargo } from './discoveryVisuals';
 import { gameAssets } from './assets/gameAssets';
@@ -30,18 +31,20 @@ export class GameRenderer {
   private readonly assets: AssetStore<D001AssetKey>;
   private deliveryNotice: { amount: number; expiresAt: number } | null = null;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, output?: FeedbackOutput) {
     this.canvas = canvas;
     this.assets = gameAssets();
-    this.base = new Phase5Renderer(canvas, this.assets);
+    this.base = new Phase5Renderer(canvas, this.assets, output);
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D context is required.');
     ctx.imageSmoothingEnabled = false;
     this.ctx = ctx;
   }
 
-  handleEvent(event: GameEvent, state: GameState, now: number): void {
-    this.base.handleEvent(event, state, now);
+  clearFeedback(): void { this.base.clearFeedback(); }
+
+  handleEvent(event: GameEvent, state: GameState, now: number, batch: readonly GameEvent[] = [event]): void {
+    this.base.handleEvent(event, state, now, batch);
     if (isFirstLiveScrapGain(state, event)) {
       this.deliveryNotice = { amount: Number(event.data?.amount ?? 0), expiresAt: now + 2500 };
     }

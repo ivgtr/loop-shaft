@@ -163,7 +163,7 @@ describe('semantic render state', () => {
 
   it('maps every LootKind to a Cargo visual class and prioritizes equipmentSeed', () => {
     const mapped = (Object.keys(LOOT) as LootKind[]).map((kind) => cargoVisualClass({ kind, category: LOOT[kind].category }));
-    expect(mapped).toHaveLength(35);
+    expect(mapped).toHaveLength(37);
     expect(new Set(mapped)).toEqual(new Set([
       'rock', 'metal', 'copper', 'gold', 'gem', 'fossil', 'relic', 'research', 'anomaly', 'core',
       'equipment-crate', 'industrial-crate',

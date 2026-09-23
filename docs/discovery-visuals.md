@@ -11,6 +11,8 @@ PR #17 / #18 の分岐を、main の PR #19 / #20 の素材・装備・物流描
 
 ## 打撃演出
 
+以下は統合時点の記録です。現在の打撃／破壊の強弱と報酬演出は [reward-presentation.md](reward-presentation.md) を優先します。
+
 プレイヤーの `MINER_SWING_START` / `MINER_SWING_HIT` / `NODE_DAMAGE` に実際の `depth` を付ける。`MiningImpactEffects` は表示中の階層、実在する地点、正の有限ダメージを持つ `MINER_SWING_HIT` だけを受理する。プレイヤーの岩片は、工具と共通の `miningContact` でイベントの地点に合わせる。別階層の Crew、階層が不明なイベント、待機・歩行から演出を作らない。
 
 岩片260ms・最大16打撃、揺れ110ms・左右1px。階層変更、移動画面、新しいRun、Reboot、描画時計の巻き戻りで破棄する。保存や再抽選はしない。ワールド全体と岩片へ同じ揺れを一度だけ適用し、鑑定・納品・獲得通知とCanvas UIは揺らさない。

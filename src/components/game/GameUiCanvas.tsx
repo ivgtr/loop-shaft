@@ -16,7 +16,7 @@ import { cargoValue, carriedWeight } from '../../game/simulation';
 export function GameUiCanvas() {
   const runtime = useGameRuntime();
   const assets = useMemo(gameAssets, []);
-  const { state, workshop, elevatorUi, helpOpen, management } = useGameSnapshot();
+  const { state, workshop, elevatorUi, helpOpen, management, presentation } = useGameSnapshot();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const inputsRef = useRef<HTMLDivElement>(null);
   const focusSelectedItem = useRef(false);
@@ -26,7 +26,7 @@ export function GameUiCanvas() {
   const open = workshop !== null || elevatorUi !== null || helpOpen || management !== null;
   const heldPointer = useRef<{ id: number; button: string } | null>(null);
   const managementLayout = useMemo(() => management ? layoutManagementUi(state, management, viewport) : null, [state, management, viewport]);
-  const layout = useMemo(() => workshop ? layoutWorkshopUi(state, workshop, viewport) : layoutGameUi(state, elevatorUi, helpOpen, viewport), [state, workshop, elevatorUi, helpOpen, viewport]);
+  const layout = useMemo(() => workshop ? layoutWorkshopUi(state, workshop, viewport) : layoutGameUi(state, elevatorUi, helpOpen, viewport, presentation), [state, workshop, elevatorUi, helpOpen, viewport, presentation]);
   const buttons = managementLayout?.buttons ?? layout.buttons;
   const readout = sceneReadout(state);
 
@@ -93,7 +93,8 @@ export function GameUiCanvas() {
 
   function activate(action: GameUiAction): void {
     runtime.unlockAudio();
-    if (action.type === 'station-open') runtime.openManagement(action.request);
+    if (action.type === 'presentation') runtime.changePresentation(action.setting);
+    else if (action.type === 'station-open') runtime.openManagement(action.request);
     else if (action.type === 'station-close') runtime.closeManagement();
     else if (action.type === 'station-back') runtime.backManagement();
     else if (action.type === 'station-details') runtime.toggleManagementDetails();

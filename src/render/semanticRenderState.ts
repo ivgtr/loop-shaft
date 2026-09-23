@@ -278,6 +278,7 @@ function equipmentBank(rarity: EquipmentRarity | undefined): 0 | 1 | 2 | 3 {
 }
 
 const CARGO_BY_KIND: Record<LootKind, CargoVisualClass> = {
+  CHORUS_GEODE: 'relic', GRAVITY_KNOT: 'anomaly',
   STONE: 'rock', IRON: 'metal', COPPER: 'copper', GOLD_NUGGET: 'gold', NATURAL_GOLD: 'gold', GEM: 'gem',
   OLD_COIN: 'gold', POCKET_WATCH: 'gold', TRILOBITE: 'fossil', AMMONITE: 'fossil', ANCIENT_FISH: 'fossil',
   REPTILE_TOOTH: 'fossil', STRANGE_VERTEBRA: 'fossil', PROSPECTOR_LENS: 'relic', RHYTHM_RELAY: 'relic',

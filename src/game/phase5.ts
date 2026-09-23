@@ -1,3 +1,4 @@
+import { cargoTransfer } from './cargoFeedback';
 import { partitionCargo } from './cargoSelection';
 import { CARGO_ROUTE_DURATION, COLLECT_DURATION, CREW_BOARD_COST, CREW_HIRE_COSTS, CREW_MINER_MOVE_SPEED, CREW_PORTER_CAPACITY, CREW_PORTER_MOVE_SPEED, CREW_SLOT_COSTS, CREW_TRAVEL_DURATION, D180_EXTENSION_COST, LOOT, OFFLINE_CAP_SECONDS, OFFLINE_STEP_SECONDS, PLAYER_PACK_CAPACITY, PORTER_COLLECT_DURATION, SWING, WORLD } from './config';
 import { canPlayerAccessNode, localCargoDropX, processDeepEvents, updateDeepGame } from './deepGame';
@@ -443,12 +444,14 @@ export function crewPickupItems(member: CrewMember, floor: FloorState, target: L
 }
 
 function pickUpCrewLoot(state: GameState, member: CrewMember, floor: FloorState, target: LootStack): void {
-  for (const item of crewPickupItems(member, floor, target)) {
+  const picked = crewPickupItems(member, floor, target);
+  for (const item of picked) {
     member.body.carried.push(item);
     const index = floor.loot.findIndex((candidate) => candidate.id === item.id);
     if (index >= 0) floor.loot.splice(index, 1);
     emit(state, 'PORTER_PICKUP', { crewId: member.id, id: item.id, depth: member.assignedDepth, name: item.name, rarity: item.rarity });
   }
+  if (picked.length) emit(state, 'CARGO_TRANSFERRED', cargoTransfer('PICKUP', member.id, member.assignedDepth, picked, member.body.x));
 }
 
 function depositCrewCargo(state: GameState, member: CrewMember, floor: FloorState): void {
@@ -457,6 +460,7 @@ function depositCrewCargo(state: GameState, member: CrewMember, floor: FloorStat
   const destination = localCargoDropX(state, member.assignedDepth);
   for (const item of deposited) { item.x = destination; item.y = WORLD.floorY - 5; }
   floor.cargo.push(...deposited);
+  emit(state, 'CARGO_TRANSFERRED', cargoTransfer('DEPOSIT', member.id, member.assignedDepth, deposited, destination));
   emit(state, 'FLOOR_CARGO_DEPOSITED', {
     crewId: member.id,
     depth: member.assignedDepth,
@@ -597,7 +601,7 @@ export function processPhase5Events(state: GameState, events: readonly GameEvent
       const node = floor.nodes.find((candidate) => candidate.id === nodeId);
       if (node) spawnAncientSiteDrop(state, floor, node, 'PLAYER');
     }
-    if (event.type === 'LOOT_APPRAISE') appraiseEquipmentDrop(state, String(event.data?.id ?? ''));
+    if (event.type === 'LOOT_APPRAISE') appraiseEquipmentDrop(state, String(event.data?.id ?? ''), String(event.data?.shipmentId ?? ''));
   }
   processDeepEvents(state, events);
 }
@@ -625,7 +629,7 @@ function spawnAncientSiteDrop(state: GameState, floor: FloorState, node: MiningN
   floor.loot.push(loot);
   state.run.phase5.equipment.drops.push({ lootId: loot.id, seed: equipmentSeed, baseId: equipmentBaseId(slot, node.id), slot, sourceDepth: D180 });
   emit(state, 'EQUIPMENT_DROP', { id: loot.id, slot, nodeId: node.id, depth: D180, seed: equipmentSeed });
-  emit(state, 'DISCOVERY_FOUND', { id: loot.id, name: loot.name, rarity: loot.rarity, category: loot.category, nodeId: node.id, depth: D180 });
+  emit(state, 'DISCOVERY_FOUND', { id: loot.id, name: loot.name, rarity: loot.rarity, category: loot.category, nodeId: node.id, depth: D180, publicKind: 'SEALED' });
   emitLootSpawn(state, loot, node.id);
 }
 
@@ -636,7 +640,7 @@ function equipmentBaseId(slot: EquipmentSlot, site: string): string {
   return 'ancient-boots';
 }
 
-function appraiseEquipmentDrop(state: GameState, lootId: string): void {
+function appraiseEquipmentDrop(state: GameState, lootId: string, shipmentId: string): void {
   const drops = state.run.phase5.equipment.drops;
   const index = drops.findIndex((drop) => drop.lootId === lootId);
   if (index < 0) return;
@@ -653,7 +657,7 @@ function appraiseEquipmentDrop(state: GameState, lootId: string): void {
   if (item.baseId.startsWith('deep-') && !state.meta.deepDiscoveries.includes(item.baseId)) state.meta.deepDiscoveries.push(item.baseId);
   if (drop.sourceDepth !== 'D-030' && !state.meta.ancientDiscoveries.includes(item.baseId)) state.meta.ancientDiscoveries.push(item.baseId);
   if (drop.sourceDepth !== 'D-030' && !state.run.phase5.ancient.discoveries.includes(item.baseId)) state.run.phase5.ancient.discoveries.push(item.baseId);
-  emit(state, 'EQUIPMENT_APPRAISED', { id: item.id, name: item.name, baseId: item.baseId, slot: item.slot, rarity: item.rarity, seed: item.seed, first, newOption });
+  emit(state, 'EQUIPMENT_APPRAISED', { id: item.id, name: item.name, baseId: item.baseId, slot: item.slot, rarity: item.rarity, seed: item.seed, first, newOption, lootId, shipmentId, benefit: item.affixes[0]?.description ?? 'No additional effects.' });
 }
 
 export function generateEquipmentItem(state: GameState, seed: number, baseId: string, slot: EquipmentSlot): EquipmentItem {

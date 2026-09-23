@@ -14,6 +14,8 @@ describe('visible, finite mining impacts', () => {
       const effects = new MiningImpactEffects(); effects.hit(hit(state), state, 100);
       expect(effects.pixels(100)[0]).toEqual({ x: node.x - facing * 3, y: node.y + 13 - 12 });
       expect(effects.pixels(100)[0]).toEqual(miningContact(state));
+      expect(effects.shake(state, 150)).toBe(0);
+      effects.hit({ ...hit(state), type: 'NODE_BREAK' }, state, 100);
       expect(Math.abs(effects.shake(state, 150))).toBe(1);
       expect(effects.shake(state, 211)).toBe(0); expect(effects.pixels(360)).toHaveLength(0);
     }

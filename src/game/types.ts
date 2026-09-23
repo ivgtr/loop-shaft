@@ -46,6 +46,8 @@ export type LootKind =
   | 'STRIDE_MODULE'
   | 'FRACTURE_CORE'
   | 'BLACK_GLASS_HEART'
+  | 'CHORUS_GEODE'
+  | 'GRAVITY_KNOT'
   | 'CRYSTAL_MEMORY'
   | 'SURVEY_CARTRIDGE'
   | 'DAMAGED_RESEARCH_LOG'
@@ -76,7 +78,9 @@ export type PassiveId =
   | 'ELEVATOR_RHYTHM'
   | 'FOSSIL_HUNTER'
   | 'LONG_STRIDE'
-  | 'LAST_SWING';
+  | 'LAST_SWING'
+  | 'RESEARCH_ECHO'
+  | 'FLOATING_LOAD';
 
 export type ResearchId =
   | 'DEEP_SURVEY'
@@ -641,6 +645,7 @@ export type Selection =
   | null;
 
 export type GameEventType =
+  | 'CARGO_TRANSFERRED' | 'SHIPMENT_APPRAISED'
   | 'ORE_QUALITY_FOUND' | 'PROSPECT_REVEALED' | 'PROSPECT_EXTRACTED'
   | 'SPECIMEN_APPRAISED' | 'COLLECTION_RESTORED'
   | 'PLAYER_INPUT_MOVE' | 'MINER_MOVE_START' | 'MINER_ARRIVE' | 'PLAYER_INPUT_MINE'

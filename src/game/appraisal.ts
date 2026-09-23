@@ -18,7 +18,13 @@ export function rememberFind(state: GameState, receipt: Omit<FindReceipt, 'at'>)
 
 /** Both the central lift and freight call this only after actual arrival / unloading. */
 export function appraisePhysicalCargo(state: GameState, cargo: readonly LootStack[], sink: Sink, via = 'CENTRAL'): void {
-  let scrapGain = 0; let dataGain = 0; let coreGain = 0; let pureValue = 0;
+  if (!cargo.length) return;
+  const shipmentId = `${via}:${cargo[0]!.id}`;
+  const publish = sink;
+  sink = (type, data) => publish(type, { ...data, shipmentId });
+  // Snapshot before unlocking this shipment's passives: cargo order cannot change its payout.
+  const researchEcho = state.meta.passives.active.includes('RESEARCH_ECHO');
+  let scrapGain = 0; let dataGain = 0; let coreGain = 0; let pureValue = 0; let ordinaryScrap = 0;
   for (const physical of cargo) {
     const item = appraisedLoot(physical);
     const first = !state.meta.collection.entries.some((entry) => entry.kind === item.kind && entry.discovered);
@@ -26,7 +32,7 @@ export function appraisePhysicalCargo(state: GameState, cargo: readonly LootStac
     if (item.category === 'ORE' && item.quality === 'PURE') pureValue += value;
     if (physical.specimen) sink('SPECIMEN_APPRAISED', { ...specimenAppraisalEvent(state, physical, item), value });
     sink('LOOT_APPRAISE', { id: item.id, kind: item.kind, name: item.name, category: item.category, rarity: item.rarity,
-      depth: item.originDepth ?? state.run.depth.current, value, via });
+      depth: item.originDepth ?? state.run.depth.current, value, via, quality: item.quality ?? 'NORMAL' });
     if (['FOSSIL', 'RELIC', 'ANOMALY'].includes(item.category)) {
       registerCollection(state, item, sink, Boolean(physical.specimen));
       const entry = state.meta.collection.entries.find((candidate) => candidate.kind === item.kind)!;
@@ -43,9 +49,12 @@ export function appraisePhysicalCargo(state: GameState, cargo: readonly LootStac
         sink('PASSIVE_EQUIPPED', { passive, enabled: true, auto: true });
       }
     }
-    if (item.category === 'RESEARCH') dataGain += item.dataValue;
+    if (item.category === 'RESEARCH') dataGain += item.dataValue + (researchEcho && item.dataValue > 0 ? 1 : 0);
     if (item.category === 'CORE') coreGain += item.coreValue;
-    else scrapGain += value;
+    else {
+      scrapGain += value;
+      if (item.category === 'ORE' && (!item.quality || item.quality === 'NORMAL')) ordinaryScrap += value;
+    }
   }
   const pure = cargo.find((item) => item.category === 'ORE' && item.quality === 'PURE');
   if (pure && pureValue > 0) rememberFind(state, { id: `pure-${pure.id}`, name: 'Pure ore shipment', depth: pure.originDepth ?? state.run.depth.current, value: pureValue, reason: 'PURE' });
@@ -65,6 +74,8 @@ export function appraisePhysicalCargo(state: GameState, cargo: readonly LootStac
       sink('REBOOT_AVAILABLE', { pendingCore: state.run.pendingCore });
     }
   }
+  sink('SHIPMENT_APPRAISED', { id: shipmentId, via, items: cargo.length, scrap: scrapGain, ordinaryScrap,
+    specialScrap: scrapGain - ordinaryScrap, data: dataGain, core: coreGain });
 }
 
 function registerCollection(state: GameState, item: LootStack, sink: Sink, fromSpecimen: boolean): void {
@@ -77,7 +88,8 @@ function registerCollection(state: GameState, item: LootStack, sink: Sink, fromS
   const first = !entry.discovered;
   entry.discovered = true; entry.count += 1;
   sink(first ? 'COLLECTION_REGISTERED' : 'COLLECTION_DUPLICATE', { id: item.id, kind: item.kind,
-    name: LOOT[item.kind].name, count: entry.count, rarity: item.rarity, category: item.category, fromSpecimen });
+    name: LOOT[item.kind].name, count: entry.count, rarity: item.rarity, category: item.category, fromSpecimen,
+    value: Math.round(item.value * appraisalMultiplier(state, item.category)) });
 }
 
 export function duplicateFossilsAvailable(state: GameState, kind: LootKind): number {
