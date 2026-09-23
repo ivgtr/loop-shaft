@@ -1,0 +1,39 @@
+name: Reward stage 1 integration
+on:
+  push:
+    branches: ['work/reward-stage1']
+    paths: ['scripts/apply-reward-stage1.py', '.github/workflows/reward-stage1-apply.yml']
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: work/reward-stage1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply reviewed integration edits
+        run: |
+          python3 scripts/apply-reward-stage1.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: connect reward motifs, impact contrast and presentation settings'
+          git push origin HEAD:work/reward-stage1
+      - run: npm ci
+      - run: npm run assets:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install chromium --with-deps
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: reward-stage1-browser-report
+          path: playwright-report/
+          retention-days: 7
