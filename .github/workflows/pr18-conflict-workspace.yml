@@ -1,0 +1,34 @@
+name: PR18 conflict workspace
+on:
+  push:
+    branches: [feat/discovery-visuals]
+    paths: [.github/workflows/pr18-conflict-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Export source and locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pr18-workspace
+          git bundle create /tmp/pr18-workspace/loop-shaft.bundle --all
+          git worktree add --detach /tmp/pr18-main origin/main
+          cd /tmp/pr18-main
+          npm ci
+          tar -czf /tmp/pr18-workspace/node_modules.tar.gz node_modules
+          git rev-parse HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr18-workspace
+          path: /tmp/pr18-workspace/
+          retention-days: 1
