@@ -1,53 +1,44 @@
 name: Validation
 
 on:
-  push:
-    branches:
-      - main
-      - 'codex/**'
   pull_request:
+  push:
+    branches: [main]
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.head.ref }}
-      - uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
-      - name: Apply pending Phase 6 repair
-        if: github.event_name == 'push' && github.ref_name == 'codex/milestone-6-deep-game' && hashFiles('scripts/phase6-ci-fix.mjs') != ''
-        run: |
-          node scripts/phase6-ci-fix.mjs
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet || git commit -m "fix: stabilize Phase 6 validation"
-          git push origin HEAD:${{ github.ref_name }}
+          cache: npm
       - run: npm ci
-      - name: Verify authored sprites
-        run: npm run assets:check
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Test
+      - name: Core tests
         run: npm test
-      - name: Build
+      - name: Typecheck and production build
         run: npm run build
-      - name: Install browser engines
+      - name: Install Chromium
         run: npx playwright install chromium --with-deps
-      - name: Browser smoke test
-        run: npm run test:e2e
+      - name: Production browser smoke
+        run: npm run test:e2e:smoke
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: failure()
         with:
           name: playwright-report
-          path: playwright-report/
+          path: |
+            playwright-report/
+            test-results/smoke/
+          if-no-files-found: ignore
           retention-days: 7

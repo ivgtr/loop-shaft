@@ -63,19 +63,33 @@ Reboot and equipment transfers pin their consequences beside the final action. *
 
 Renewable ore supports stable work. Visible, finite seams add fossils and special finds without lowering ordinary yield for staying at a site. D-030 can open before full automation; Boots and Pack do not require earlier shop purchases. Auto Dispatch offers BALANCED / BULK / PRIORITY policies with a maximum cargo wait. Core reserves are finite per site and Run.
 
-The current rules and save migration are in [balance-design.md](docs/balance-design.md). `npm run test:balance` checks physical rewards, shipping and comparative routes; `npm run balance:report` explicitly regenerates [the scripted measurements](docs/balance-results.json). These are not human play-time or game-feel results.
+The current rules and save migration are in [balance-design.md](docs/balance-design.md). `npm run test:balance` checks physical rewards, shipping and comparative routes; `npm run balance:report` explicitly regenerates [the scripted measurements](docs/balance-results.json). These are opt-in tools for balance changes, not PR gates, human play-time or game-feel results.
 
 ## Checks
 
+Normal PR checks (the build includes typechecking):
+
 ```bash
-npm run typecheck
 npm test
 npm run build
 npx playwright install chromium
-npm run test:e2e
+npm run test:e2e:smoke
 ```
 
-The tests cover input buffering, cargo ownership and cancellation, upgrade prerequisites, visual hit targets, keyboard-only first delivery, focus changes, touch controls, workshop comparisons / purchases, modal input isolation, stable viewport geometry, save compatibility, separate opening / travel actions, cargo-blocked travel, floor-independent scale, keyboard paging through every destination, all recovered instances, research transitions, crew assignment / equipment, passives, protocols, reset previews and confirmation invalidation. Progression timing and subjective game feel still require human playtesting; see sections 30 and 38 of the requirements.
+Validation runs the fast unit/integration suite and three production-browser scenarios: first physical delivery, purchase/save/reload with carried cargo, and small-screen touch with facility open/close. The smoke serves the existing `dist` build; run `build` first. `npm run typecheck` remains available independently during development.
+
+Special cases are **opt-in**, not additional CI gates:
+
+```bash
+npm run test:e2e -- tests/e2e/player-controls.spec.ts
+npm run test:extended
+npm run test:balance
+npm run assets:check
+```
+
+Run the command relevant to the change, not every command above. `npm run test:e2e` runs the detailed browser suite on Vite dev, including source-import rendering probes. `npm run test:extended` runs authoring geometry and multi-seed probes; `npm run balance:report` updates the scripted report only when explicitly requested.
+
+[Test strategy](docs/testing-strategy.md) defines what stays in CI, how to add regressions without growing the gate, and what to review manually. Progression timing and subjective game feel still require human playtesting; see sections 30 and 38 of the requirements.
 
 ## GitHub Pages
 
