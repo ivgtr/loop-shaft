@@ -18,14 +18,16 @@ test('exceptional cargo retains its silhouette through discovery, handling and a
     const shots: Array<{ name: string; image: string }> = [];
     const rows: Array<{ effect: string | undefined; artifact: string | undefined; starts: number; immutable: boolean }> = [];
     for (const kind of ['CHORUS_GEODE', 'GRAVITY_KNOT']) {
-      const state = create.createGameState(93); const floor = state.run.floors['D-001']; const node = floor.nodes[0];
-      const item = fixture.loot(kind, kind); item.x = node.x; item.y = node.y - 4; floor.loot.push(item);
+      const state = create.createGameState(93); state.run.depth.current = 'D-100';
+      state.run.depth.unlocked.push('D-030', 'D-060', 'D-100'); state.meta.bestDepth = 'D-100';
+      const floor = state.run.floors['D-100']; const node = floor.nodes[0];
+      const item = fixture.loot(kind, kind, 'D-100'); item.x = node.x; item.y = node.y - 4; floor.loot.push(item);
       const canvas = document.createElement('canvas'); const notices: RewardNotice[] = [];
       const renderer = new rendering.GameRenderer(canvas, { settings: () => settings, reward: (notice: RewardNotice | null) => {
         if (notice) notices.push(notice); audio.playReward(notice);
       } });
       const event: GameEvent = { id: 1, type: 'DISCOVERY_FOUND', at: 0, data: { id: item.id, name: item.name,
-        category: item.category, publicKind: kind, depth: 'D-001', nodeId: node.id } };
+        category: item.category, publicKind: kind, depth: 'D-100', nodeId: node.id } };
       renderer.handleEvent(event, state, 1000, [event]); renderer.render(state, 1000); renderer.render(state, 1330);
       shots.push({ name: `${kind}-found`, image: canvas.toDataURL() });
       const effect = notices[0]?.effect;
