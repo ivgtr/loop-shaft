@@ -1,3 +1,4 @@
+import { APPRAISAL_TIMING, shipmentPayoutStart } from './shipmentFeedback';
 import type { RewardEffect, RewardNotice } from './rewardFeedback';
 
 export interface RewardNote { at: number; frequency: number; duration: number; type: OscillatorType; gain: number; end?: number; }
@@ -16,13 +17,35 @@ const MOTIFS: Record<RewardEffect, readonly RewardNote[]> = {
   equipment: [note(0, 147, .05, 'square', .02), note(.09, 440, .16, 'triangle'), note(.22, 659, .22, 'triangle')],
   trace: [note(0, 880, .07, 'sine', .026), note(.12, 880, .15, 'sine', .021)],
   record: [note(0, 392, .16, 'triangle'), note(.10, 523, .20, 'triangle'), note(.22, 784, .28, 'sine')],
+  work: [note(0, 147, .06, 'triangle', .04), note(.10, 392, .14, 'sine', .025)],
   find: [note(0, 523, .10, 'triangle', .03), note(.10, 659, .16, 'triangle', .027)],
 };
 
 export function rewardNotes(notice: RewardNotice): readonly RewardNote[] {
+  if (notice.shipment) {
+    const receipt = notice.shipment; const highlight = receipt.highlight;
+    const payout = shipmentPayoutStart(receipt) / 1000;
+    const opening = highlight ? [note(0, 143, .08, 'triangle', .025),
+      ...MOTIFS[highlight.effect ?? 'find'].map(n => ({ ...n, at: n.at + APPRAISAL_TIMING.reveal / 1000 }))] : [];
+    // The grade/first-record chord follows the reveal rather than announcing it under the dust.
+    if (highlight && highlight.priority >= 4) opening.push(
+      note(APPRAISAL_TIMING.grade / 1000, 784, .28, 'sine', .026),
+      note(APPRAISAL_TIMING.grade / 1000, 1047, .22, 'sine', .017));
+    return [...opening, ...(receipt.ordinary > 0 ? [note(payout, 659, .08, 'triangle', .02)] : []),
+      ...(receipt.special > 0 ? [note(payout + .31, 988, .12, 'sine', .026)] : []),
+      note(payout + .63, 784, .15, 'sine', .028), note(payout + .69, 1175, .18, 'sine', .018)];
+  }
   const notes = MOTIFS[notice.effect ?? 'find'];
   // Common repeat appraisals stay short. A first/pristine specimen gets its own resolving chord.
   if (notice.effect === 'specimen') return notice.priority >= 4
     ? [...notes, note(.38, 784, .38, 'sine', .026), note(.38, 1047, .30, 'sine', .017)] : notes.slice(0, 1);
   return notes;
+}
+
+/** Short fragments of the find motif, not another discovery fanfare. */
+export function transportNotes(effect: string, deposit: boolean): readonly RewardNote[] {
+  const motif = MOTIFS[effect as RewardEffect] ?? MOTIFS.find;
+  if (effect === 'find') return [note(0, deposit ? 180 : 250, .055, 'triangle', .025, 100)];
+  return motif.slice(0, 2).map((n, index) => ({ ...n, at: index * .025, duration: Math.min(.13, n.duration),
+    frequency: n.frequency * (deposit ? .85 : 1), gain: n.gain * .45 }));
 }

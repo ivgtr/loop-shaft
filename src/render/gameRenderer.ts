@@ -43,8 +43,8 @@ export class GameRenderer {
 
   clearFeedback(): void { this.base.clearFeedback(); }
 
-  handleEvent(event: GameEvent, state: GameState, now: number): void {
-    this.base.handleEvent(event, state, now);
+  handleEvent(event: GameEvent, state: GameState, now: number, batch: readonly GameEvent[] = [event]): void {
+    this.base.handleEvent(event, state, now, batch);
     if (isFirstLiveScrapGain(state, event)) {
       this.deliveryNotice = { amount: Number(event.data?.amount ?? 0), expiresAt: now + 2500 };
     }

@@ -1,8 +1,9 @@
+import type { ShipmentReceipt } from './shipmentFeedback';
 import { FOSSIL_KINDS } from './config';
 import type { GameEvent, LootKind, SpecimenGrade } from './types';
 import type { PresentationSettings } from './presentationSettings';
 
-export type RewardEffect = 'find' | 'fine' | 'pure' | 'metal' | 'gem' | 'fossil' | 'relic' | 'anomaly' | 'specimen' | 'equipment' | 'trace' | 'record';
+export type RewardEffect = 'find' | 'fine' | 'pure' | 'metal' | 'gem' | 'fossil' | 'relic' | 'anomaly' | 'specimen' | 'equipment' | 'trace' | 'record' | 'work';
 export interface RewardNotice {
   key: string;
   label: string;
@@ -11,6 +12,9 @@ export interface RewardNotice {
   duration: number;
   effect?: RewardEffect;
   origin?: { depth: string; nodeId: string };
+  shipment?: ShipmentReceipt;
+  work?: { x: number; y: number; depth: string };
+  benefit?: string;
   specimen?: { kind: LootKind; grade: SpecimenGrade };
 }
 export interface ActiveRewardNotice extends RewardNotice { startedAt: number; queuedAt: number; }
@@ -36,7 +40,7 @@ export function rewardNotice(event: GameEvent): RewardNotice | null {
     case 'SPECIMEN_APPRAISED': return { ...make(name, `${data.first ? 'NEW SPECIMEN' : data.grade === 'PRISTINE' ? 'PRISTINE SPECIMEN' : 'APPRAISED'} · +${data.value} SCRAP`, data.first || data.grade === 'PRISTINE' ? 5 : 1, 'specimen'),
       ...(FOSSIL_KINDS.includes(data.kind as LootKind) && (data.grade === 'INTACT' || data.grade === 'PRISTINE')
         ? { specimen: { kind: data.kind as LootKind, grade: data.grade } } : {}) };
-    case 'EQUIPMENT_APPRAISED': return make(name, data.first ? 'FIRST TOOL · EQUIP AT WORKSHOP' : data.newOption ? 'NEW BUILD OPTION · WORKSHOP' : 'GEAR APPRAISED · WORKSHOP', data.first || data.newOption ? 5 : 2, 'equipment');
+    case 'EQUIPMENT_APPRAISED': return { ...make(name, data.first ? 'FIRST GEAR · EQUIP AT WORKSHOP' : data.newOption ? 'NEW BUILD OPTION · WORKSHOP' : 'GEAR APPRAISED · WORKSHOP', data.first || data.newOption ? 5 : 2, 'equipment'), benefit: String(data.benefit ?? '') };
     case 'COLLECTION_REGISTERED': return data.fromSpecimen ? null : make(name, 'NEW COLLECTION RECORD', 4, 'record');
     case 'COLLECTION_RESTORED': return make(name, 'RESTORED · COLLECTION RECORDED', 4, 'record');
     case 'DISCOVERY_FOUND': {
@@ -65,6 +69,12 @@ export class RewardNoticeQueue {
     this.seen.add(notice.key);
     if (this.seen.size > 128) this.seen.delete(this.seen.values().next().value!);
     if (!this.current || notice.priority > this.current.priority) {
+      // A first-use acknowledgement may share the frame with a more important find.
+      if (this.current?.effect === 'work') {
+        this.pending.push(this.current);
+        this.pending.sort((a, b) => b.priority - a.priority || a.queuedAt - b.queuedAt);
+        this.pending.splice(4);
+      }
       this.current = { ...notice, startedAt: now, queuedAt: now };
       return;
     }

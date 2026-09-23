@@ -2,7 +2,7 @@ import type { ActiveRewardNotice, RewardEffect } from '../game/rewardFeedback';
 import type { PresentationSettings } from '../game/presentationSettings';
 
 const COLORS: Record<RewardEffect, string> = {
-  fine: '#cab98b', pure: '#e8e6c7', metal: '#e5b45e', gem: '#91d3d3', fossil: '#c6b18b',
+  work: '#b9c4a9', fine: '#cab98b', pure: '#e8e6c7', metal: '#e5b45e', gem: '#91d3d3', fossil: '#c6b18b',
   relic: '#bda784', anomaly: '#a796b5', specimen: '#e1cfaa', equipment: '#b9c4a9', trace: '#b5a584', record: '#dcc79f', find: '#b6b1a2',
 };
 export const rewardAccent = (notice: ActiveRewardNotice): string => COLORS[notice.effect ?? 'find'];
@@ -59,6 +59,7 @@ export function drawRewardEffect(ctx: CanvasRenderingContext2D, notice: ActiveRe
       break;
     case 'relic':
     case 'equipment':
+    case 'work':
       for (let i = 0; i < 3; i++) if (!settings.motion || t >= i * 2) {
         pixel(-12 + i * 9, -17, 5, 2); pixel(-10 + i * 9, -15, 1, 3);
       }

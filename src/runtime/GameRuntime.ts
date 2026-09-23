@@ -537,7 +537,7 @@ export class GameRuntime {
     const events = [...baseEvents, ...drainEvents(this.state)];
     for (const gameEvent of events) {
       if (!document.hidden) {
-        this.renderer?.handleEvent(gameEvent, this.state, now);
+        this.renderer?.handleEvent(gameEvent, this.state, now, events);
         this.audio.handle(gameEvent, this.state);
       }
     }

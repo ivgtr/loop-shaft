@@ -1,4 +1,4 @@
-import { rewardNotes, type RewardNote } from './rewardSounds';
+import { rewardNotes, transportNotes, type RewardNote } from './rewardSounds';
 import type { RewardNotice } from './rewardFeedback';
 import type { GameEvent, GameState } from './types';
 
@@ -40,7 +40,7 @@ export class GameAudio {
   playReward(notice: RewardNotice | null): void {
     const context = this.context;
     if (!context || !this.work) return;
-    this.stopVoices(true);
+    this.stopVoices(!notice?.shipment);
     const now = context.currentTime;
     this.work.gain.cancelScheduledValues(now);
     this.work.gain.setValueAtTime(1, now);
@@ -55,11 +55,11 @@ export class GameAudio {
 
   handle(event: GameEvent, state?: GameState): void {
     if (!this.context || this.context.state !== 'running' || this.volume === 0) return;
-    const localWork = ['MINER_SWING_HIT', 'NODE_BREAK', 'PORTER_PICKUP', 'PORTER_DEPOSIT'].includes(event.type);
+    const localWork = ['MINER_SWING_HIT', 'NODE_BREAK', 'CARGO_TRANSFERRED'].includes(event.type);
     if (localWork && state && (state.run.elevator.travel || (event.data?.depth && event.data.depth !== state.run.depth.current))) return;
-    const automated = Boolean(event.data?.crewId || event.data?.boreId);
+    const automated = Boolean(event.data?.crewId || event.data?.boreId || (event.type === 'CARGO_TRANSFERRED' && event.data?.actor !== 'PLAYER'));
     if (localWork) {
-      const key = `${event.type}:${automated ? 'auto' : 'player'}`;
+      const key = `${event.type}:${event.data?.stage ?? ''}:${automated ? 'auto' : 'player'}`;
       const now = this.context.currentTime;
       if (now < (this.cooldowns.get(key) ?? 0)) return;
       this.cooldowns.set(key, now + (automated ? .12 : .045));
@@ -73,13 +73,15 @@ export class GameAudio {
       this.tone({ at: 0, frequency: 165, end: 55, duration: .12, type: 'triangle', gain: automated ? .04 : .085 });
       this.tone({ at: .035, frequency: 310, end: 130, duration: .075, type: 'square', gain: .015 });
     }
-    if (event.type === 'PORTER_PICKUP') this.sequence([250], .035, .015);
-    if (event.type === 'PORTER_DEPOSIT') this.sequence([330], .045, .018);
+    if (event.type === 'CARGO_TRANSFERRED' && Number(event.data?.items) > 0) {
+      for (const note of transportNotes(String(event.data?.effect), event.data?.stage === 'DEPOSIT'))
+        this.tone({ ...note, gain: note.gain * (automated ? .65 : 1) });
+    }
     if (event.type === 'ELEVATOR_DEPART') this.sequence([520, 390], .05, .035);
     if (event.type === 'ELEVATOR_ARRIVE_SURFACE') this.sequence([330, 520], .055, .035);
-    if (event.type === 'DATA_GAIN') this.sequence([392, 494, 587], .05, .025);
+    if (event.type === 'DATA_GAIN' && !event.data?.shipmentId) this.sequence([392, 494, 587], .05, .025);
     if (event.type === 'RESEARCH_COMPLETED') this.sequence([440, 587, 740], .07, .026);
-    if (event.type === 'CORE_CHARGE_GAINED') this.sequence([147, 196, 247], .09, .03);
+    if (event.type === 'CORE_CHARGE_GAINED' && !event.data?.shipmentId) this.sequence([147, 196, 247], .09, .03);
     if (event.type === 'REBOOT_COMMITTED') { this.reset(); this.sequence([147, 110, 82], .12, .04); }
     if (event.type === 'CORE_PROTOCOL_PURCHASED') this.sequence([330, 440, 523], .07, .026);
     if (event.type === 'DEPTH_ENTERED') this.sequence([220, 196, 165], .1, .025);

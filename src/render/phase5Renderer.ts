@@ -39,8 +39,8 @@ export class Phase5Renderer {
 
   clearFeedback(): void { this.base.clearFeedback(); }
 
-  handleEvent(event: GameEvent, state: GameState, now: number): void {
-    this.base.handleEvent(event, state, now);
+  handleEvent(event: GameEvent, state: GameState, now: number, batch: readonly GameEvent[] = [event]): void {
+    this.base.handleEvent(event, state, now, batch);
   }
 
   worldShake(state: GameState, now: number): number {

@@ -1,3 +1,6 @@
+import { shipmentNotice } from '../game/shipmentFeedback';
+import { WorkFeedback } from '../game/workFeedback';
+import { drawShipmentNotice } from './shipmentNotice';
 import { MiningImpactEffects } from './miningImpactEffects';
 import { collectionSpriteFrame } from './discoveryVisuals';
 import { rewardNotice, RewardNoticeQueue, type ActiveRewardNotice, type FeedbackOutput } from '../game/rewardFeedback';
@@ -19,6 +22,7 @@ export class CanvasRenderer {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly impacts = new MiningImpactEffects();
   private readonly notices = new RewardNoticeQueue();
+  private readonly workFeedback = new WorkFeedback();
   private presented: ActiveRewardNotice | null = null;
   private state: GameState | null = null;
   private run: GameState['run'] | null = null;
@@ -45,14 +49,17 @@ export class CanvasRenderer {
     this.run = state.run; this.depth = state.run.depth.current; this.state = state; this.lastTime = now;
   }
 
-  handleEvent(event: GameEvent, state: GameState, now: number): void {
+  handleEvent(event: GameEvent, state: GameState, now: number, batch: readonly GameEvent[] = [event]): void {
     this.sync(state, now);
     this.impacts.hit(event, state, now);
     if (event.type === 'REBOOT_COMMITTED') this.clearFeedback();
-    const notice = rewardNotice(event);
+    const workNotices = this.workFeedback.handle(event, state);
+    const notice = event.type === 'SHIPMENT_APPRAISED' ? shipmentNotice(event, batch)
+      : event.data?.shipmentId ? null : rewardNotice(event);
     // Offscreen mining is not a local spectacle. Global, delivered appraisals remain visible.
     if (notice && !state.run.elevator.travel && (!notice.origin || (notice.origin.depth === state.run.depth.current
       && state.run.floors[state.run.depth.current].nodes.some(node => node.id === notice.origin!.nodeId)))) this.notices.push(notice, now);
+    for (const work of workNotices) this.notices.push(work, now);
     if (event.type === 'RESEARCH_COMPLETED') this.gain = { label: `RESEARCH COMPLETE · ${String(event.data?.research ?? '')}`, startedAt: now };
     if (event.type === 'CORE_CHARGE_GAINED') this.gain = { label: `CORE CHARGE +${Number(event.data?.amount ?? 0)}`, startedAt: now };
     if (event.type === 'DATA_GAIN') this.gain = { label: `DATA +${Number(event.data?.amount ?? 0)}`, startedAt: now };
@@ -99,6 +106,8 @@ export class CanvasRenderer {
     this.ctx.fillStyle = '#8b7770';
     if (settings.motion) for (const pixel of this.impacts.pixels(now)) this.ctx.fillRect(pixel.x, pixel.y, 2, 2);
     this.ctx.restore();
+    const movement = this.state && this.workFeedback.movement(this.state);
+    if (movement) this.notices.push(movement, now);
     const notice = this.notices.at(now);
     if (notice !== this.presented) {
       this.presented = notice;
@@ -107,10 +116,12 @@ export class CanvasRenderer {
     if (notice) {
       const origin = notice.origin;
       const node = origin && this.state?.run.floors[this.state.run.depth.current].nodes.find(node => node.id === origin.nodeId);
-      const point = node ? { x: Math.round(node.x) + shake, y: Math.round(node.y) - 10 + (origin?.depth === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) } : null;
+      const workPoint = notice.work && notice.work.depth === this.depth && now - notice.queuedAt < 350 ? notice.work : null;
+      const point = workPoint ? { x: workPoint.x + shake, y: workPoint.y } : node ? { x: Math.round(node.x) + shake, y: Math.round(node.y) - 10 + (origin?.depth === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) } : null;
       if (point) drawRewardEffect(this.ctx, notice, point, now, settings);
       // Fine ore is a quiet local glint, not another full-width banner.
-      if (notice.effect !== 'fine') {
+      if (notice.shipment) drawShipmentNotice(this.ctx, notice, this.assets, now, settings);
+      else if (notice.effect !== 'fine') {
         const accent = rewardAccent(notice);
         this.ctx.fillStyle = '#111014'; this.ctx.fillRect(87, 53, 306, 26);
         this.ctx.strokeStyle = accent; this.ctx.strokeRect(87.5, 53.5, 305, 25);
