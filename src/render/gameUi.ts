@@ -1,11 +1,14 @@
 import { DEFAULT_PRESENTATION, type PresentationSettings } from '../game/presentationSettings';
 import { ELEVATOR_TABS, elevatorItems, selectedElevatorItem, shipmentStatus, type ElevatorItem, type ElevatorTab, type ElevatorUiState } from '../game/elevatorUi';
+import { fieldResources, fieldInstruction, liftNeedsAttention } from '../game/fieldUi';
+import { stationAvailable } from '../game/management';
+import { surveyRequest } from '../game/management/survey';
+import { drawMeter } from './meters';
 import { sceneReadout } from '../game/hud';
 import { playerControlAvailable, playerInteraction } from '../game/playerControls';
 import { canDispatchElevator, canRequestMine, cargoWeight, carriedWeight } from '../game/simulation';
 import type { GameState } from '../game/types';
-import { workshopGuide } from '../game/workshop';
-import { C, drawButton, elide, lines, text, type UiButton, type UiViewport, type WorkshopUiAction } from './workshopUi';
+import { C, drawButton, lines, text, icon, type UiButton, type UiViewport, type WorkshopUiAction } from './workshopUi';
 import type { Rect } from './interactionTargets';
 
 export type GameUiAction = import('./managementUi').ManagementUiAction | WorkshopUiAction | { type: 'lift-open'; tab?: ElevatorTab; id?: string }
@@ -64,14 +67,14 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
   const available = playerControlAvailable(state);
   // Fixed dock: no target-dependent movement, no duplicate contextual action by the miner.
   const controls: Omit<UiButton<GameUiAction>, keyof Rect>[] = [
-    { id: 'left', label: 'Walk left', text: '<', action: { type: 'direction', direction: -1 }, disabled: !available },
-    { id: 'right', label: 'Walk right', text: '>', action: { type: 'direction', direction: 1 }, disabled: !available },
-    { id: 'mine', label: 'MINE', text: 'MINE', action: { type: 'command', command: { type: 'mine' } }, disabled: !canRequestMine(state) },
-    { id: 'interact', label: interaction.label, text: interaction.label, action: { type: 'command', command: { type: 'interact' } }, disabled: interaction.reason !== null },
-    { id: 'return', label: 'RETURN', text: 'RETURN', action: { type: 'command', command: { type: 'return' } }, disabled: !available || carriedWeight(state) === 0 },
-    { id: 'stop', label: 'CANCEL', text: 'STOP', action: { type: 'command', command: { type: 'cancel' } } },
-    { id: 'lift-open', label: 'Open elevator controls', text: 'LIFT', action: { type: 'lift-open' }, disabled: Boolean(state.run.elevator.travel) },
-    { id: 'help', label: 'Controls and current objective', text: '?', action: { type: 'help-open' } },
+    { id: 'left', label: 'Walk left', text: '<', action: { type: 'direction', direction: -1 }, tone: 'quiet', disabled: !available },
+    { id: 'right', label: 'Walk right', text: '>', action: { type: 'direction', direction: 1 }, tone: 'quiet', disabled: !available },
+    { id: 'mine', label: 'MINE', text: 'MINE', action: { type: 'command', command: { type: 'mine' } }, disabled: !canRequestMine(state), tone: 'primary', busy: available && Boolean(state.run.character.swing) },
+    { id: 'interact', label: interaction.label, text: interaction.label, action: { type: 'command', command: { type: 'interact' } }, disabled: interaction.reason !== null, tone: 'primary', busy: ['COLLECTING', 'LOADING'].includes(state.run.character.state) },
+    { id: 'return', label: 'RETURN', text: 'RETURN', tone: 'quiet', action: { type: 'command', command: { type: 'return' } }, disabled: !available || carriedWeight(state) === 0 },
+    { id: 'stop', label: 'CANCEL', text: 'STOP', action: { type: 'command', command: { type: 'cancel' } }, disabled: state.run.character.state === 'IDLE' && state.selection === null, tone: 'quiet' },
+    { id: 'lift-open', label: 'Open elevator controls', text: 'LIFT', tone: 'quiet', action: { type: 'lift-open' }, disabled: Boolean(state.run.elevator.travel) },
+    { id: 'help', label: 'Controls and current objective', text: '?', tone: 'quiet', action: { type: 'help-open' } },
   ];
   const gap = 4; const margin = 8;
   controls.forEach((control, n) => {
@@ -88,18 +91,15 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
     x: Math.min(w - 106, world.x + world.width * .55),
     // The fixed-size cabinet must stay below the scene's notification strip when the world is scaled down.
     y: Math.max(world.y + world.height * .43, world.y + world.height * .30 + 42),
-    width: 96, height: 44, disabled: !canDispatchElevator(state) });
-  const guide = workshopGuide(state);
-  if (guide) buttons.push({ id: 'goal', label: 'Inspect next workshop upgrade', text: guide.label, action: { type: 'open' },
-    x: 10, y: compact ? 56 : 46, width: Math.min(w - 100, 420), height: 44, selected: guide.ready });
-  else if (state.run.depth.current === 'D-001' && state.run.stats.elevatorTrips > 0) {
-    const connected = state.run.depth.unlocked.includes('D-030');
-    buttons.push({ id: 'shaft-goal', label: 'Inspect the next shaft connection',
-      text: connected ? 'LIFT · TRAVEL TO D-030' : 'LIFT · OPEN D-030 CONNECTION',
-      action: { type: 'lift-open', tab: connected ? 'travel' : 'extend', id: 'D-030' },
-      x: 10, y: compact ? 56 : 46, width: Math.min(w - 100, 360), height: 44 });
-  }
-  buttons.push({ id: 'base', label: 'Open base facilities', text: 'BASE', action: { type: 'station-open', request: { station: 'facilities' } },
+    width: 96, height: 44, disabled: !canDispatchElevator(state), tone: 'primary' });
+  const top = h - (compact ? 144 : 100);
+  buttons.push({ id: 'pack-inspect', label: `Inspect backpack: ${Number(carriedWeight(state).toFixed(1))} of ${state.run.character.backpackCapacity} kilograms`, text: '',
+    action: { type: 'station-open', request: { station: 'survey', tab: 'cargo', selectedId: 'backpack' } },
+    x: 8, y: top, width: 156, height: 44, disabled: !stationAvailable(state, 'survey') || Boolean(state.run.elevator.travel) });
+  buttons.push({ id: 'inspect', label: 'Inspect mining site', text: 'INSPECT', tone: 'quiet',
+    action: { type: 'station-open', request: surveyRequest(state) }, x: w - 104, y: top, width: 96, height: 44,
+    disabled: !stationAvailable(state, 'survey') || Boolean(state.run.elevator.travel) });
+  buttons.push({ id: 'base', label: 'Open base facilities', text: 'BASE', tone: 'quiet', action: { type: 'station-open', request: { station: 'facilities' } },
     x: w - 82, y: compact ? 56 : 46, width: 72, height: 44, disabled: Boolean(state.run.elevator.travel) });
   return { buttons, panel: null, compact, item: null };
 }
@@ -121,49 +121,53 @@ export function drawGameUi(ctx: CanvasRenderingContext2D, state: GameState, elev
       if (!compact) text(ctx, item.name, x, top, 17, C.light);
       lines(ctx, item.summary, x, top + (compact ? 0 : 27), width, 12, 2, C.gold);
       lines(ctx, item.description, x, top + (compact ? 36 : 57), width, 12, 3);
-      lines(ctx, item.reason ?? (elevator.tab === 'dispatch' ? shipmentStatus(state) : 'Ready'), x, p.y + p.height - 106, width, 12, 2, C.installed);
+      const reason = item.reason ?? (elevator.tab === 'dispatch' && item.id === 'shipment' ? shipmentStatus(state) : null);
+      if (reason) lines(ctx, reason, x, p.y + p.height - 106, width, 12, 2, C.installed);
       if (elevator.notice) lines(ctx, elevator.notice, x, p.y + p.height - 70, width, 11, 1, C.gold);
     } else if (help) {
       const x = p.x + 14; const width = p.width - 28;
-      const controls = ['A / D or arrows: walk', 'Space / MINE: one swing', 'E: pick up, load, or inspect', 'F / SEND: send loaded cargo', 'RETURN: walk back and unload', 'Esc: close a window / stop', 'Hold < / > to walk on touch'];
+      const controls = ['A / D or arrows: walk', 'Space / MINE: one swing', 'E: pick up, load, or inspect', 'F / SEND: send loaded cargo', 'RETURN: walk back and unload', 'Esc: close a window / stop', 'I / INSPECT: field notes'];
       controls.forEach((label, n) => text(ctx, label, x, p.y + 72 + n * (p.height < 350 ? 18 : 24), 12));
-      if (p.height >= 350) lines(ctx, sceneReadout(state).detail || sceneReadout(state).goal, x, p.y + 258, width, 12, 2, C.gold);
+      if (p.height >= 350) lines(ctx, sceneReadout(state).goal, x, p.y + 258, width, 12, 2, C.gold);
     }
   } else {
     const run = state.run;
+    const resources = fieldResources(state);
     ctx.fillStyle = '#0b0a0def'; ctx.fillRect(0, 0, w, compact ? 52 : 36);
-    text(ctx, `SCRAP ${amount(run.scrap)}  DATA ${amount(run.data)}  CORE ${amount(state.meta.core)}`, 10, 22, 12, C.gold);
-    text(ctx, `${run.depth.current}  RUN ${String(state.meta.runIndex).padStart(2, '0')}`, compact ? 10 : w - 10, compact ? 44 : 22, 12, C.light, compact ? 'left' : 'right');
-    const readout = sceneReadout(state);
-    if (!layout.buttons.some((button) => ['goal', 'shaft-goal'].includes(button.id))) lines(ctx, readout.goal, 12, compact ? 77 : 62, Math.min(w - 104, 440), 12, 2, C.gold);
-    const top = h - (compact ? 132 : 88);
-    text(ctx, elide(ctx, readout.survey, w - 20, 11), 10, viewport.world.y + viewport.world.height - (compact ? 24 : 7), 11, C.gold);
+    const wallet = [`SCRAP ${amount(run.scrap)}`, resources.data ? `DATA ${amount(run.data)}` : '', resources.core ? `CORE ${amount(state.meta.core)}` : ''].filter(Boolean).join('  ');
+    text(ctx, wallet, 10, 22, 12, C.gold);
+    text(ctx, `${run.depth.current}${resources.run ? `  RUN ${String(state.meta.runIndex).padStart(2, '0')}` : ''}`,
+      compact ? 10 : w - 10, compact ? 44 : 22, 12, C.light, compact ? 'left' : 'right');
+    const instruction = fieldInstruction(state);
+    if (instruction) lines(ctx, instruction, 12, compact ? 77 : 62, Math.min(w - 104, 440), 12, 2, C.gold);
+    const top = h - (compact ? 144 : 100);
     ctx.fillStyle = C.background; ctx.fillRect(0, top, w, h - top);
-    ctx.fillStyle = C.line; ctx.fillRect(0, top, w, 1);
-    const pack = `PACK ${Number(carriedWeight(state).toFixed(1))}/${run.character.backpackCapacity}kg`;
-    text(ctx, pack, 10, top + 19, 12, C.gold);
-    if (!compact) text(ctx, elide(ctx, readout.short, w - 205, 12), 195, top + 19, 12, C.muted);
-    else {
-      // Target information has its own stable strip; never overlays the ore hit areas.
-      text(ctx, elide(ctx, readout.short, w - 20, 11), 10, viewport.world.y + viewport.world.height - 7, 11, C.light);
-      const action = playerInteraction(state);
-      text(ctx, action.reason?.startsWith('PACK FULL') ? 'FULL · CAN STILL MINE' : state.run.character.state.replaceAll('_', ' '), w - 10, top + 19, 10, C.muted, 'right');
-    }
-    const send = layout.buttons.find((button) => button.id === 'send')!;
-    const value = `${Number(cargoWeight(run.elevator.cargo).toFixed(1))}/${run.elevator.maxLoad} kg`;
-    const status = shipmentStatus(state);
-    // The shipping switch belongs to the lift-side control box, clear of the shaft.
-    const cabinet = { x: send.x - 4, y: send.y - 36, width: send.width + 8, height: 84 };
+    const bag = layout.buttons.find(button => button.id === 'pack-inspect')!;
+    const bagFocused = focused === bag.id || hovered === bag.id;
+    if (bagFocused) { ctx.strokeStyle = C.light; ctx.lineWidth = 1; ctx.strokeRect(bag.x + 1, bag.y + 1, bag.width - 2, bag.height - 2); }
+    icon(ctx, 'pack', bag.x + 3, bag.y + 7, 2, false);
+    const weight = carriedWeight(state); const capacity = run.character.backpackCapacity;
+    drawMeter(ctx, { x: bag.x + 40, y: bag.y + 18, width: 100, height: 8 }, weight, capacity, weight >= capacity);
+    if (bagFocused) text(ctx, `${Number(weight.toFixed(1))}/${capacity} kg`, bag.x + 40, bag.y + 13, 10, C.light);
+
+    const send = layout.buttons.find(button => button.id === 'send')!;
+    const cabinet = { x: send.x - 4, y: send.y - 32, width: send.width + 8, height: 80 };
     ctx.fillStyle = C.surface; ctx.fillRect(cabinet.x, cabinet.y, cabinet.width, cabinet.height);
     ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.strokeRect(cabinet.x, cabinet.y, cabinet.width, cabinet.height);
     ctx.beginPath(); ctx.moveTo(viewport.world.x + viewport.world.width / 2, cabinet.y + 17); ctx.lineTo(cabinet.x, cabinet.y + 17); ctx.stroke();
-    text(ctx, elide(ctx, status, send.width - 4, 10), send.x + 4, send.y - 22, 10, C.muted);
-    text(ctx, value, send.x + 4, send.y - 9, 11, C.light);
-    const fill = Math.min(1, cargoWeight(run.elevator.cargo) / Math.max(1, run.elevator.maxLoad));
-    ctx.fillStyle = C.installed; ctx.fillRect(send.x + 2, send.y - 4, (send.width - 4) * fill, 2);
+    const load = cargoWeight(run.elevator.cargo);
+    drawMeter(ctx, { x: send.x + 4, y: send.y - 13, width: send.width - 8, height: 8 }, load, run.elevator.maxLoad, load >= run.elevator.maxLoad);
+    if (focused === 'send' || hovered === 'send') text(ctx, `${Number(load.toFixed(1))}/${run.elevator.maxLoad} kg`, send.x + 4, send.y - 18, 10, C.light);
+    else if (liftNeedsAttention(state)) text(ctx, run.porter.holdForTravel ? 'II' : run.automation.autoDispatch.enabled ? 'A' : 'II', send.x + 4, send.y - 18, 10, C.gold);
+    else if (['ASCENDING', 'DESCENDING', 'UNLOADING'].includes(run.elevator.state)) {
+      // A tiny directional indicator complements the actual moving cage, not another status caption.
+      const x = send.x + 9; const y = send.y - 23; const down = run.elevator.state === 'DESCENDING';
+      ctx.fillStyle = C.muted;
+      for (let row = 0; row < 3; row++) ctx.fillRect(x - row, y + (down ? -row : row), row * 2 + 1, 1);
+    }
 
   }
-  for (const button of layout.buttons) drawButton(ctx, button, focused === button.id, compact, hovered === button.id);
+  for (const button of layout.buttons) if (button.id !== 'pack-inspect') drawButton(ctx, button, focused === button.id, compact, hovered === button.id);
 }
 
 function amount(value: number): string {

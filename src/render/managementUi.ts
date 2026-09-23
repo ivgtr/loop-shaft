@@ -232,7 +232,7 @@ export function layoutManagementUi(state: GameState, ui: ManagementState, viewpo
   const actionWidth = confirming ? (main.width - 6) / 2 : main.width;
   if (confirming) add('station-cancel', decision?.cancelLabel ?? 'Cancel confirmation',
     { type: decision?.closeOnCancel ? 'station-close' : 'station-cancel-confirm' }, box(main.x, actionY, actionWidth), undefined, false, decision?.cancelLabel ?? 'GO BACK');
-  add('station-activate', confirming ? decision?.confirmLabel ?? 'CONFIRM CHOICE' : item.actionLabel,
+  if (ui.station !== 'survey') add('station-activate', confirming ? decision?.confirmLabel ?? 'CONFIRM CHOICE' : item.actionLabel,
     { type: 'station-activate' }, box(main.x + (confirming ? actionWidth + 6 : 0), actionY, actionWidth), undefined, !item.action || Boolean(item.reason));
   return { buttons, panel: p, compact, item, title: confirming ? ui.station === 'reboot' ? 'NEXT RUN' : 'CONFIRM' : view.title,
     textBox, pages, page, confirming, count: `${index + 1}/${view.items.length}`, texts, bars, route, gear, gallery, essentialBox, reading, detailsAvailable };
@@ -245,6 +245,7 @@ function selectPage(view: StationView, index: number, offset: number, perPage: n
 }
 function itemGroup(ui: ManagementState, view: StationView): string {
   if (view.gallery) return 'FINDS';
+  if (ui.station === 'survey') return ui.tab === 'veins' ? 'VEIN' : 'CARGO';
   if (ui.station === 'equipment') return ui.tab;
   if (ui.station === 'crew' && view.roster) return ui.tab === 'assign' ? 'FLOOR' : ui.tab === 'priority' ? 'TASK' : 'SLOT';
   return ui.station === 'research' ? 'PROJECT' : ui.station === 'logistics' ? 'ROUTE' : 'ITEM';

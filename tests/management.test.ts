@@ -105,7 +105,7 @@ describe('management presentation uses actual game state', () => {
   });
   it('only exposes facilities at their existing progression gates', () => {
     const state = createGameState(); const view = stationView(state, createManagementState(state, { station: 'facilities' }));
-    expect(view.items.map((i) => i.id)).toEqual(['workshop', 'equipment']);
+    expect(view.items.map((i) => i.id)).toEqual(['workshop', 'survey', 'equipment']);
     expect(stationAvailable(state, 'reboot')).toBe(false); expect(stationAvailable(state, 'research')).toBe(false);
   });
 });

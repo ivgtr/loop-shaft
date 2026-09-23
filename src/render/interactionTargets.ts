@@ -2,7 +2,7 @@ import { CARGO_HUB_X, RAIL_STOP_X, WORLD } from '../game/config';
 import { canPlayerAccessNode } from '../game/deepGame';
 import { canShowCrewBoard } from '../game/phase5';
 import { canMoveToNode } from '../game/playerControls';
-import { canDispatchElevator, canRequestMine, cargoWeight, currentFloor, mineBlockReason } from '../game/simulation';
+import { canDispatchElevator, cargoWeight, currentFloor } from '../game/simulation';
 import type { GameState, Selection } from '../game/types';
 import { elevatorY } from './environment';
 import { INTERACTION_LAYOUT } from './interactionLayout';
@@ -89,10 +89,9 @@ export function deriveInteractionTargets(state: GameState): InteractionTarget[] 
     for (const node of currentFloor(state).nodes) {
       const remote = !canPlayerAccessNode(node);
       const depleted = node.hp <= 0;
-      const miningJob = state.run.character.targetNodeId === node.id
-        && ['MINING', 'MOVING_TO_NODE'].includes(state.run.character.state);
-      const available = miningJob ? canRequestMine(state, node.id) : canMoveToNode(state, node);
-      const status = remote ? 'NO WALKWAY' : depleted ? 'DEPLETED' : available ? null : mineBlockReason(state, node.id);
+      // Affordance describes the site, not the input buffer of an individual swing.
+      const available = canMoveToNode(state, node);
+      const status = remote ? 'NO WALKWAY' : depleted ? 'DEPLETED' : available ? null : 'USE THE SCANNER';
       const visualOffset = depth === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0;
       const center = { x: node.x, y: node.y - 9 + visualOffset };
       const tall = node.id === 'core-shell' || node.id === 'sealed-chamber';

@@ -1,16 +1,18 @@
+import { fieldGuideTarget, type FieldHint } from '../game/fieldUi';
 import type { FeedbackOutput } from '../game/rewardFeedback';
 import { drawWorksite } from './worksiteRenderer';
 import { visibleCargo } from './discoveryVisuals';
 import { gameAssets } from './assets/gameAssets';
 import { drawCargoMark } from './discoveryCues';
 import { CARGO_HUB_X, RAIL_STOP_X, WORLD } from '../game/config';
-import { deriveInitialLogisticsGuide, isFirstLiveScrapGain } from '../game/initialLogisticsGuide';
+import { isFirstLiveScrapGain } from '../game/initialLogisticsGuide';
 import { cargoWeight } from '../game/simulation';
 import type { GameEvent, GameState, LootStack } from '../game/types';
 import { Phase5Renderer } from './phase5Renderer';
 import { drawInteractionOverlay } from './interactionOverlay';
-import { drawDeliveryNotice, initialGuideTargetKey } from './initialGuideOverlay';
+import { drawDeliveryNotice } from './initialGuideOverlay';
 import {
+  sameInteractionTarget,
   clientToWorldPoint,
   deriveInteractionTargets,
   resolveInteractionTarget,
@@ -50,7 +52,7 @@ export class GameRenderer {
     }
   }
 
-  render(state: GameState, now: number, hoveredKey: string | null = null): void {
+  render(state: GameState, now: number, hoveredKey: string | null = null, hint: FieldHint | null = null): void {
     const shake = this.base.worldShake(state, now);
     this.ctx.save();
     this.ctx.translate(shake, 0);
@@ -82,9 +84,9 @@ export class GameRenderer {
     }
     if (depth === 'D-001') drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets);
     const targets = deriveInteractionTargets(state);
-    const guide = deriveInitialLogisticsGuide(state);
-    const guideTargetKey = initialGuideTargetKey(guide, targets);
-    drawInteractionOverlay(this.ctx, targets, state.selection, hoveredKey, guideTargetKey);
+    const guide = fieldGuideTarget(state);
+    const guideTargetKey = targets.find(target => sameInteractionTarget(target.ref, guide))?.key ?? null;
+    drawInteractionOverlay(this.ctx, targets, state.selection, hoveredKey, guideTargetKey, state, hint);
     this.ctx.restore();
     // The shared Canvas HUD owns instructions; world overlay only marks the target.
     if (this.deliveryNotice && now < this.deliveryNotice.expiresAt) {

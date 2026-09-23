@@ -2,7 +2,7 @@ import type { CollectionEntry, EquipmentItem } from '../types';
 import type { GameCommand } from '../../runtime/commands';
 import type { DepthId, EquipmentSlot, Selection } from '../types';
 
-export type Station = 'facilities' | 'equipment' | 'research' | 'crew' | 'archive' | 'scanner' | 'core' | 'reboot' | 'logistics';
+export type Station = 'survey' | 'facilities' | 'equipment' | 'research' | 'crew' | 'archive' | 'scanner' | 'core' | 'reboot' | 'logistics';
 export interface StationRequest { station: Station; tab?: string; subjectId?: string; selectedId?: string; }
 /** Transient navigation only. Never part of the v6 save. */
 export interface ManagementState {
