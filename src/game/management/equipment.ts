@@ -88,6 +88,7 @@ export function equipmentPreview(state: GameState, item: EquipmentItem, crewId?:
   }
   const sameEffect = (a: EquipmentItem['affixes'][number], b: EquipmentItem['affixes'][number]) => a.id === b.id && a.value === b.value;
   return { slot: item.slot, current: current?.name ?? 'Basic equipment', candidate: item.name, metrics,
+    ...(item.slot === 'TOOL' ? { currentTool: current, candidateTool: item } : {}),
     gained: item.affixes.filter((affix) => !current?.affixes.some((old) => sameEffect(old, affix))).map((affix) => `${affix.name}: ${affix.description}`),
     lost: (current?.affixes ?? []).filter((affix) => !item.affixes.some((next) => sameEffect(affix, next))).map((affix) => `${affix.name}: ${affix.description}`),
   };

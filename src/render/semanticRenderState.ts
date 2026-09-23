@@ -1,3 +1,4 @@
+import { equipmentColor, toolProfile, type ToolProfile } from './equipmentArt';
 import { nodeDiscoveryCue } from '../game/prospecting';
 import {
   COLLECT_DURATION,
@@ -94,6 +95,8 @@ export interface CharacterRenderState {
   readonly facing: -1 | 1;
   readonly worldAnchor: { readonly x: number; readonly y: number };
   readonly toolBank: 0 | 1;
+  readonly recoveredTool: ToolProfile | null;
+  readonly lampColor: string | null;
   readonly packBank: 0 | 1;
   readonly bootsBank: 0 | 1;
   readonly carried: readonly LootStack[];
@@ -116,6 +119,9 @@ export interface SemanticRenderState {
 
 export function deriveSemanticRenderState(state: Readonly<GameState>, animationTimeMs: number): SemanticRenderState {
   const clip = characterClip(state.run.character.state, Boolean(state.run.character.swing), state.run.character.carried.length > 0);
+  const equipment = state.run.phase5.equipment;
+  const equipped = (slot: 'TOOL' | 'BOOTS' | 'PACK' | 'LAMP') => equipment.inventory.find((item) => item.id === equipment.equippedPlayer[slot]);
+  const tool = equipped('TOOL'); const lamp = equipped('LAMP');
   return {
     character: {
       clip,
@@ -124,8 +130,10 @@ export function deriveSemanticRenderState(state: Readonly<GameState>, animationT
       facing: state.run.character.facing,
       worldAnchor: { x: Math.round(state.run.character.x), y: Math.round(state.run.character.y) + 8 + D001_VISUAL_GROUND_OFFSET },
       toolBank: state.run.tool.level - 1 as 0 | 1,
-      packBank: state.run.pack.level - 1 as 0 | 1,
-      bootsBank: state.run.boots.level - 1 as 0 | 1,
+      recoveredTool: tool ? toolProfile(tool) : null,
+      lampColor: lamp ? equipmentColor(lamp.rarity) : null,
+      packBank: equipped('PACK') ? 1 : state.run.pack.level - 1 as 0 | 1,
+      bootsBank: equipped('BOOTS') ? 1 : state.run.boots.level - 1 as 0 | 1,
       carried: state.run.character.carried,
     },
     porter: state.run.porter.enabled ? derivePorterRenderState(state, animationTimeMs) : null,

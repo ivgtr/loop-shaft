@@ -1,3 +1,6 @@
+import { drawToolIcon } from './equipmentArt';
+import { FOSSIL_ART } from './cargoSprites';
+import { drawPixelSprite } from './pixelSprite';
 import { stationView, type ManagementState, type StationItem, type StationRequest } from '../game/management';
 import { number, type RouteStop, type StationView } from '../game/management/types';
 import type { GameState } from '../game/types';
@@ -284,7 +287,8 @@ export function drawManagementUi(ctx: CanvasRenderingContext2D, viewport: UiView
   if (layout.item.equipment) for (const { box: b, current } of layout.gear) {
     const equipment = layout.item.equipment;
     text(ctx, current ? 'CURRENT' : 'CANDIDATE', b.x, b.y + 11, 11, current ? C.muted : C.gold);
-    icon(ctx, equipment.slot === 'TOOL' ? 'pick' : equipment.slot === 'BOOTS' ? 'boots' : equipment.slot === 'PACK' ? 'pack' : 'lamp', b.x + 2, b.y + 18, 3, current);
+    if (equipment.slot === 'TOOL') drawToolIcon(ctx, current ? equipment.currentTool : equipment.candidateTool, b.x + 2, b.y + 18, 3);
+    else icon(ctx, equipment.slot === 'BOOTS' ? 'boots' : equipment.slot === 'PACK' ? 'pack' : 'lamp', b.x + 2, b.y + 18, 3, current);
     text(ctx, elide(ctx, current ? equipment.current : equipment.candidate, b.width, 12), b.x, b.y + 82, 12);
     if (current) text(ctx, '→', b.x + b.width + 8, b.y + 44, 16, C.gold);
   }
@@ -299,7 +303,9 @@ function drawDiscovery(ctx: CanvasRenderingContext2D, button: UiButton<Managemen
   ctx.fillStyle = button.selected ? '#3b3025' : C.surface; ctx.fillRect(x, y, width, height);
   ctx.strokeStyle = focused ? C.light : button.selected ? C.gold : C.line; ctx.lineWidth = focused ? 2 : 1; ctx.strokeRect(x + .5, y + .5, width - 1, height - 1);
   const cx = Math.round(x + width / 2); ctx.fillStyle = found ? C.gold : '#51494b';
-  if (item.discovery!.category === 'FOSSIL') {
+  const specimen = found ? FOSSIL_ART[item.id as keyof typeof FOSSIL_ART] : null;
+  if (specimen) drawPixelSprite(ctx, specimen, cx - 18, y + 6, 3);
+  else if (item.discovery!.category === 'FOSSIL') {
     ctx.fillRect(cx - 10, y + 19, 20, 5); ctx.fillRect(cx - 12, y + 15, 5, 13); ctx.fillRect(cx + 7, y + 15, 5, 13);
   } else if (['RESEARCH', 'RELIC'].includes(item.discovery!.category)) {
     ctx.fillRect(cx - 8, y + 10, 16, 24); ctx.fillStyle = found ? C.background : '#342f33'; ctx.fillRect(cx - 4, y + 16, 8, 3); ctx.fillRect(cx - 4, y + 24, 8, 3);

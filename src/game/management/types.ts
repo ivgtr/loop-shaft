@@ -1,5 +1,5 @@
 import type { GameCommand } from '../../runtime/commands';
-import type { DepthId, EquipmentSlot, LootCategory, Selection } from '../types';
+import type { DepthId, EquipmentItem, EquipmentSlot, LootCategory, Selection } from '../types';
 
 export type Station = 'facilities' | 'equipment' | 'research' | 'crew' | 'archive' | 'scanner' | 'core' | 'reboot' | 'logistics';
 export interface StationRequest { station: Station; tab?: string; subjectId?: string; selectedId?: string; }
@@ -15,6 +15,7 @@ export interface DecisionFact { label: string; value: string; warning?: boolean;
 export interface EquipmentMetric { label: string; before: number; after: number; unit?: string; }
 export interface EquipmentPreview {
   slot: EquipmentSlot; current: string; candidate: string;
+  currentTool?: Pick<EquipmentItem, 'affixes'>; candidateTool?: Pick<EquipmentItem, 'affixes'>;
   metrics: EquipmentMetric[]; gained: string[]; lost: string[];
 }
 export interface RouteStop { label: string; detail: string; blocked: boolean; }
