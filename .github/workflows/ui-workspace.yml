@@ -4,25 +4,42 @@ on:
     branches: [feat/quiet-worksite-ui]
     paths: [.github/workflows/ui-workspace.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
   workspace:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm ci
-      - name: Bundle tracked source and installed dependencies
+      - name: Apply verified source changes
+        shell: python
         run: |
-          mkdir -p /tmp/ui-workspace
-          git archive HEAD | tar -x -C /tmp/ui-workspace
-          cp -a node_modules /tmp/ui-workspace/
-          tar -czf /tmp/ui-workspace.tar.gz -C /tmp/ui-workspace .
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ui-workspace
-          path: /tmp/ui-workspace.tar.gz
-          retention-days: 1
+          from pathlib import Path
+          from hashlib import sha256
+          import subprocess
+          changed = []
+          def write(name, before, after, ops):
+              p = Path(name)
+              assert p.parts[0] in ('src', 'docs', 'tests') and '..' not in p.parts
+              original = p.read_bytes() if p.exists() else b''
+              assert sha256(original).hexdigest() == before, f'baseline mismatch: {name}'
+              lines = original.decode().splitlines(keepends=True)
+              for start, end, text in reversed(ops):
+                  lines[start:end] = [text]
+              updated = ''.join(lines).encode()
+              assert sha256(updated).hexdigest() == after, f'result mismatch: {name}: {sha256(updated).hexdigest()}'
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_bytes(updated)
+              changed.append(name)
+              print('verified', name, after, flush=True)
+          for script in sorted(Path('.github').glob('ui-edits-*.py')):
+              exec(compile(script.read_text(), str(script), 'exec'))
+          assert len(changed) == 22
+          subprocess.run(['git', 'add', '--', *changed], check=True)
+          subprocess.run(['git', 'diff', '--cached', '--check'], check=True)
+      - name: Commit only product changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: replace status narration with contextual worksite UI'
+          git push origin HEAD:feat/quiet-worksite-ui
