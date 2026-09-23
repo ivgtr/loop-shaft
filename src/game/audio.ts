@@ -46,8 +46,8 @@ export class GameAudio {
     this.work.gain.setValueAtTime(1, now);
     if (!notice || this.volume === 0 || context.state !== 'running') return;
     if (notice.priority >= 3) {
-      this.work.gain.linearRampToValueAtTime(notice.effect === 'anomaly' ? .12 : .35, now + .025);
-      this.work.gain.setValueAtTime(notice.effect === 'anomaly' ? .12 : .35, now + .32);
+      this.work.gain.linearRampToValueAtTime(notice.effect === 'anomaly' || notice.effect === 'gravity' ? .12 : .35, now + .025);
+      this.work.gain.setValueAtTime(notice.effect === 'anomaly' || notice.effect === 'gravity' ? .12 : .35, now + .32);
       this.work.gain.linearRampToValueAtTime(1, now + .62);
     }
     for (const note of rewardNotes(notice)) this.tone(note, true);

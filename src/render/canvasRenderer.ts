@@ -125,9 +125,9 @@ export class CanvasRenderer {
         const accent = rewardAccent(notice);
         this.ctx.fillStyle = '#111014'; this.ctx.fillRect(87, 53, 306, 26);
         this.ctx.strokeStyle = accent; this.ctx.strokeRect(87.5, 53.5, 305, 25);
-        const image = notice.specimen && this.assets.ready('discoveryCollection');
-        if (image && notice.specimen) {
-          const frame = collectionSpriteFrame({ kind: notice.specimen.kind, discovered: true, count: 1, bestSpecimenGrade: notice.specimen.grade });
+        const image = (notice.specimen || notice.artifact) && this.assets.ready('discoveryCollection');
+        if (image && (notice.specimen || notice.artifact)) {
+          const frame = collectionSpriteFrame({ kind: notice.artifact ?? notice.specimen!.kind, discovered: true, count: 1, bestSpecimenGrade: notice.specimen?.grade });
           this.ctx.drawImage(image, frame % 5 * 24, Math.floor(frame / 5) * 24, 24, 24, 90, 54, 24, 24);
         }
         if (!point && notice.priority >= 4) drawRewardEffect(this.ctx, notice, null, now, settings);
