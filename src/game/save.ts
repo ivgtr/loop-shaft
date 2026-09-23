@@ -695,6 +695,9 @@ function normalizeCollection(value: unknown, fallback: CollectionState): Collect
         count: Math.max(0, Math.floor(numberOr(match.count, 0))),
         restorationSpent: Math.min(Math.max(0, Math.floor(numberOr(match.count, 0)) - 1), Math.max(0, Math.floor(numberOr(match.restorationSpent, 0)))),
         restored: Boolean(match.restored),
+        ...(LOOT[kind].category === 'FOSSIL' && numberOr(match.count, 0) > 0
+          && (match.bestSpecimenGrade === 'INTACT' || match.bestSpecimenGrade === 'PRISTINE')
+          ? { bestSpecimenGrade: match.bestSpecimenGrade } : {}),
       } : base;
     }),
   };

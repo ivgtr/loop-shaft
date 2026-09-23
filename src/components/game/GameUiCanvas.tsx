@@ -1,3 +1,4 @@
+import { gameAssets } from '../../render/assets/gameAssets';
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useGameRuntime, useGameSnapshot } from '../../app/GameProvider';
 import { selectedWorkshopItem, workshopItems } from '../../game/workshop';
@@ -14,6 +15,7 @@ import { cargoValue, carriedWeight } from '../../game/simulation';
  * focus, touch hit areas and screen-reader semantics from the SAME layout. */
 export function GameUiCanvas() {
   const runtime = useGameRuntime();
+  const assets = useMemo(gameAssets, []);
   const { state, workshop, elevatorUi, helpOpen, management } = useGameSnapshot();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const inputsRef = useRef<HTMLDivElement>(null);
@@ -62,10 +64,10 @@ export function GameUiCanvas() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.imageSmoothingEnabled = false;
-    if (managementLayout) drawManagementUi(ctx, viewport, managementLayout, focused, hovered);
+    if (managementLayout) drawManagementUi(ctx, viewport, managementLayout, focused, hovered, assets);
     else if (workshop && 'itemCount' in layout) drawWorkshopUi(ctx, state, workshop, viewport, layout, focused, hovered);
     else if (!('itemCount' in layout)) drawGameUi(ctx, state, elevatorUi, helpOpen, viewport, layout, focused, hovered);
-  }, [state, workshop, elevatorUi, helpOpen, managementLayout, layout, viewport, focused, hovered]);
+  }, [state, workshop, elevatorUi, helpOpen, managementLayout, layout, viewport, focused, hovered, assets]);
 
   useLayoutEffect(() => {
     setHovered(null);

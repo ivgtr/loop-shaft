@@ -262,6 +262,8 @@ export interface CollectionEntry {
   count: number;
   restorationSpent?: number;
   restored?: boolean;
+  /** Best physically appraised specimen, not inferred from restoration or rarity. */
+  bestSpecimenGrade?: SpecimenGrade;
 }
 export interface CollectionState { entries: CollectionEntry[]; }
 export interface PassiveState { unlocked: PassiveId[]; active: PassiveId[]; }

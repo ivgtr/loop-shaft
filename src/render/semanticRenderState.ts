@@ -1,3 +1,6 @@
+import { PORTER_LOAD_X } from '../game/simulation';
+import { deriveCargoMotion, type CargoPositions } from './cargoMotion';
+import { equippedItem, workEquipment, miningContact, type WorkEquipment } from './workEquipment';
 import { nodeDiscoveryCue } from '../game/prospecting';
 import {
   COLLECT_DURATION,
@@ -38,9 +41,10 @@ export interface ActorRenderState<Clip extends string> {
   readonly facing: -1 | 1;
   readonly worldAnchor: { readonly x: number; readonly y: number };
   readonly carried: readonly LootStack[];
+  readonly cargoPositions?: CargoPositions;
 }
 
-export type PorterRenderState = ActorRenderState<PorterClip>;
+export interface PorterRenderState extends ActorRenderState<PorterClip> { readonly pause?: 'travel' | 'lift' }
 export interface CrewRenderState extends ActorRenderState<PorterClip | CrewMinerClip> {
   readonly role: CrewMember['role'];
   readonly toolBank: 0 | 1 | 2 | 3;
@@ -93,13 +97,17 @@ export interface CharacterRenderState {
   readonly frame: number;
   readonly facing: -1 | 1;
   readonly worldAnchor: { readonly x: number; readonly y: number };
+  readonly equipment: WorkEquipment;
+  readonly contact: { readonly x: number; readonly y: number } | null;
   readonly toolBank: 0 | 1;
   readonly packBank: 0 | 1;
   readonly bootsBank: 0 | 1;
   readonly carried: readonly LootStack[];
+  readonly cargoPositions?: CargoPositions;
 }
 
 export interface SemanticRenderState {
+  readonly floorCargoPositions?: CargoPositions;
   readonly character: CharacterRenderState;
   readonly porter: PorterRenderState | null;
   readonly crew: ReadonlyMap<string, CrewRenderState>;
@@ -116,16 +124,18 @@ export interface SemanticRenderState {
 
 export function deriveSemanticRenderState(state: Readonly<GameState>, animationTimeMs: number): SemanticRenderState {
   const clip = characterClip(state.run.character.state, Boolean(state.run.character.swing), state.run.character.carried.length > 0);
-  return {
+  const semantic: SemanticRenderState = {
     character: {
       clip,
       row: CLIP_ROW[clip],
       frame: characterFrame(state, clip, animationTimeMs),
       facing: state.run.character.facing,
-      worldAnchor: { x: Math.round(state.run.character.x), y: Math.round(state.run.character.y) + 8 + D001_VISUAL_GROUND_OFFSET },
+      worldAnchor: { x: Math.round(state.run.character.x), y: Math.round(state.run.character.y) + 8 + (state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) },
+      equipment: workEquipment(state),
+      contact: miningContact(state),
       toolBank: state.run.tool.level - 1 as 0 | 1,
       packBank: state.run.pack.level - 1 as 0 | 1,
-      bootsBank: state.run.boots.level - 1 as 0 | 1,
+      bootsBank: equippedItem(state, 'BOOTS') ? 1 : state.run.boots.level - 1 as 0 | 1,
       carried: state.run.character.carried,
     },
     porter: state.run.porter.enabled ? derivePorterRenderState(state, animationTimeMs) : null,
@@ -139,9 +149,18 @@ export function deriveSemanticRenderState(state: Readonly<GameState>, animationT
     elevator: {
       width: state.run.anomaly.selected === 'EMPTY_SHAFT' ? 'narrow' : 'normal',
       door: ['ASCENDING', 'DESCENDING', 'TRAVELING'].includes(state.run.elevator.state) ? 'closed' : 'open',
-      y: d001ElevatorVisualY(state.run.elevator.position),
+      y: state.run.depth.current === 'D-001' ? d001ElevatorVisualY(state.run.elevator.position)
+        : WORLD.elevatorBottomY + (WORLD.topY - WORLD.elevatorBottomY) * state.run.elevator.position,
     },
     shaftBottom: state.run.depth.unlocked.includes('D-030') ? 'open' : 'sealed',
+  };
+  const motion = deriveCargoMotion(state, semantic);
+  return {
+    ...semantic,
+    floorCargoPositions: motion.floor,
+    character: { ...semantic.character, cargoPositions: motion.player },
+    porter: semantic.porter ? { ...semantic.porter, cargoPositions: motion.porter } : null,
+    crew: new Map([...semantic.crew].map(([id, actor]) => [id, { ...actor, cargoPositions: motion.crew.get(id) }])),
   };
 }
 
@@ -172,8 +191,11 @@ export function derivePorterRenderState(state: Readonly<GameState>, now: number)
       ? progressFrame(porter.loadingTimer, PORTER_LOAD_DURATION, 4)
       : loopFrame(now, clip === 'walk' || clip === 'carry-walk' ? 135 : 500, clip === 'walk' || clip === 'carry-walk' ? 4 : 2);
   return {
-    clip, row: PORTER_ROW[clip], frame, facing: porter.facing,
-    worldAnchor: { x: Math.round(porter.x), y: Math.round(porter.y) + 8 + D001_VISUAL_GROUND_OFFSET }, carried: porter.carried,
+    pause: porter.holdForTravel && porter.carried.length === 0 ? 'travel' : porter.state === 'WAITING_FOR_ELEVATOR' ? 'lift' : undefined,
+    clip, row: PORTER_ROW[clip], frame: porter.holdForTravel || porter.state === 'WAITING_FOR_ELEVATOR' ? 0 : frame,
+    facing: porter.state === 'COLLECTING' && porter.collectTimer >= PORTER_COLLECT_DURATION / 2
+      ? PORTER_LOAD_X >= porter.x ? 1 : -1 : porter.facing,
+    worldAnchor: { x: Math.round(porter.x), y: Math.round(porter.y) + 8 + (state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) }, carried: porter.carried,
   };
 }
 
@@ -210,7 +232,7 @@ export function deriveCrewRenderState(state: Readonly<GameState>, member: Readon
     row: CLIP_ROW[clip as CharacterClip],
     frame,
     facing: member.body.facing,
-    worldAnchor: { x: Math.round(member.body.x), y: Math.round(member.body.y) + 8 + D001_VISUAL_GROUND_OFFSET },
+    worldAnchor: { x: Math.round(member.body.x), y: Math.round(member.body.y) + 8 + (state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) },
     carried: member.body.carried,
     toolBank: equipmentBank(equipped?.rarity),
     visible: member.assignedDepth === state.run.depth.current && member.state !== 'TRAVELING',
@@ -235,7 +257,7 @@ export function deriveEngineerRenderState(state: Readonly<GameState>, now: numbe
     : loopFrame(now, clip === 'walk' ? 150 : 500, clip === 'walk' || clip === 'work' ? 4 : 2);
   return {
     clip, row: ENGINEER_ROW[clip], frame, facing: targetX >= engineer.x ? 1 : -1,
-    worldAnchor: { x: Math.round(engineer.x), y: WORLD.floorY + D001_VISUAL_GROUND_OFFSET }, carried: [],
+    worldAnchor: { x: Math.round(engineer.x), y: WORLD.floorY + (state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) }, carried: [],
     visible: engineer.assignedDepth === state.run.depth.current && engineer.state !== 'LOCKED',
   };
 }
@@ -302,7 +324,7 @@ function characterFrame(state: Readonly<GameState>, clip: CharacterClip, now: nu
     return swingFrame(state.run.character.swing);
   }
   if (clip === 'collect') return progressFrame(state.run.character.collectTimer, COLLECT_DURATION, 4);
-  if (clip === 'load') return progressFrame(state.run.character.loadingTimer, LOAD_DURATION, 4);
+  if (clip === 'load') return Math.min(2, progressFrame(state.run.character.loadingTimer, LOAD_DURATION, 4));
   if (clip === 'walk' || clip === 'carry-walk') {
     return playerWalkFrame(state.run.character.x, state.run.character.facing);
   }

@@ -1,5 +1,6 @@
+import type { CollectionEntry, EquipmentItem } from '../types';
 import type { GameCommand } from '../../runtime/commands';
-import type { DepthId, EquipmentSlot, LootCategory, Selection } from '../types';
+import type { DepthId, EquipmentSlot, Selection } from '../types';
 
 export type Station = 'facilities' | 'equipment' | 'research' | 'crew' | 'archive' | 'scanner' | 'core' | 'reboot' | 'logistics';
 export interface StationRequest { station: Station; tab?: string; subjectId?: string; selectedId?: string; }
@@ -16,6 +17,8 @@ export interface EquipmentMetric { label: string; before: number; after: number;
 export interface EquipmentPreview {
   slot: EquipmentSlot; current: string; candidate: string;
   metrics: EquipmentMetric[]; gained: string[]; lost: string[];
+  currentTool?: Pick<EquipmentItem, 'affixes'>; candidateTool?: Pick<EquipmentItem, 'affixes'>;
+  currentToolLevel?: number;
 }
 export interface RouteStop { label: string; detail: string; blocked: boolean; }
 export interface StationOption { id: string; label: string; active: boolean; selected: boolean; }
@@ -28,7 +31,7 @@ export interface StationItem {
   decision?: { facts: DecisionFact[]; confirmLabel: string; cancelLabel: string; closeOnCancel?: boolean; };
   equipment?: EquipmentPreview;
   progress?: { value: number; total: number; label: string; };
-  discovery?: { category: LootCategory; discovered: boolean; };
+  discovery?: Pick<CollectionEntry, 'kind' | 'category' | 'discovered' | 'restored' | 'count' | 'bestSpecimenGrade'>;
   route?: RouteStop[];
   options?: StationOption[];
   /** Only payload-affecting state belongs here; clocks must not cancel confirmation. */

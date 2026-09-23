@@ -1,4 +1,6 @@
-import { drawPhysicalCargo, drawCarriedCargo } from './cargoRenderer';
+import { floorCargoDropX } from './cargoMotion';
+import { visibleCargo } from './discoveryVisuals';
+import { drawCargoMark } from './discoveryCues';
 import { WORLD } from '../game/config';
 import { canShowCrewBoard, phase5Floor } from '../game/phase5';
 import type { CrewMember, EquipmentItem, EquipmentRarity, GameEvent, GameState, Phase5DepthId } from '../game/types';
@@ -6,8 +8,11 @@ import { CanvasRenderer } from './canvasRenderer';
 import { INTERACTION_LAYOUT } from './interactionLayout';
 import { PALETTE } from './palette';
 import {
+  canDrawD001Player,
   drawD001ActorShadow,
+  drawD001Cargo,
   drawD001CargoShadow,
+  drawD001CarriedCargo,
   drawD001Crew,
   type D001AssetStore,
 } from './d001ImageRenderer';
@@ -43,19 +48,18 @@ export class Phase5Renderer {
     this.base.drawForegroundFx(now, shake);
   }
 
-  render(state: GameState, now: number): void {
-    this.base.render(state, now);
+  render(state: GameState, now: number, frame?: SemanticRenderState): void {
+    const semantic = frame ?? deriveSemanticRenderState(state, now);
+    this.base.render(state, now, semantic);
     if (state.run.elevator.travel) return;
     this.ctx.save();
-    if ((state.run.depth.current as string) === 'D-180') drawAncientRuins(this.ctx, now);
-    const semantic = deriveSemanticRenderState(state, now);
     if (state.run.phase5.crew.unlocked) {
-      drawCargoPlatform(this.ctx, state);
+      drawCargoPlatform(this.ctx, state, this.assets);
       drawCrew(this.ctx, state, now, semantic, this.assets);
     }
     drawCrewBoard(this.ctx, state, now);
     drawCargoRouteIndicator(this.ctx, state);
-    drawPlayerEquipment(this.ctx, state);
+    if (!canDrawD001Player(this.assets)) drawPlayerEquipment(this.ctx, state);
     this.ctx.restore();
   }
 
@@ -85,24 +89,40 @@ function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: num
   drawPixelText(ctx, crew.unlocked ? 'SHIFT BOARD' : 'CREW BOARD', x + 5, y + 27, { font: 'standard', baseline: 'bottom' });
 }
 
-function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState): void {
+function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, assets: D001AssetStore): void {
   const floor = phase5Floor(state, state.run.depth.current as Phase5DepthId);
   if (!floor) return;
-  const x = WORLD.elevatorX + 38;
-  const y = WORLD.floorY - 4 + (state.run.depth.current === 'D-001' ? D001_CARGO_PLATFORM_OFFSET : 0);
-  ctx.fillStyle = '#3a3935'; ctx.fillRect(x, y, 38, 4);
-  ctx.fillStyle = '#67635c'; ctx.fillRect(x + 2, y - 3, 34, 3);
-  ctx.fillStyle = '#272724'; ctx.fillRect(x + 4, y + 4, 3, 5); ctx.fillRect(x + 30, y + 4, 3, 5);
-  const count = Math.min(8, floor.cargo.length);
-  for (let index = count - 1; index >= 0; index -= 1) {
-    const row = Math.floor(index / 4); const col = index % 4;
-    const item = floor.cargo[index]!;
-    drawD001CargoShadow(ctx, x + 7 + col * 8, y - 4 - row * 5);
-    drawPhysicalCargo(ctx, item, x + 7 + col * 8, y - 4 - row * 5);
+  const groups = new Map<number, typeof floor.cargo>([[WORLD.elevatorX + 48, []]]);
+  for (const item of floor.cargo) {
+    const dropX = floorCargoDropX(state, item);
+    if (!groups.has(dropX)) groups.set(dropX, []);
+    groups.get(dropX)!.push(item);
   }
-  if (floor.cargo.length > 8) {
-    ctx.fillStyle = '#c8bda8';
-    drawPixelText(ctx, `+${floor.cargo.length - 8}`, x + 27, y - 10, { font: 'compact', baseline: 'bottom' });
+  for (const [dropX, items] of groups) {
+    const x = dropX - 10;
+    const y = WORLD.floorY - 4 + (state.run.depth.current === 'D-001' ? D001_CARGO_PLATFORM_OFFSET : 0);
+    ctx.fillStyle = '#3a3935'; ctx.fillRect(x, y, 38, 4);
+    ctx.fillStyle = '#67635c'; ctx.fillRect(x + 2, y - 3, 34, 3);
+    ctx.fillStyle = '#272724'; ctx.fillRect(x + 4, y + 4, 3, 5); ctx.fillRect(x + 30, y + 4, 3, 5);
+    const visible = visibleCargo(items, 8);
+    const count = visible.length;
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const row = Math.floor(index / 4); const col = index % 4;
+      const item = visible[index]!;
+      if (state.run.depth.current === 'D-001' && assets.ready('cargoItems')) {
+        drawD001CargoShadow(ctx, x + 7 + col * 8, y - 4 - row * 5);
+      }
+      const cargoImage = drawD001Cargo(ctx, item, x + 7 + col * 8, y - 4 - row * 5, assets);
+      if (!cargoImage) {
+        ctx.fillStyle = item.equipmentSeed !== undefined ? '#8b795f' : item.category === 'CORE' ? '#9e8067' : item.category === 'RESEARCH' ? '#718e96' : '#755f43';
+        ctx.fillRect(x + 4 + col * 8, y - 8 - row * 5, 6, 4);
+        drawCargoMark(ctx, item, x + 7 + col * 8, y - 4 - row * 5);
+      }
+    }
+    if (items.length > 8) {
+      ctx.fillStyle = '#c8bda8';
+      drawPixelText(ctx, `+${items.length - 8}`, x + 27, y - 10, { font: 'compact', baseline: 'bottom' });
+    }
   }
 }
 
@@ -117,15 +137,19 @@ function drawCrew(
   for (const member of state.run.phase5.crew.members) {
     if (member.assignedDepth !== depth || member.state === 'TRAVELING') continue;
     const actor = semantic.crew.get(member.id);
-    if (state.run.depth.current === 'D-001' && actor?.visible) drawD001ActorShadow(ctx, actor);
-    const imageDrawn = Boolean(state.run.depth.current === 'D-001' && actor && drawD001Crew(ctx, actor, assets));
+    if (actor?.visible) drawD001ActorShadow(ctx, actor);
+    const imageDrawn = Boolean(actor && drawD001Crew(ctx, actor, assets));
     if (!imageDrawn) {
       ctx.save();
       if (state.run.depth.current === 'D-001') ctx.translate(0, D001_VISUAL_GROUND_OFFSET);
       drawCrewMember(ctx, state, member, now);
       ctx.restore();
     }
-    else if (actor) drawCarriedCargo(ctx, actor);
+    if (actor && !drawD001CarriedCargo(ctx, actor, assets) && actor.carried.length > 0) {
+      ctx.fillStyle = '#735e43';
+      ctx.fillRect(actor.worldAnchor.x + actor.facing * 6 - (actor.facing > 0 ? 0 : 6), actor.worldAnchor.y - 12, 6, 8);
+      drawCargoMark(ctx, actor.carried[0]!, actor.worldAnchor.x + actor.facing * 8, actor.worldAnchor.y - 4);
+    }
   }
 }
 
@@ -138,7 +162,7 @@ function drawCrewMember(ctx: CanvasRenderingContext2D, state: GameState, member:
   ctx.fillStyle = member.role === 'MINER' ? '#a6906d' : '#8b8c79'; ctx.fillRect(x - 3, y - 4, 7, 6);
   ctx.fillStyle = '#49545a'; ctx.fillRect(x - 3, y + 2, 2, 4 + step); ctx.fillRect(x + 2, y + 2, 2, 5 - step);
   if (member.role === 'MINER' && (member.swing || member.state === 'MINING')) drawCrewPick(ctx, state, member, x, y, dir);
-  if (member.body.carried.length > 0) { ctx.fillStyle = '#735e43'; ctx.fillRect(x - dir * 7 - (dir > 0 ? 6 : 0), y - 5, 6, 8); drawPhysicalCargo(ctx, member.body.carried[0]!, x + dir * 8, y + 3); }
+  if (member.body.carried.length > 0) { ctx.fillStyle = '#735e43'; ctx.fillRect(x - dir * 7 - (dir > 0 ? 6 : 0), y - 5, 6, 8); }
   if (member.pendingDepth) { ctx.fillStyle = '#a98e62'; ctx.fillRect(x - 1, y - 13, 3, 2); }
 }
 
@@ -167,28 +191,11 @@ function drawCargoRouteIndicator(ctx: CanvasRenderingContext2D, state: GameState
   ctx.fillStyle = '#776a50'; ctx.fillRect(270, 50, Math.max(1, Math.round(29 * ratio)), 1);
 }
 
-function drawAncientRuins(ctx: CanvasRenderingContext2D, now: number): void {
-  ctx.fillStyle = '#191816'; ctx.fillRect(0, 42, 214, 134); ctx.fillRect(266, 42, 214, 134);
-  ctx.fillStyle = '#292723';
-  for (const x of [22, 76, 142, 188, 286, 344, 402, 454]) {
-    ctx.fillRect(x, 62, 12, 113); ctx.fillStyle = '#4c4941'; ctx.fillRect(x - 3, 62, 18, 5); ctx.fillRect(x - 2, 166, 16, 5); ctx.fillStyle = '#292723';
-  }
-  ctx.fillStyle = '#3b3933'; ctx.fillRect(20, 82, 194, 5); ctx.fillRect(266, 82, 195, 5);
-  ctx.fillStyle = '#565047'; ctx.fillRect(22, 169, 92, 2); ctx.fillRect(132, 169, 82, 2); ctx.fillRect(268, 169, 73, 2); ctx.fillRect(366, 169, 95, 2);
-  ctx.fillStyle = '#272721'; ctx.fillRect(114, 164, 18, 8); ctx.fillRect(341, 164, 25, 8);
-  ctx.fillStyle = '#6b6558'; ctx.fillRect(47, 98, 25, 14); ctx.fillRect(385, 104, 31, 15);
-  ctx.fillStyle = '#1c1c19'; ctx.fillRect(50, 101, 19, 8); ctx.fillRect(389, 107, 23, 9);
-  ctx.fillStyle = Math.floor(now / 900) % 2 === 0 ? '#766d57' : '#5f594a'; ctx.fillRect(54, 104, 2, 2);
-  ctx.fillRect(397, 111, 2, 2);
-
-}
-
 function drawPlayerEquipment(ctx: CanvasRenderingContext2D, state: GameState): void {
   const equipped = state.run.phase5.equipment.equippedPlayer;
   if (Object.keys(equipped).length === 0) return;
   const c = state.run.character; const x = Math.round(c.x); const y = Math.round(c.y) + (state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0); const dir = c.facing;
-  const tool = itemFor(state, equipped.TOOL); const pack = itemFor(state, equipped.PACK); const boots = itemFor(state, equipped.BOOTS); const lamp = itemFor(state, equipped.LAMP);
-  if (tool && state.run.depth.current !== 'D-001' && !c.swing && c.state === 'MINING') { ctx.fillStyle = equipmentColor(tool.rarity); ctx.fillRect(x + dir * 8 - (dir < 0 ? 4 : 0), y - 10, 5, 2); }
+  const pack = itemFor(state, equipped.PACK); const boots = itemFor(state, equipped.BOOTS); const lamp = itemFor(state, equipped.LAMP);
   if (pack) { ctx.strokeStyle = equipmentColor(pack.rarity); ctx.strokeRect(x - dir * 8 - (dir > 0 ? 7 : 0) + 0.5, y - 6.5, 7, 9); }
   if (boots) { ctx.fillStyle = equipmentColor(boots.rarity); ctx.fillRect(x - 3, y + 3, 2, 2); ctx.fillRect(x + 2, y + 3, 2, 2); }
   if (lamp) {

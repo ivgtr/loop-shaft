@@ -1,4 +1,5 @@
-import type { GameEvent } from './types';
+import { FOSSIL_KINDS } from './config';
+import type { GameEvent, LootKind, SpecimenGrade } from './types';
 
 export interface RewardNotice {
   key: string;
@@ -6,6 +7,7 @@ export interface RewardNotice {
   detail: string;
   priority: number;
   duration: number;
+  specimen?: { kind: LootKind; grade: SpecimenGrade };
 }
 
 /** Feedback reflects delivered value / a new decision, not merely an item's rarity color. */
@@ -20,7 +22,9 @@ export function rewardNotice(event: GameEvent): RewardNotice | null {
   switch (event.type) {
     case 'ORE_QUALITY_FOUND': return make(`${data.quality === 'PURE' ? 'PURE' : 'FINE'} ORE · ${data.value} SCRAP`, `${depth} · DELIVER TO SURFACE`, data.quality === 'PURE' ? 3 : 1);
     case 'PROSPECT_REVEALED': return make(`${data.signal} TRACE FOUND`, `${depth} · INSPECT THE MARKED ROCK`, 3);
-    case 'SPECIMEN_APPRAISED': return make(name, `${data.first ? 'NEW SPECIMEN' : data.grade === 'PRISTINE' ? 'PRISTINE SPECIMEN' : 'APPRAISED'} · +${data.value} SCRAP`, data.first || data.grade === 'PRISTINE' ? 5 : 1);
+    case 'SPECIMEN_APPRAISED': return { ...make(name, `${data.first ? 'NEW SPECIMEN' : data.grade === 'PRISTINE' ? 'PRISTINE SPECIMEN' : 'APPRAISED'} · +${data.value} SCRAP`, data.first || data.grade === 'PRISTINE' ? 5 : 1),
+      ...(FOSSIL_KINDS.includes(data.kind as LootKind) && (data.grade === 'INTACT' || data.grade === 'PRISTINE')
+        ? { specimen: { kind: data.kind as LootKind, grade: data.grade } } : {}) };
     case 'EQUIPMENT_APPRAISED': return make(name, data.first ? 'FIRST TOOL · EQUIP AT WORKSHOP' : data.newOption ? 'NEW BUILD OPTION · WORKSHOP' : 'GEAR APPRAISED · WORKSHOP', data.first || data.newOption ? 5 : 2);
     case 'COLLECTION_REGISTERED': return data.fromSpecimen ? null : make(name, 'NEW COLLECTION RECORD', 4);
     case 'COLLECTION_RESTORED': return make(name, 'RESTORED · COLLECTION RECORDED', 4);

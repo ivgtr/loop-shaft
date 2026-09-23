@@ -168,6 +168,6 @@ export function nodeDiscoveryCue(floor: FloorState, node: MiningNode): { signal:
 }
 
 export function specimenAppraisalEvent(state: GameState, item: LootStack, known: LootStack): Record<string, string | number | boolean> {
-  return { id: item.id, name: known.name, grade: item.specimen!.grade, value: known.value,
+  return { id: item.id, kind: known.kind, name: known.name, grade: item.specimen!.grade, value: known.value,
     first: !state.meta.collection.entries.some((entry) => entry.kind === known.kind && entry.discovered), depth: item.originDepth ?? 'D-001' };
 }

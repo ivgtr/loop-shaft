@@ -1,4 +1,5 @@
 import type { GameEvent, GameState } from '../game/types';
+import { miningContact } from './workEquipment';
 import { D001_VISUAL_GROUND_OFFSET } from './semanticRenderState';
 
 type Impact = { x: number; y: number; startedAt: number };
@@ -11,12 +12,14 @@ export class MiningImpactEffects {
   private depth: string | null = null;
   private impacts: Impact[] = [];
   private shakeUntil = 0;
+  private lastTime = 0;
 
   private sync(state: GameState, now: number): void {
-    if (this.run !== state.run || this.depth !== state.run.depth.current || state.run.elevator.travel) {
+    if (this.run !== state.run || this.depth !== state.run.depth.current || state.run.elevator.travel || now < this.lastTime) {
       this.impacts = [];
       this.shakeUntil = 0;
     }
+    this.lastTime = now;
     this.run = state.run;
     this.depth = state.run.depth.current;
     this.impacts = this.impacts.filter((fx) => now >= fx.startedAt && now - fx.startedAt < LIFETIME);
@@ -24,11 +27,18 @@ export class MiningImpactEffects {
 
   hit(event: GameEvent, state: GameState, now: number): void {
     this.sync(state, now);
+    if (event.type === 'REBOOT_COMMITTED') {
+      this.impacts = [];
+      this.shakeUntil = 0;
+      return;
+    }
     if (event.type !== 'MINER_SWING_HIT' || state.run.elevator.travel || event.data?.depth !== state.run.depth.current) return;
     const node = state.run.floors[state.run.depth.current].nodes.find((candidate) => candidate.id === event.data?.nodeId);
-    if (!node || !(Number(event.data?.damage) > 0)) return;
+    const damage = event.data?.damage;
+    if (!node || typeof damage !== 'number' || !Number.isFinite(damage) || damage <= 0) return;
     const ground = state.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0;
-    this.impacts.push({ x: Math.round(node.x), y: Math.round(node.y) + ground - 8, startedAt: now });
+    const contact = event.data?.crewId ? null : miningContact(state, node.id);
+    this.impacts.push({ x: contact?.x ?? Math.round(node.x), y: contact?.y ?? Math.round(node.y) + ground - 8, startedAt: now });
     this.impacts = this.impacts.slice(-16);
     this.shakeUntil = now + 110;
   }

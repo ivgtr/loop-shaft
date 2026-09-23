@@ -57,11 +57,11 @@ export function archiveView(state: GameState, ui: ManagementState): StationView 
     const restorable = fossil && !entry.discovered;
     const reason = restorable ? restorationBlockReason(state, entry.kind) : null;
     return { ...information(entry.kind, entry.discovered ? entry.name : '????',
-      entry.discovered ? `${entry.rarity} · ${entry.category} · ${entry.count} appraised${entry.restored ? ' · RESTORED' : ''}` : `UNDISCOVERED · ${entry.category}`,
+      entry.discovered ? `${entry.rarity} · ${entry.category} · ${entry.count} appraised${entry.restored ? ' · RESTORED' : ''}${entry.bestSpecimenGrade ? ` · ${entry.bestSpecimenGrade}` : ''}` : `UNDISCOVERED · ${entry.category}`,
       [entry.discovered ? 'Collection records survive Reboot.' : 'Bring this discovery to Surface to identify it.',
         ...(fossil ? [`${available} duplicate ${fossilFamilyName(entry.kind)} available. Restore a missing relative with ${RESTORATION_COST}. Your first specimen is never spent.`,
           'Restoration records a fossil only: no Scrap, Data, Core or passive reward.'] : [])]),
-      discovery: { category: entry.category, discovered: entry.discovered }, badge: entry.restored ? 'RESTORED' : entry.discovered ? `×${entry.count}` : '?',
+      discovery: { kind: entry.kind, category: entry.category, discovered: entry.discovered, count: entry.count, restored: entry.restored, bestSpecimenGrade: entry.bestSpecimenGrade }, badge: entry.restored ? 'RESTORED' : entry.discovered ? `×${entry.count}` : '?',
       reason, actionLabel: restorable ? `RESTORE · ${RESTORATION_COST} DUPLICATES` : 'INFORMATION',
       action: restorable && !reason ? commandAction({ type: 'restore-fossil', kind: entry.kind }) : null,
       decision: restorable ? { confirmLabel: 'RESTORE SPECIMEN', cancelLabel: 'KEEP DUPLICATES', facts: [

@@ -73,7 +73,10 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
       y: h - (compact ? 100 : 52) + row * 48, width: rowWidths[index]!, height: 44 });
   });
   buttons.push({ id: 'send', label: 'SEND', text: 'SEND', action: { type: 'command', command: { type: 'send' } },
-    x: Math.min(w - 106, world.x + world.width * .55), y: world.y + world.height * .43, width: 96, height: 44, disabled: !canDispatchElevator(state) });
+    x: Math.min(w - 106, world.x + world.width * .55),
+    // The fixed-size cabinet must stay below the scene's notification strip when the world is scaled down.
+    y: Math.max(world.y + world.height * .43, world.y + world.height * .30 + 42),
+    width: 96, height: 44, disabled: !canDispatchElevator(state) });
   const guide = workshopGuide(state);
   if (guide) buttons.push({ id: 'goal', label: 'Inspect next workshop upgrade', text: guide.label, action: { type: 'open' },
     x: 10, y: compact ? 56 : 46, width: Math.min(w - 100, 420), height: 44, selected: guide.ready });

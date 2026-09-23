@@ -12,7 +12,7 @@ import {
 import { d001RopeEndY, deriveSemanticRenderState } from './semanticRenderState';
 import { drawPixelText } from './pixelText';
 
-export function drawEnvironment(ctx: CanvasRenderingContext2D, state: GameState, assets?: D001AssetStore): void {
+export function drawEnvironment(ctx: CanvasRenderingContext2D, state: GameState, assets?: D001AssetStore, now = state.elapsed * 1000): void {
   const depth = state.run.depth.current;
   if (depth === 'D-001' && assets && drawD001Background(ctx, assets)) {
     drawD001SurfaceJunction(ctx, assets) || drawSurfaceStationFrame(ctx);
@@ -30,6 +30,7 @@ export function drawEnvironment(ctx: CanvasRenderingContext2D, state: GameState,
   if (depth === 'D-030') drawD030Details(ctx, state);
   if (depth === 'D-060') drawD060Details(ctx, state);
   if (depth === 'D-100') drawD100Details(ctx, state);
+  if (depth === 'D-180') drawAncientRuins(ctx, now);
   if (depth === 'D-001') {
     const semantic = deriveSemanticRenderState(state, state.elapsed * 1000);
     if (assets) drawD001ShaftBottom(ctx, semantic, assets) || drawShaftBottomFallback(ctx, semantic.shaftBottom);
@@ -233,4 +234,19 @@ function depthLamp(depth: DepthId): string {
 
 export function elevatorY(state: GameState): number {
   return WORLD.elevatorBottomY + (WORLD.topY - WORLD.elevatorBottomY) * state.run.elevator.position;
+}
+
+function drawAncientRuins(ctx: CanvasRenderingContext2D, now: number): void {
+  ctx.fillStyle = '#191816'; ctx.fillRect(0, 42, 214, 134); ctx.fillRect(266, 42, 214, 134);
+  ctx.fillStyle = '#292723';
+  for (const x of [22, 76, 142, 188, 286, 344, 402, 454]) {
+    ctx.fillRect(x, 62, 12, 113); ctx.fillStyle = '#4c4941'; ctx.fillRect(x - 3, 62, 18, 5); ctx.fillRect(x - 2, 166, 16, 5); ctx.fillStyle = '#292723';
+  }
+  ctx.fillStyle = '#3b3933'; ctx.fillRect(20, 82, 194, 5); ctx.fillRect(266, 82, 195, 5);
+  ctx.fillStyle = '#565047'; ctx.fillRect(22, 169, 92, 2); ctx.fillRect(132, 169, 82, 2); ctx.fillRect(268, 169, 73, 2); ctx.fillRect(366, 169, 95, 2);
+  ctx.fillStyle = '#272721'; ctx.fillRect(114, 164, 18, 8); ctx.fillRect(341, 164, 25, 8);
+  ctx.fillStyle = '#6b6558'; ctx.fillRect(47, 98, 25, 14); ctx.fillRect(385, 104, 31, 15);
+  ctx.fillStyle = '#1c1c19'; ctx.fillRect(50, 101, 19, 8); ctx.fillRect(389, 107, 23, 9);
+  ctx.fillStyle = Math.floor(now / 900) % 2 === 0 ? '#766d57' : '#5f594a'; ctx.fillRect(54, 104, 2, 2);
+  ctx.fillRect(397, 111, 2, 2);
 }
