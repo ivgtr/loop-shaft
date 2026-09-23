@@ -6,6 +6,10 @@ const note = (at: number, frequency: number, duration: number, type: OscillatorT
 
 /** Authored envelopes/intervals, not one ascending square-wave tune with a different color. */
 const MOTIFS: Record<RewardEffect, readonly RewardNote[]> = {
+  chorus: [note(0, 220, .08, 'triangle', .045), note(.08, 660, .28, 'sine', .035),
+    note(.18, 990, .32, 'sine', .027), note(.32, 660, .30, 'sine', .018), note(.47, 1320, .28, 'sine', .016)],
+  gravity: [note(.12, 65, .32, 'triangle', .065, 43), note(.17, 390, .17, 'sine', .025, 195),
+    note(.34, 780, .19, 'sine', .025), note(.48, 117, .26, 'triangle', .032)],
   fine: [note(0, 1320, .10, 'sine', .026)],
   pure: [note(0, 1175, .22), note(.075, 1762, .24, 'sine', .024), note(.15, 2350, .18, 'sine', .016)],
   metal: [note(0, 196, .16, 'triangle', .07, 98), note(.015, 509, .30, 'sine', .035), note(.025, 1007, .22, 'sine', .024), note(.16, 1568, .19, 'sine', .026)],
@@ -26,7 +30,7 @@ export function rewardNotes(notice: RewardNotice): readonly RewardNote[] {
     const receipt = notice.shipment; const highlight = receipt.highlight;
     const payout = shipmentPayoutStart(receipt) / 1000;
     const opening = highlight ? [note(0, 143, .08, 'triangle', .025),
-      ...MOTIFS[highlight.effect ?? 'find'].map(n => ({ ...n, at: n.at + APPRAISAL_TIMING.reveal / 1000 }))] : [];
+      ...MOTIFS[highlight.effect ?? 'find'].slice(0, highlight.artifact && highlight.priority <= 3 ? 2 : undefined).map(n => ({ ...n, at: n.at + APPRAISAL_TIMING.reveal / 1000 }))] : [];
     // The grade/first-record chord follows the reveal rather than announcing it under the dust.
     if (highlight && highlight.priority >= 4) opening.push(
       note(APPRAISAL_TIMING.grade / 1000, 784, .28, 'sine', .026),
@@ -36,6 +40,7 @@ export function rewardNotes(notice: RewardNotice): readonly RewardNote[] {
       note(payout + .63, 784, .15, 'sine', .028), note(payout + .69, 1175, .18, 'sine', .018)];
   }
   const notes = MOTIFS[notice.effect ?? 'find'];
+  if (notice.artifact && notice.priority <= 3) return notes.slice(0, 2);
   // Common repeat appraisals stay short. A first/pristine specimen gets its own resolving chord.
   if (notice.effect === 'specimen') return notice.priority >= 4
     ? [...notes, note(.38, 784, .38, 'sine', .026), note(.38, 1047, .30, 'sine', .017)] : notes.slice(0, 1);

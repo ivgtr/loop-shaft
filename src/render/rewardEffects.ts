@@ -2,7 +2,7 @@ import type { ActiveRewardNotice, RewardEffect } from '../game/rewardFeedback';
 import type { PresentationSettings } from '../game/presentationSettings';
 
 const COLORS: Record<RewardEffect, string> = {
-  work: '#b9c4a9', fine: '#cab98b', pure: '#e8e6c7', metal: '#e5b45e', gem: '#91d3d3', fossil: '#c6b18b',
+  chorus: '#72afb3', gravity: '#b18b67', work: '#b9c4a9', fine: '#cab98b', pure: '#e8e6c7', metal: '#e5b45e', gem: '#91d3d3', fossil: '#c6b18b',
   relic: '#bda784', anomaly: '#a796b5', specimen: '#e1cfaa', equipment: '#b9c4a9', trace: '#b5a584', record: '#dcc79f', find: '#b6b1a2',
 };
 export const rewardAccent = (notice: ActiveRewardNotice): string => COLORS[notice.effect ?? 'find'];
@@ -31,6 +31,29 @@ export function drawRewardEffect(ctx: CanvasRenderingContext2D, notice: ActiveRe
     ctx.restore(); return;
   }
   switch (effect) {
+    case 'chorus':
+      // Two stepped echo rings around the real geode. No radial glow or duplicate item.
+      for (let ring = 0; ring < 2; ring++) {
+        const radius = 7 + Math.max(0, travel - ring * 5);
+        pixel(-radius, -10, 1, 5); pixel(radius, -10, 1, 5);
+        pixel(-radius + 3, -14, 4); pixel(radius - 6, -14, 4);
+        pixel(-radius + 3, -2, 4); pixel(radius - 6, -2, 4);
+      }
+      if (t >= 2) sparkle(0, -21, 2);
+      break;
+    case 'gravity':
+      if (t < 2) break;
+      // A short absence, then fragments pulled inward and upward instead of exploding.
+      ctx.fillStyle = '#140e0c';
+      pixel(-18, -22, 36, 2); pixel(-18, 9, 36, 2);
+      ctx.fillStyle = COLORS.gravity;
+      for (const side of [-1, 1]) {
+        const offset = 18 - Math.min(10, travel);
+        pixel(side * offset, -3 - Math.floor(travel / 2), 3, 2);
+        pixel(side * (offset + 3), -17, 2, 3);
+      }
+      pixel(-6, 7, 12); pixel(-3, 9, 6);
+      break;
     case 'fine': sparkle(4, -10, 1); break;
     case 'pure':
     case 'gem': {

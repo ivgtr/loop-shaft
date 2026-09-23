@@ -107,6 +107,8 @@ export const LOOT: Record<LootKind, LootDefinition> = {
   HUNTER_COMPASS: { name: 'Hunter Compass', rarity: 'RELIC', category: 'RELIC', weight: 0.65, value: 35, passive: 'FOSSIL_HUNTER' },
   STRIDE_MODULE: { name: 'Stride Module', rarity: 'RELIC', category: 'RELIC', weight: 0.85, value: 35, passive: 'LONG_STRIDE' },
   FRACTURE_CORE: { name: 'Fracture Core', rarity: 'RELIC', category: 'RELIC', weight: 1.1, value: 35, passive: 'LAST_SWING' },
+  CHORUS_GEODE: { name: 'Chorus Geode', rarity: 'RELIC', category: 'RELIC', weight: 1.6, value: 35, passive: 'RESEARCH_ECHO' },
+  GRAVITY_KNOT: { name: 'Gravity Knot', rarity: 'ANOMALY', category: 'ANOMALY', weight: 1.8, value: 35, passive: 'FLOATING_LOAD' },
   BLACK_GLASS_HEART: { name: 'Black Glass Heart', rarity: 'ANOMALY', category: 'ANOMALY', weight: 1.25, value: 180 },
   CRYSTAL_MEMORY: { name: 'Crystal Memory', rarity: 'RARE', category: 'RESEARCH', weight: 0.8, value: 12, dataValue: 3 },
   SURVEY_CARTRIDGE: { name: 'Survey Cartridge', rarity: 'RARE', category: 'RESEARCH', weight: 0.55, value: 8, dataValue: 4 },
@@ -133,7 +135,12 @@ export const ANOMALY_KINDS: readonly LootKind[] = ['BLACK_GLASS_HEART'];
 export const RESEARCH_KINDS: readonly LootKind[] = ['CRYSTAL_MEMORY', 'SURVEY_CARTRIDGE', 'DAMAGED_RESEARCH_LOG', 'RESONANCE_SHARD', 'UNKNOWN_INSTRUMENT'];
 export const CORE_KINDS: readonly LootKind[] = ['CORE_FRAGMENT', 'CORE_MATRIX'];
 export const EQUIPMENT_CRATE_KINDS: readonly LootKind[] = ['ANCIENT_TOOL_CRATE', 'ANCIENT_PACK_CRATE', 'ANCIENT_LAMP_CRATE'];
-export const COLLECTIBLE_KINDS: readonly LootKind[] = [...FOSSIL_KINDS, ...RELIC_KINDS, ...ANOMALY_KINDS];
+// Finite prospect bonuses only. Do not add these to the ordinary treasure pools.
+export const EXCEPTIONAL_KINDS = ['CHORUS_GEODE', 'GRAVITY_KNOT'] as const;
+export function isExceptionalKind(kind: unknown): kind is typeof EXCEPTIONAL_KINDS[number] {
+  return kind === 'CHORUS_GEODE' || kind === 'GRAVITY_KNOT';
+}
+export const COLLECTIBLE_KINDS: readonly LootKind[] = [...FOSSIL_KINDS, ...RELIC_KINDS, ...ANOMALY_KINDS, ...EXCEPTIONAL_KINDS];
 
 export const ANOMALIES: Record<AnomalyId, { name: string; description: string }> = {
   GOLD_RUSH: { name: 'Gold Rush', description: 'Less ordinary ore. Valuable finds become much more common.' },
@@ -146,6 +153,8 @@ export const ANOMALIES: Record<AnomalyId, { name: string; description: string }>
 export const ANOMALY_POOL = Object.keys(ANOMALIES) as AnomalyId[];
 
 export const PASSIVES: Record<PassiveId, { name: string; description: string }> = {
+  RESEARCH_ECHO: { name: 'Research Echo', description: 'Research cargo: +1 Data each at Surface.' },
+  FLOATING_LOAD: { name: 'Floating Load', description: 'Carrying: player moves 35% faster.' },
   PROSPECTORS_EYE: { name: "Prospector's Eye", description: 'Read exact treasure odds and fossil/relic traces before committing.' },
   ELEVATOR_RHYTHM: { name: 'Elevator Rhythm', description: 'Dispatch at 85%+ load to accelerate that round trip.' },
   FOSSIL_HUNTER: { name: 'Fossil Hunter', description: 'Fossil odds rise sharply, but ordinary ore appraises lower.' },

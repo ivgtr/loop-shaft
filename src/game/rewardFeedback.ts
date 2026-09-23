@@ -1,9 +1,9 @@
 import type { ShipmentReceipt } from './shipmentFeedback';
-import { FOSSIL_KINDS } from './config';
+import { FOSSIL_KINDS, isExceptionalKind, LOOT, PASSIVES } from './config';
 import type { GameEvent, LootKind, SpecimenGrade } from './types';
 import type { PresentationSettings } from './presentationSettings';
 
-export type RewardEffect = 'find' | 'fine' | 'pure' | 'metal' | 'gem' | 'fossil' | 'relic' | 'anomaly' | 'specimen' | 'equipment' | 'trace' | 'record' | 'work';
+export type RewardEffect = 'find' | 'fine' | 'pure' | 'metal' | 'gem' | 'fossil' | 'relic' | 'anomaly' | 'specimen' | 'equipment' | 'trace' | 'record' | 'work' | 'chorus' | 'gravity';
 export interface RewardNotice {
   key: string;
   label: string;
@@ -15,6 +15,7 @@ export interface RewardNotice {
   shipment?: ShipmentReceipt;
   work?: { x: number; y: number; depth: string };
   benefit?: string;
+  artifact?: LootKind;
   specimen?: { kind: LootKind; grade: SpecimenGrade };
 }
 export interface ActiveRewardNotice extends RewardNotice { startedAt: number; queuedAt: number; }
@@ -41,9 +42,23 @@ export function rewardNotice(event: GameEvent): RewardNotice | null {
       ...(FOSSIL_KINDS.includes(data.kind as LootKind) && (data.grade === 'INTACT' || data.grade === 'PRISTINE')
         ? { specimen: { kind: data.kind as LootKind, grade: data.grade } } : {}) };
     case 'EQUIPMENT_APPRAISED': return { ...make(name, data.first ? 'FIRST GEAR · EQUIP AT WORKSHOP' : data.newOption ? 'NEW BUILD OPTION · WORKSHOP' : 'GEAR APPRAISED · WORKSHOP', data.first || data.newOption ? 5 : 2, 'equipment'), benefit: String(data.benefit ?? '') };
-    case 'COLLECTION_REGISTERED': return data.fromSpecimen ? null : make(name, 'NEW COLLECTION RECORD', 4, 'record');
+    case 'COLLECTION_DUPLICATE':
+    case 'COLLECTION_REGISTERED': {
+      if (data.fromSpecimen) return null;
+      if (isExceptionalKind(data.kind)) {
+        const first = event.type === 'COLLECTION_REGISTERED';
+        return { ...make(name, first ? 'PASSIVE UNLOCKED · ARCHIVE / PASSIVES' : `DUPLICATE · +${data.value ?? LOOT[data.kind].value} SCRAP`,
+          first ? 6 : 3, data.kind === 'CHORUS_GEODE' ? 'chorus' : 'gravity'), artifact: data.kind,
+          benefit: first ? PASSIVES[LOOT[data.kind].passive!].description : 'COLLECTION KEPT · NO STACKING BONUS' };
+      }
+      return event.type === 'COLLECTION_REGISTERED' ? make(name, 'NEW COLLECTION RECORD', 4, 'record') : null;
+    }
     case 'COLLECTION_RESTORED': return make(name, 'RESTORED · COLLECTION RECORDED', 4, 'record');
     case 'DISCOVERY_FOUND': {
+      if (isExceptionalKind(data.publicKind)) return {
+        ...make(name, `${depth} · DELIVER TO UNLOCK PASSIVE`, 6, data.publicKind === 'CHORUS_GEODE' ? 'chorus' : 'gravity'),
+        artifact: data.publicKind,
+      };
       const effect: RewardEffect = data.publicKind === 'SEALED' ? (data.category === 'FOSSIL' ? 'fossil' : 'find')
         : data.publicKind === 'GEM' ? 'gem' : data.category === 'VALUABLE' ? 'metal'
           : data.category === 'FOSSIL' ? 'fossil' : data.category === 'ANOMALY' ? 'anomaly'

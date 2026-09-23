@@ -22,10 +22,10 @@ export function drawShipmentNotice(ctx: CanvasRenderingContext2D, notice: Active
     const revealed = age >= APPRAISAL_TIMING.reveal;
     const graded = age >= APPRAISAL_TIMING.grade;
     ctx.fillStyle = '#71634d'; ctx.fillRect(91, 78, 27, 3); ctx.fillRect(94, 81, 3, 3); ctx.fillRect(112, 81, 3, 3);
-    const image = highlight.specimen && assets.ready('discoveryCollection');
-    if (image && highlight.specimen && revealed) {
-      const frame = collectionSpriteFrame({ kind: highlight.specimen.kind, discovered: true, count: 1,
-        bestSpecimenGrade: graded ? highlight.specimen.grade : 'INTACT' });
+    const image = (highlight.specimen || highlight.artifact) && assets.ready('discoveryCollection');
+    if (image && (highlight.specimen || highlight.artifact) && revealed) {
+      const frame = collectionSpriteFrame({ kind: highlight.artifact ?? highlight.specimen!.kind, discovered: true, count: 1,
+        bestSpecimenGrade: graded ? highlight.specimen?.grade : 'INTACT' });
       ctx.drawImage(image, frame % 5 * 24, Math.floor(frame / 5) * 24, 24, 24, 92, 54, 24, 24);
     } else {
       ctx.fillStyle = revealed ? accent : '#655340'; ctx.fillRect(97, 61, 15, 13);

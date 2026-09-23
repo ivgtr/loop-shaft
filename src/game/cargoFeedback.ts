@@ -3,11 +3,12 @@ import type { DepthId, LootStack } from './types';
 
 /** Only public appearance selects a handling sound, including inside a mixed load. */
 export function cargoEffect(items: readonly LootStack[]): RewardEffect {
-  const rank: Partial<Record<RewardEffect, number>> = { anomaly: 8, relic: 7, gem: 6, metal: 5, fossil: 4, pure: 3, fine: 2, find: 1 };
+  const rank: Partial<Record<RewardEffect, number>> = { gravity: 10, chorus: 9, anomaly: 8, relic: 7, gem: 6, metal: 5, fossil: 4, pure: 3, fine: 2, find: 1 };
   let effect: RewardEffect = 'find';
   for (const item of items) {
     // Test sealed status before kind, rarity, grade, value or equipment seed contents.
     const next: RewardEffect = item.specimen ? 'fossil' : item.equipmentSeed !== undefined ? 'find'
+      : item.kind === 'CHORUS_GEODE' ? 'chorus' : item.kind === 'GRAVITY_KNOT' ? 'gravity'
       : item.kind === 'GEM' ? 'gem' : item.category === 'VALUABLE' ? 'metal'
         : item.category === 'ANOMALY' ? 'anomaly' : item.category === 'RELIC' ? 'relic'
           : item.category === 'FOSSIL' ? 'fossil' : item.quality === 'PURE' ? 'pure' : item.quality === 'FINE' ? 'fine' : 'find';

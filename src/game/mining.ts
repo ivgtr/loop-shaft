@@ -1,6 +1,6 @@
 import { LOOT, WORLD, SWING, COLLECT_DURATION, LOAD_DURATION, VALUABLE_KINDS, FOSSIL_KINDS, RELIC_KINDS, RESEARCH_KINDS } from './config';
 import { getModifiers } from './modifiers';
-import { advanceProspecting, applyOreQuality, prospectExtraWeight, prospectReward, prospectSurvey, sealSpecimen } from './prospecting';
+import { advanceProspecting, applyOreQuality, exceptionalProspectReward, prospectExtraWeight, prospectReward, prospectSurvey, sealSpecimen } from './prospecting';
 import { hashSeed, nextRandom } from './rng';
 import type { DepthId, FloorState, GameEventType, GameState, LootCategory, LootKind, LootStack, MiningNode } from './types';
 
@@ -113,7 +113,7 @@ export function rollMiningLoot(state: GameState, floor: FloorState, node: Mining
   node.minedCount = (node.minedCount ?? 0) + 1;
   const spawned: LootStack[] = [];
   const rewards = advanceProspecting(floor, node);
-  const add = (requested: LootKind, sealed = false, fieldGearSeed: number | null = null): void => {
+  const add = (requested: LootKind, sealed = false, fieldGearSeed: number | null = null, positionRoll?: number): void => {
     let kind = requested;
     if (LOOT[kind].category === 'CORE') {
       const remaining = coreReserveRemaining(node);
@@ -126,7 +126,7 @@ export function rollMiningLoot(state: GameState, floor: FloorState, node: Mining
       id: `loot-${state.meta.runIndex}-${state.run.nextLootId++}`, kind, name: def.name,
       rarity: def.rarity, category: def.category, weight: def.weight, value: def.value,
       dataValue: def.dataValue ?? 0, coreValue: def.coreValue ?? 0,
-      x: node.x + (nextRandom(state) - 0.5) * 14, y: node.y - 4, originDepth: floor.id,
+      x: node.x + ((positionRoll ?? nextRandom(state)) - 0.5) * 14, y: node.y - 4, originDepth: floor.id,
       ...(source.crewId ? { sourceCrewId: source.crewId } : {}),
     };
     applyOreQuality(item, rewards.quality);
@@ -194,6 +194,8 @@ export function rollMiningLoot(state: GameState, floor: FloorState, node: Mining
   }
   for (const prospect of rewards.prospects) {
     add(prospectReward(floor, prospect), prospect.signal === 'FOSSIL');
+    const exceptional = exceptionalProspectReward(floor, prospect);
+    if (exceptional) add(exceptional, false, null, hashSeed(floor.seed ^ prospect.id ^ 0xecce17) / 0x100000000);
     emit('PROSPECT_EXTRACTED', { prospectId: prospect.id, signal: prospect.signal });
   }
   if (rewards.fieldGearSeed !== null) add('ANCIENT_TOOL_CRATE', false, rewards.fieldGearSeed);

@@ -40,6 +40,7 @@ export function getModifiers(state: GameState, carrying = state.run.character.ca
 
   if (state.meta.passives.active.includes('LONG_STRIDE') && !carrying) playerMoveSpeed *= 1.65;
   if (state.meta.passives.active.includes('FOSSIL_HUNTER')) fossilWeightMultiplier *= 2.35;
+  if (state.meta.passives.active.includes('FLOATING_LOAD') && carrying) playerMoveSpeed *= 1.35;
   if (run.elevator.rhythmBoostTrips > 0) elevatorSpeed *= 1.65;
 
   switch (run.anomaly.selected) {

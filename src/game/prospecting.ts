@@ -107,9 +107,23 @@ export function prospectReward(floor: FloorState, prospect: Prospect): LootKind 
   return pool[Math.floor(random(floor, prospect.id, 0xf05511) * pool.length)]!;
 }
 
+/** One seeded opportunity on the second finite clue of each eligible floor.
+ * It supplements, never replaces, the normal clue reward. No per-hit reroll, timer,
+ * new save counter, or extra draw from the production RNG is involved.
+ * This is reward logic, not a public survey: do not expose it before extraction.
+ */
+export function exceptionalProspectReward(floor: FloorState, prospect: Prospect): LootKind | null {
+  if (prospect.id !== 1 || !['D-060', 'D-100', 'D-180', 'D-250', 'D-400'].includes(floor.id)) return null;
+  if (random(floor, prospect.id, 0xecce) >= 1 / 6) return null;
+  return floor.id === 'D-060' || random(floor, prospect.id, 0xc401) < 0.5 ? 'CHORUS_GEODE' : 'GRAVITY_KNOT';
+}
+
 export function prospectExtraWeight(floor: FloorState, node: MiningNode): number {
   const extra = floorProspects(floor).filter((p) => p.nodeId === node.id && p.work === p.required - 1)
-    .reduce((sum, p) => sum + LOOT[prospectReward(floor, p)].weight, 0);
+    .reduce((sum, p) => {
+      const exceptional = exceptionalProspectReward(floor, p);
+      return sum + LOOT[prospectReward(floor, p)].weight + (exceptional ? LOOT[exceptional].weight : 0);
+    }, 0);
   return extra + (floor.id === 'D-030' ? LOOT.ANCIENT_TOOL_CRATE.weight : 0);
 }
 

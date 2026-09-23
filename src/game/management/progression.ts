@@ -1,4 +1,4 @@
-import { ANOMALIES, CORE_PROTOCOLS, PASSIVES, RESEARCH } from '../config';
+import { ANOMALIES, CORE_PROTOCOLS, isExceptionalKind, LOOT, PASSIVES, RESEARCH } from '../config';
 import { duplicateFossilsAvailable, fossilFamilyName, RESTORATION_COST, restorationBlockReason } from '../appraisal';
 import { createNewRun } from '../createGame';
 import { legacyEquipmentForReboot } from '../phase5';
@@ -59,6 +59,8 @@ export function archiveView(state: GameState, ui: ManagementState): StationView 
     return { ...information(entry.kind, entry.discovered ? entry.name : '????',
       entry.discovered ? `${entry.rarity} · ${entry.category} · ${entry.count} appraised${entry.restored ? ' · RESTORED' : ''}${entry.bestSpecimenGrade ? ` · ${entry.bestSpecimenGrade}` : ''}` : `UNDISCOVERED · ${entry.category}`,
       [entry.discovered ? 'Collection records survive Reboot.' : 'Bring this discovery to Surface to identify it.',
+        ...(entry.discovered && isExceptionalKind(entry.kind) ? [PASSIVES[LOOT[entry.kind].passive!].description,
+          'Activate in PASSIVES (two slots). Duplicates sell for Scrap; effects never stack.'] : []),
         ...(fossil ? [`${available} duplicate ${fossilFamilyName(entry.kind)} available. Restore a missing relative with ${RESTORATION_COST}. Your first specimen is never spent.`,
           'Restoration records a fossil only: no Scrap, Data, Core or passive reward.'] : [])]),
       discovery: { kind: entry.kind, category: entry.category, discovered: entry.discovered, count: entry.count, restored: entry.restored, bestSpecimenGrade: entry.bestSpecimenGrade }, badge: entry.restored ? 'RESTORED' : entry.discovered ? `×${entry.count}` : '?',

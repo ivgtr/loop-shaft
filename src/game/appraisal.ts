@@ -22,6 +22,8 @@ export function appraisePhysicalCargo(state: GameState, cargo: readonly LootStac
   const shipmentId = `${via}:${cargo[0]!.id}`;
   const publish = sink;
   sink = (type, data) => publish(type, { ...data, shipmentId });
+  // Snapshot before unlocking this shipment's passives: cargo order cannot change its payout.
+  const researchEcho = state.meta.passives.active.includes('RESEARCH_ECHO');
   let scrapGain = 0; let dataGain = 0; let coreGain = 0; let pureValue = 0; let ordinaryScrap = 0;
   for (const physical of cargo) {
     const item = appraisedLoot(physical);
@@ -47,7 +49,7 @@ export function appraisePhysicalCargo(state: GameState, cargo: readonly LootStac
         sink('PASSIVE_EQUIPPED', { passive, enabled: true, auto: true });
       }
     }
-    if (item.category === 'RESEARCH') dataGain += item.dataValue;
+    if (item.category === 'RESEARCH') dataGain += item.dataValue + (researchEcho && item.dataValue > 0 ? 1 : 0);
     if (item.category === 'CORE') coreGain += item.coreValue;
     else {
       scrapGain += value;
@@ -86,7 +88,8 @@ function registerCollection(state: GameState, item: LootStack, sink: Sink, fromS
   const first = !entry.discovered;
   entry.discovered = true; entry.count += 1;
   sink(first ? 'COLLECTION_REGISTERED' : 'COLLECTION_DUPLICATE', { id: item.id, kind: item.kind,
-    name: LOOT[item.kind].name, count: entry.count, rarity: item.rarity, category: item.category, fromSpecimen });
+    name: LOOT[item.kind].name, count: entry.count, rarity: item.rarity, category: item.category, fromSpecimen,
+    value: Math.round(item.value * appraisalMultiplier(state, item.category)) });
 }
 
 export function duplicateFossilsAvailable(state: GameState, kind: LootKind): number {
