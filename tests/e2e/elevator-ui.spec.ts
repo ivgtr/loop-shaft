@@ -136,7 +136,11 @@ test('help consumes commands and a lost pointer focus does not poison the next h
   await page.mouse.down(); await expect(canvas).toHaveAttribute('data-player-state', 'MOVING_TO_POINT'); await page.mouse.up();
   await expect(canvas).toHaveAttribute('data-player-state', 'IDLE');
   await ui(page, 'help').click(); await expect(page.getByRole('dialog', { name: 'Controls help' })).toBeVisible();
-  await ui(page, 'window-close').focus(); await page.keyboard.press('Tab'); await expect(ui(page, 'window-close')).toBeFocused();
+  await ui(page, 'window-close').focus();
+  for (const id of ['presentation-volume', 'presentation-motion', 'presentation-highlights', 'window-close']) {
+    await page.keyboard.press('Tab'); await expect(ui(page, id)).toBeFocused();
+  }
+  await page.keyboard.press('Shift+Tab'); await expect(ui(page, 'presentation-highlights')).toBeFocused();
   await page.keyboard.press('KeyE'); await page.keyboard.press('KeyD');
   await expect(canvas).toHaveAttribute('data-player-state', 'IDLE'); await expect(canvas).toHaveAttribute('data-swing', 'ready');
   await page.keyboard.press('Escape'); await expect(canvas).toBeFocused();
