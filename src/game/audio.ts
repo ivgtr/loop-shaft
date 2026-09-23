@@ -111,7 +111,7 @@ export class GameAudio {
 
   private tone(note: RewardNote, reward = false): void {
     const context = this.context; const output = reward ? this.master : this.work;
-    if (!context || !output || this.voices.size >= 24) return;
+    if (!context || !output || this.voices.size >= (reward ? 24 : 16)) return;
     const oscillator = context.createOscillator(); const gain = context.createGain();
     const start = context.currentTime + note.at;
     oscillator.type = note.type; oscillator.frequency.setValueAtTime(note.frequency, start);

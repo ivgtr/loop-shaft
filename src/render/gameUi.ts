@@ -1,3 +1,4 @@
+import { DEFAULT_PRESENTATION, type PresentationSettings } from '../game/presentationSettings';
 import { ELEVATOR_TABS, elevatorItems, selectedElevatorItem, shipmentStatus, type ElevatorItem, type ElevatorTab, type ElevatorUiState } from '../game/elevatorUi';
 import { sceneReadout } from '../game/hud';
 import { playerControlAvailable, playerInteraction } from '../game/playerControls';
@@ -9,12 +10,13 @@ import type { Rect } from './interactionTargets';
 
 export type GameUiAction = import('./managementUi').ManagementUiAction | WorkshopUiAction | { type: 'lift-open'; tab?: ElevatorTab; id?: string }
   | { type: 'lift-close' | 'lift-activate' | 'help-open' | 'help-close' }
+  | { type: 'presentation'; setting: keyof PresentationSettings }
   | { type: 'lift-tab'; tab: ElevatorTab } | { type: 'lift-select'; id: string } | { type: 'direction'; direction: -1 | 1 };
 export interface GameUiLayout {
   buttons: UiButton<GameUiAction>[]; panel: Rect | null; compact: boolean; item: ElevatorItem | null;
 }
 
-export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null, help: boolean, viewport: UiViewport): GameUiLayout {
+export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null, help: boolean, viewport: UiViewport, presentation: PresentationSettings = DEFAULT_PRESENTATION): GameUiLayout {
   const { width: w, height: h, world } = viewport;
   const compact = w < 680;
   const buttons: UiButton<GameUiAction>[] = [];
@@ -23,7 +25,17 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
       width: compact ? w - 16 : Math.min(660, w - 32), height: compact ? h - 16 : 386 };
     buttons.push({ id: 'window-close', text: 'X', label: help ? 'Close controls help' : 'Close elevator controls', action: { type: help ? 'help-close' : 'lift-close' },
       x: panel.x + panel.width - 52, y: panel.y + 6, width: 44, height: 44 });
-    if (help) return { buttons, panel, compact, item: null };
+    if (help) {
+      const settings: Array<{ setting: keyof PresentationSettings; text: string; label: string }> = [
+        { setting: 'volume', text: `VOL ${Math.round(presentation.volume * 100)}%`, label: `Sound volume ${Math.round(presentation.volume * 100)} percent` },
+        { setting: 'motion', text: `MOTION ${presentation.motion ? 'ON' : 'OFF'}`, label: `Screen shake and effect motion ${presentation.motion ? 'on' : 'off'}` },
+        { setting: 'highlights', text: `LIGHT ${presentation.highlights ? 'ON' : 'OFF'}`, label: `Effect highlights ${presentation.highlights ? 'on' : 'off'}` },
+      ];
+      settings.forEach((setting, n) => buttons.push({ id: `presentation-${setting.setting}`, text: setting.text, label: setting.label,
+        action: { type: 'presentation', setting: setting.setting }, x: panel.x + 8 + n * (panel.width - 16) / 3,
+        y: panel.y + panel.height - 54, width: (panel.width - 16) / 3 - 4, height: 44 }));
+      return { buttons, panel, compact, item: null };
+    }
     const ui = elevator!;
     ELEVATOR_TABS.forEach((tab, n) => buttons.push({ id: `lift-tab-${tab}`, text: tab === 'dispatch' ? 'SHIP' : tab.toUpperCase(), label: `Elevator ${tab}`,
       selected: tab === ui.tab, action: { type: 'lift-tab', tab }, x: panel.x + 8 + n * (panel.width - 16) / 3, y: panel.y + 56,
@@ -114,8 +126,8 @@ export function drawGameUi(ctx: CanvasRenderingContext2D, state: GameState, elev
     } else if (help) {
       const x = p.x + 14; const width = p.width - 28;
       const controls = ['A / D or arrows: walk', 'Space / MINE: one swing', 'E: pick up, load, or inspect', 'F / SEND: send loaded cargo', 'RETURN: walk back and unload', 'Esc: close a window / stop', 'Hold < / > to walk on touch'];
-      controls.forEach((label, n) => text(ctx, label, x, p.y + 72 + n * 24, 12));
-      lines(ctx, sceneReadout(state).detail || sceneReadout(state).goal, x, p.y + 264, width, 12, compact ? 4 : 3, C.gold);
+      controls.forEach((label, n) => text(ctx, label, x, p.y + 72 + n * (p.height < 350 ? 18 : 24), 12));
+      if (p.height >= 350) lines(ctx, sceneReadout(state).detail || sceneReadout(state).goal, x, p.y + 258, width, 12, 2, C.gold);
     }
   } else {
     const run = state.run;
