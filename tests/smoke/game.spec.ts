@@ -13,7 +13,8 @@ function observeErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('response', response => {
-    if (/\.(?:js|css|png)(?:\?|$)/.test(response.url()) && !response.ok()) {
+    // Cached assets may legitimately return 304 after a reload.
+    if (/\.(?:js|css|png)(?:\?|$)/.test(response.url()) && response.status() >= 400) {
       errors.push(`${response.status()} ${response.url()}`);
     }
   });
@@ -138,7 +139,11 @@ test.describe('small-screen touch', () => {
     await action(page, 'close').tap();
     await expect(workshop(page)).toHaveCount(0);
     point = await worldPoint(page, node.x, 214);
+    // Closing a facility stops the old job; reselect, then issue a new swing.
     await page.touchscreen.tap(point.x, point.y);
+    await expect(canvas).toHaveAttribute('data-player-state', 'MINING');
+    await expect(canvas).toHaveAttribute('data-swing', 'ready');
+    await page.getByRole('button', { name: 'MINE', exact: true }).tap();
     await expect.poll(async () => Number(await rock.getAttribute('aria-valuenow'))).toBeLessThan(remainingHp);
     expect(errors).toEqual([]);
   });

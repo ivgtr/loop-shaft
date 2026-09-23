@@ -24,6 +24,8 @@ function fieldTool(state: GameState, affix: EquipmentAffixId) {
   throw new Error(`Missing field affix ${affix}`);
 }
 
+// Keep boundary/representative contracts here; broad seed scans are opt-in in
+// prospecting.extended.test.ts, alongside the balance measurement tools.
 describe('ordinary ore upside and bounded bad luck', () => {
   it.each([[0.029, 0, 'PURE'], [0.03, 0, 'FINE'], [0.149, 0, 'FINE'], [0.15, 0, 'NORMAL'], [0.999, 12, 'FINE']])('roll %s with %s misses gives %s', (roll, misses, expected) => {
     expect(qualityForRoll(roll as number, misses as number)).toBe(expected);
@@ -35,16 +37,14 @@ describe('ordinary ore upside and bounded bad luck', () => {
       const item = loot(kind); const before = structuredClone(item); applyOreQuality(item, 'PURE'); expect(item).toEqual(before);
     }
   });
-  it('bounds normal-quality droughts over 256 seeds and preserves base ordinary production', () => {
-    for (let seed = 1; seed <= 256; seed++) {
-      const state = createGameState(seed); let misses = 0;
-      for (let i = 0; i < 80; i++) {
-        const items = breakRock(state); const ores = items.filter((item) => item.category === 'ORE');
-        expect(ores).toHaveLength(3); expect(ores.every((item) => item.value >= 12 && item.weight === 2)).toBe(true);
-        misses = ores[0]!.quality === 'NORMAL' ? misses + 1 : 0;
-        expect(misses).toBeLessThanOrEqual(QUALITY_PITY);
-      }
-    }
+  it('applies the quality safeguard to physical ore without reducing ordinary production', () => {
+    const state = createGameState(1);
+    state.run.floors['D-001'].prospecting = { ...createProspectingState(), qualityMisses: QUALITY_PITY };
+    const ores = breakRock(state).filter(item => item.category === 'ORE');
+    expect(ores).toHaveLength(3);
+    expect(ores.every(item => item.value >= 12 && item.weight === 2)).toBe(true);
+    expect(ores[0]!.quality).not.toBe('NORMAL');
+    expect(state.run.floors['D-001'].prospecting!.qualityMisses).toBe(0);
   });
   it('isolates quality and field gear from unrelated floor work and preview reads', () => {
     const states = [createGameState(90), createGameState(90)];
@@ -107,43 +107,36 @@ describe('finite persistent clues and future art contract', () => {
     state.meta.runIndex++; state.run = createNewRun(state.meta);
     expect(state.run.floors['D-001'].prospecting).toBeUndefined();
   });
-  it('reserves every possible bonus so Bore capacity never discards a newly rolled find', () => {
-    for (let seed = 1; seed <= 30; seed++) {
-      const state = createGameState(seed);
-      for (const depth of ['D-030', 'D-060', 'D-180', 'D-250', 'D-400'] as const) {
-        const floor = state.run.floors[depth];
-        for (let i = 0; i < 36; i++) {
-          const node = floor.nodes[i % 3]!; const max = maximumMiningDropWeight(state, floor, node);
-          const items = rollMiningLoot(state, floor, node, () => undefined, { boreId: 'probe' });
-          expect(items.reduce((sum, item) => sum + item.weight, 0)).toBeLessThanOrEqual(max + 0.001);
-        }
+  it('reserves physical bonus capacity across representative Bore work on each depth', () => {
+    const state = createGameState(1);
+    for (const depth of ['D-030', 'D-060', 'D-180', 'D-250', 'D-400'] as const) {
+      const floor = state.run.floors[depth];
+      for (let i = 0; i < 36; i++) {
+        const node = floor.nodes[i % 3]!; const max = maximumMiningDropWeight(state, floor, node);
+        const items = rollMiningLoot(state, floor, node, () => undefined, { boreId: 'probe' });
+        expect(items.reduce((sum, item) => sum + item.weight, 0)).toBeLessThanOrEqual(max + 0.001);
       }
     }
   });
 });
 
 describe('early equipment must reach surface and change real work', () => {
-  it('guarantees the first field tool in six local breaks and later gaps within sixteen', () => {
-    for (let seed = 1; seed <= 128; seed++) {
-      const state = createGameState(seed); let first = 0; let misses = 0;
-      for (let i = 1; i <= 64; i++) {
-        const items = breakRock(state, 'D-030', 0); misses++;
-        if (items.some((item) => item.equipmentSeed !== undefined)) { first ||= i; expect(misses).toBeLessThanOrEqual(16); misses = 0; }
-        if (i === 6) expect(first).toBeGreaterThan(0);
-        expect(misses).toBeLessThan(16);
-      }
-      expect(state.run.phase5.equipment.inventory).toHaveLength(0);
+  it('bounds first and subsequent field-tool gaps in a representative physical run', () => {
+    const state = createGameState(1); let first = 0; let misses = 0;
+    for (let i = 1; i <= 64; i++) {
+      const items = breakRock(state, 'D-030', 0); misses++;
+      if (items.some((item) => item.equipmentSeed !== undefined)) { first ||= i; expect(misses).toBeLessThanOrEqual(16); misses = 0; }
+      if (i === 6) expect(first).toBeGreaterThan(0);
+      expect(misses).toBeLessThan(16);
     }
+    expect(state.run.phase5.equipment.inventory).toHaveLength(0);
   });
-  it('keeps field tools one-affix/level-one and deterministic without leaking into ancient records', () => {
-    const state = createGameState(411); const pool = new Set();
-    for (let seed = 1; seed <= 100; seed++) {
-      const a = generateEquipmentItem(state, seed, 'field-pick', 'TOOL');
-      const b = generateEquipmentItem(state, seed, 'field-pick', 'TOOL');
-      expect(a.affixes).toEqual(b.affixes); expect(a.level).toBe(1); expect(a.affixes).toHaveLength(1);
-      expect(['COMMON', 'RARE']).toContain(a.rarity); pool.add(a.affixes[0]!.id);
-    }
-    expect([...pool].sort()).toEqual(['FOSSIL_BREAKER', 'LIGHT_FRAME', 'RESEARCH_PRISM']);
+  it('keeps a generated field tool one-affix/level-one and deterministic', () => {
+    const state = createGameState(411);
+    const a = generateEquipmentItem(state, 1, 'field-pick', 'TOOL');
+    const b = generateEquipmentItem(state, 1, 'field-pick', 'TOOL');
+    expect(a.affixes).toEqual(b.affixes); expect(a.level).toBe(1); expect(a.affixes).toHaveLength(1);
+    expect(['COMMON', 'RARE']).toContain(a.rarity);
   });
   it('appraises once after actual lift travel, can equip during Run 1, and does not consume passive guarantee', () => {
     let state = createGameState(515); state.run.depth.unlocked.push('D-030'); state.run.depth.current = 'D-030';
