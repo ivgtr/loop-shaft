@@ -101,6 +101,7 @@ describe('shipment and completed work feedback', () => {
     const state = createGameState(); const feedback = new WorkFeedback();
     expect(feedback.handle(event('AUTOMATION_UNLOCKED', { automation: 'AUTO_SWING' }), state)).toEqual([]);
     feedback.handle(event('AUTO_SWING_TRIGGER', { nodeId: 'rock' }), state);
+    feedback.handle(event('MINER_SWING_START', { crewId: 'crew', nodeId: 'other-rock' }), state);
     expect(feedback.handle(event('MINER_SWING_HIT', { nodeId: 'rock', damage: 0 }), state)).toEqual([]);
     expect(feedback.handle(event('MINER_SWING_HIT', { nodeId: 'rock', damage: 2 }), state)[0]?.label).toBe('AUTO SWING WORKING');
     expect(feedback.handle(event('MINER_SWING_HIT', { nodeId: 'rock', damage: 2 }), state)).toEqual([]);

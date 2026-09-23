@@ -47,7 +47,7 @@ export class WorkFeedback {
     if (event.type === 'BORE_INSTALL_COMPLETED' && data.boreId) this.armed.add(String(data.boreId));
     if (event.type === 'ENGINEER_INSTALL_COMPLETED' && data.kind === 'FREIGHT_INSTALL') this.armed.add('FREIGHT');
     if (event.type === 'AUTO_SWING_TRIGGER' && this.armed.has('AUTO_SWING')) this.autoNode = String(data.nodeId);
-    if (event.type === 'MINER_SWING_START' && data.nodeId !== this.autoNode) this.autoNode = null;
+    if (event.type === 'MINER_SWING_START' && !data.crewId && data.nodeId !== this.autoNode) this.autoNode = null;
     if (event.type === 'PLAYER_INPUT_MINE' || event.type === 'PLAYER_INPUT_MOVE') this.autoNode = null;
     if (event.type === 'AUTO_DISPATCH_TRIGGER' && this.armed.has('AUTO_DISPATCH')) this.autoShipment = String(data.shipmentId);
     const actor = String(data.crewId ?? data.actor ?? 'PLAYER');
