@@ -1,3 +1,4 @@
+import { surveyView } from './survey';
 import { canShowCrewBoard } from '../phase5';
 import type { GameState, Selection } from '../types';
 import { crewView } from './crew';
@@ -11,6 +12,7 @@ export function stationAvailable(state: GameState, station: Station): boolean {
   const { run, meta } = state;
   switch (station) {
     case 'facilities': case 'equipment': return true;
+    case 'survey': return !(run.depth.current === 'D-030' && !run.anomaly.selected);
     case 'research': return run.depth.unlocked.includes('D-060');
     case 'archive': return run.depth.unlocked.includes('D-030');
     case 'scanner': return run.depth.current === 'D-030';
@@ -51,6 +53,7 @@ export function createManagementState(state: GameState, request: StationRequest,
 export function stationView(state: GameState, ui: ManagementState): StationView {
   let view: StationView;
   switch (ui.station) {
+    case 'survey': view = surveyView(state, ui); break;
     case 'equipment': view = equipmentView(state, ui); break;
     case 'research': view = researchView(state, ui); break;
     case 'archive': view = archiveView(state, ui); break;
@@ -71,6 +74,7 @@ export function selectedStationItem(state: GameState, ui: ManagementState): Stat
 
 function facilitiesView(state: GameState): StationView {
   const names: [Station, string, string][] = [
+    ['survey', 'Field notes', 'Inspect veins, discoveries and cargo.'],
     ['equipment', 'Recovered gear', 'Compare and equip recovered tools.'],
     ['research', 'Surface analyzer', 'Continue research and plan the next discovery.'],
     ['crew', 'Shift board', 'Hire, assign floors, set priorities and fit worker equipment.'],

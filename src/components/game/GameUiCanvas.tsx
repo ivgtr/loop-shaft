@@ -1,3 +1,5 @@
+import { inspectedNode } from '../../game/fieldUi';
+import { shipmentStatus } from '../../game/elevatorUi';
 import { gameAssets } from '../../render/assets/gameAssets';
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useGameRuntime, useGameSnapshot } from '../../app/GameProvider';
@@ -9,14 +11,14 @@ import { elevatorItems, selectedElevatorItem } from '../../game/elevatorUi';
 import { sceneReadout } from '../../game/hud';
 import { stationView, selectedStationItem } from '../../game/management';
 import { drawManagementUi, layoutManagementUi } from '../../render/managementUi';
-import { cargoValue, carriedWeight } from '../../game/simulation';
+import { cargoValue, carriedWeight, cargoWeight } from '../../game/simulation';
 
 /** The visible interface is painted on Canvas. Transparent native buttons supply
  * focus, touch hit areas and screen-reader semantics from the SAME layout. */
 export function GameUiCanvas() {
   const runtime = useGameRuntime();
   const assets = useMemo(gameAssets, []);
-  const { state, workshop, elevatorUi, helpOpen, management, presentation } = useGameSnapshot();
+  const { state, workshop, elevatorUi, helpOpen, management, presentation, controlHint } = useGameSnapshot();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const inputsRef = useRef<HTMLDivElement>(null);
   const focusSelectedItem = useRef(false);
@@ -29,6 +31,7 @@ export function GameUiCanvas() {
   const layout = useMemo(() => workshop ? layoutWorkshopUi(state, workshop, viewport) : layoutGameUi(state, elevatorUi, helpOpen, viewport, presentation), [state, workshop, elevatorUi, helpOpen, viewport, presentation]);
   const buttons = managementLayout?.buttons ?? layout.buttons;
   const readout = sceneReadout(state);
+  const node = inspectedNode(state);
 
   useLayoutEffect(() => {
     // A lost browser focus may never deliver pointerup to the original button.
@@ -207,17 +210,25 @@ export function GameUiCanvas() {
         <p role="status" aria-live="polite">{elevatorUi.notice}</p>
       </div>}
       {helpOpen && <div className="canvas-semantics"><h2>Controls and current objective</h2><p>{readout.detail || readout.goal}</p>
-        <p>A/D or arrows to walk. Space to mine. E to interact. F to send. RETURN to unload. Escape to close or stop. Hold the direction buttons to walk on touch.</p></div>}
+        <p>A/D or arrows to walk. Space to mine. E to interact. F to send. I to inspect. RETURN to unload. Escape to close or stop. Hold the direction buttons to walk on touch.</p></div>}
       {!open && <section className="canvas-semantics" aria-label="Mining status">
         <h2 data-testid="scene-title">{readout.title}</h2>
         <p data-testid="scene-detail">{readout.detail}</p>
         <p data-testid="pack-status">PACK {carriedWeight(state).toFixed(1)}/{state.run.character.backpackCapacity}kg · value {cargoValue(state.run.character.carried)} Scrap · {readout.short}</p>
         <p data-testid="resource-status">SCRAP {state.run.scrap} · DATA {state.run.data} · CORE {state.meta.core}</p>
-        <p id="player-control-help">A/D or arrows walk. Space mines. E interacts. F sends. Escape stops. Click a vein to approach it or click the floor to walk.</p>
+        {node && <p role="progressbar" aria-label={`${node.name} rock remaining`} aria-valuemin={0} aria-valuemax={node.maxHp}
+          aria-valuenow={Math.max(0, Math.min(node.maxHp, node.hp))}>HP {node.hp}/{node.maxHp}</p>}
+        <p role="progressbar" aria-label="Backpack capacity" aria-valuemin={0} aria-valuemax={state.run.character.backpackCapacity}
+          aria-valuenow={Math.min(state.run.character.backpackCapacity, carriedWeight(state))}>{carriedWeight(state)} kg</p>
+        <p role="progressbar" aria-label="Lift capacity" aria-valuemin={0} aria-valuemax={state.run.elevator.maxLoad}
+          aria-valuenow={Math.min(state.run.elevator.maxLoad, cargoWeight(state.run.elevator.cargo))}>{cargoWeight(state.run.elevator.cargo)} kg</p>
+        <p id="shipment-status">{shipmentStatus(state)}</p>
+        <p role="status" aria-live="polite">{controlHint?.text}</p>
+        <p id="player-control-help">A/D or arrows walk. Space mines. E interacts. F sends. I opens field notes. Escape stops. Click a vein to approach it or click the floor to walk.</p>
       </section>}
       {viewport.width > 0 && buttons.map((button) => <button key={button.id} type="button"
-        className="canvas-hit" aria-label={button.label} disabled={button.disabled}
-        data-status={button.badge} aria-describedby={button.badge || button.detail ? `status-${button.id}` : undefined}
+        className="canvas-hit" aria-label={button.label} disabled={button.disabled && button.action.type !== 'command'} aria-disabled={button.disabled || undefined}
+        data-status={button.badge} aria-describedby={button.id === 'lift-open' ? 'shipment-status' : button.badge || button.detail ? `status-${button.id}` : undefined}
         aria-pressed={button.selected === undefined ? undefined : button.selected}
         data-ui-action={button.id} data-selected={button.selected} data-item={button.icon || button.id.startsWith('lift-item-') || button.id === 'lift-selected' || button.id.startsWith('station-item-') || button.id === 'station-selected' ? 'true' : undefined}
         style={{ left: button.x, top: button.y, width: button.width, height: button.height }}
@@ -244,6 +255,10 @@ export function GameUiCanvas() {
         onPointerEnter={(event) => { if (event.pointerType !== 'touch') setHovered(button.id); }}
         onPointerLeave={() => setHovered(null)}
         onClick={(event) => {
+          if (button.disabled) {
+            if (button.action.type === 'command') runtime.explainControl(button.action.command);
+            return;
+          }
           // Rapid read-only navigation must not be mistaken for a purchase double click.
           const navigation = ['station-close', 'station-back', 'station-select', 'station-tab', 'station-page',
             'station-cancel-confirm', 'station-details', 'station-option', 'station-open', 'close', 'select', 'lift-close', 'lift-tab', 'lift-select', 'help-close'];

@@ -58,10 +58,11 @@ test('first delivery funds an in-world purchase without using the outside contro
   await expect(page.getByTestId('resource-status')).toContainText('SCRAP 0 ·');
   await ui(page, 'send').click();
   await expect(canvas).toHaveAttribute('data-elevator-state', 'ASCENDING');
-  await expect(ui(page, 'goal')).toHaveAttribute('aria-pressed', 'true', { timeout: 15_000 });
+  await expect(page.getByTestId('resource-status')).toContainText('SCRAP 164', { timeout: 15_000 });
+  await expect(ui(page, 'goal')).toHaveCount(0);
   await expect(dialog(page)).toHaveCount(0); // Guidance does not force the window open.
   const stage = await page.locator('.game-shell').boundingBox();
-  await ui(page, 'goal').click();
+  await clickWorld(page, 202, 216);
   await expect(dialog(page)).toContainText('Hit power 10 → 16');
   await expect(page.locator('.legacy-controls, .context-strip')).toHaveCount(0);
   await assertContained(page);
@@ -76,7 +77,8 @@ test('first delivery funds an in-world purchase without using the outside contro
   await testInfo.attach('workshop-after-purchase', { body: await page.screenshot(), contentType: 'image/png' });
   await ui(page, 'close').click();
   await expect(canvas).toBeFocused();
-  await expect(ui(page, 'goal')).toHaveAccessibleName('Inspect next workshop upgrade');
+  await expect(page.getByTestId('scene-detail')).toContainText('Runner Boots');
+  await expect(ui(page, 'goal')).toHaveCount(0);
   await clickWorld(page, SCRAP_X, 214);
   await expect(canvas).toHaveAttribute('data-player-state', 'MINING');
   await page.keyboard.press('Space');
@@ -97,7 +99,7 @@ test('keeps locked items inspectable, focus trapped, and all world inputs blocke
   await expect(page.getByTestId('scene-title')).toHaveText('Scrap Ledge');
   await canvas.focus(); await page.keyboard.down('KeyD');
   await expect(canvas).toHaveAttribute('data-player-state', 'MOVING_TO_POINT');
-  await ui(page, 'goal').click();
+  await clickWorld(page, 202, 216);
   await expect(canvas).toHaveAttribute('data-player-state', 'IDLE');
   const x = await canvas.getAttribute('data-player-x');
   await page.keyboard.up('KeyD');
@@ -133,7 +135,7 @@ test('purchasing Auto Swing neither repeats on held Enter nor starts a hidden mi
   await seed(page, state); await page.goto('/');
   await clickWorld(page, SCRAP_X, 214);
   await expect(page.getByTestId('scene-detail')).toContainText('HP 30/30');
-  await ui(page, 'goal').click();
+  await clickWorld(page, 202, 216);
   await expect(dialog(page)).toContainText('Manual swings → repeated swings');
   await ui(page, 'buy').focus(); await page.keyboard.down('Enter');
   await expect(ui(page, 'buy')).toHaveAccessibleName('Switch Auto Swing OFF');
@@ -192,7 +194,8 @@ for (const width of [320, 390]) {
       await seed(page, state); await page.goto('/');
       const stage = await page.locator('.game-shell').boundingBox();
       const world = await page.locator('.game-canvas').boundingBox();
-      await ui(page, 'goal').tap();
+      const bench = (await page.locator('.game-canvas').boundingBox())!;
+      await page.touchscreen.tap(bench.x + bench.width * 202 / 480, bench.y + bench.height * 216 / 270);
       await assertContained(page);
       await ui(page, 'next').tap();
       await expect(dialog(page)).toContainText('Walk speed');

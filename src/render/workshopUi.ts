@@ -9,7 +9,7 @@ export interface UiViewport { width: number; height: number; world: Rect; }
 export type WorkshopUiAction = { type: 'station-open'; request: import('../game/management').StationRequest } | { type: 'open' | 'close' | 'buy' } | { type: 'select'; id: string } | { type: 'command'; command: GameCommand };
 export interface UiButton<Action = WorkshopUiAction> extends Rect {
   id: string; label: string; text: string; action: Action;
-  disabled?: boolean; selected?: boolean; icon?: WorkshopIcon; owned?: boolean; badge?: string; detail?: string;
+  disabled?: boolean; selected?: boolean; tone?: 'primary' | 'quiet'; busy?: boolean; icon?: WorkshopIcon; owned?: boolean; badge?: string; detail?: string;
 }
 export interface WorkshopUiLayout {
   buttons: UiButton[];
@@ -88,7 +88,7 @@ export function drawWorkshopUi(ctx: CanvasRenderingContext2D, state: GameState, 
       ctx.strokeStyle = '#40373a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p.x + 202.5, p.y + 56); ctx.lineTo(p.x + 202.5, p.y + p.height - 12); ctx.stroke();
       icon(ctx, item.icon, p.x + 214, p.y + 57, 3, item.owned);
       text(ctx, item.name, p.x + 270, p.y + 80, 17, C.light);
-      text(ctx, item.owned ? 'FITTED' : item.tab.toUpperCase(), p.x + 212, p.y + 105, 11, item.owned ? C.installed : C.muted);
+
     }
     const x = p.x + (compact ? 14 : 212);
     const width = p.width - (compact ? 28 : 228);
@@ -96,17 +96,18 @@ export function drawWorkshopUi(ctx: CanvasRenderingContext2D, state: GameState, 
     text(ctx, item.comparison, x, top, compact ? 12 : 14, C.gold);
     lines(ctx, item.description, x, top + 24, width, 13, compact ? 3 : 3);
     const statusY = p.y + p.height - (compact ? 95 : 111);
-    const reason = compact && workshop.notice ? `${item.name} ${item.tab === 'automation' ? 'installed' : 'equipped'}` : item.reason ?? (item.cost === null ? 'Ready to equip' : item.owned ? 'Installed' : 'Ready to fit');
-    lines(ctx, reason, x, statusY, width, 12, 2, item.owned ? C.installed : C.muted);
-    if (workshop.notice && !compact) lines(ctx, workshop.notice, x, p.y + p.height - 78, width, 11, 1, C.installed);
+    if (!item.owned && item.reason) lines(ctx, item.reason, x, statusY, width, 12, 2, C.warning);
+    // Owned marker and action already express fitted/active state. Only announce a purchase once.
+    if (workshop.notice) lines(ctx, workshop.notice, x, p.y + p.height - 78, width, 11, 1, C.installed);
     if (!compact && layout.buttons.some((b) => b.id === 'previous')) text(ctx, layout.itemCount, p.x + 104, p.y + 297, 11, C.muted, 'center');
   }
   for (const button of layout.buttons) drawButton(ctx, button, focused === button.id, compact, hovered === button.id);
 }
 
 export function drawButton<Action>(ctx: CanvasRenderingContext2D, b: UiButton<Action>, focused: boolean, compact: boolean, hovered = false): void {
-  ctx.fillStyle = b.disabled ? '#19171b' : b.selected ? '#3b3025' : hovered ? '#302a2e' : '#282228'; ctx.fillRect(b.x, b.y, b.width, b.height);
-  ctx.strokeStyle = focused ? C.light : b.selected ? C.gold : '#594a42'; ctx.lineWidth = focused ? 2 : 1;
+  const dimmed = b.disabled && !b.busy;
+  ctx.fillStyle = dimmed ? '#19171b' : b.selected || b.tone === 'primary' ? '#3b3025' : hovered ? '#302a2e' : b.tone === 'quiet' ? C.background : '#282228'; ctx.fillRect(b.x, b.y, b.width, b.height);
+  ctx.strokeStyle = focused ? C.light : b.selected || (b.tone === 'primary' && !dimmed) ? C.gold : b.tone === 'quiet' && !hovered ? C.background : '#594a42'; ctx.lineWidth = focused ? 2 : 1;
   ctx.strokeRect(Math.round(b.x) + .5, Math.round(b.y) + .5, Math.round(b.width) - 1, Math.round(b.height) - 1);
   if (b.badge || b.detail) {
     text(ctx, elide(ctx, b.text, b.width - 16, 12), b.x + 8, b.y + 18, 12, C.light);
@@ -126,7 +127,7 @@ export function drawButton<Action>(ctx: CanvasRenderingContext2D, b: UiButton<Ac
     lines(ctx, b.text, b.x + 10, b.y + (compact ? 17 : 23), b.width - 20, 12, compact ? 2 : 1, C.gold);
   } else {
     const label = elide(ctx, b.text, b.width - 14, 12);
-    text(ctx, label, b.x + b.width / 2, b.y + b.height / 2 + 4, 12, b.disabled ? C.disabled : C.light, 'center');
+    text(ctx, label, b.x + b.width / 2, b.y + b.height / 2 + 4, 12, dimmed ? C.disabled : b.tone === 'quiet' ? C.muted : C.light, 'center');
   }
 }
 

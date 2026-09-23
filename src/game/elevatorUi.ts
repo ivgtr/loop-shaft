@@ -59,14 +59,14 @@ export function elevatorItems(state: GameState, tab: ElevatorTab): ElevatorItem[
     const reason = travelBlockReason(state, depth);
     const viaSurface = run.depth.current !== 'D-001' && depth !== 'D-001' && !run.research.completed.includes('MULTI_STOP_RELAY');
     return { id: depth, name: depth, summary: depth === run.depth.current ? 'CURRENT FLOOR' : `DESTINATION ${depth}`,
-      description: `Move the miner to this connected floor${viaSurface ? ' via Surface' : ''}. Cargo must be unloaded and the lift empty. No opening fee.`,
+      description: `Travel to this floor${viaSurface ? ' via Surface' : ''}. Unload cargo and empty the lift first.`,
       reason, actionLabel: `TRAVEL TO ${depth}`, command: reason ? null : { type: 'travel', depth }, complete: depth === run.depth.current };
   });
   if (tab === 'extend') return extensionItems(state);
   const canSend = canDispatchElevator(state);
   const items: ElevatorItem[] = [{ id: 'shipment', name: 'Surface shipment',
     summary: `${weight(cargoWeight(run.elevator.cargo))}/${weight(run.elevator.maxLoad)} kg · EST ${cargoValue(run.elevator.cargo)} Scrap`,
-    description: 'Send loaded cargo to Surface. Payment happens after physical delivery. This does not move the miner or change the selected vein.',
+    description: 'Send cargo to Surface. Paid on arrival.',
     reason: canSend ? null : shipmentStatus(state), actionLabel: 'SEND TO SURFACE', command: canSend ? { type: 'send' } : null }];
   const relay = run.automation.autoDispatch;
   const relayReason = relay.unlocked ? null : upgradeBlockReason(state, 'unlock-auto-dispatch');
@@ -149,7 +149,7 @@ function extensionItems(state: GameState): ElevatorItem[] {
         : checks.find(([ok]) => !ok)?.[1] ?? (run.scrap < cost ? `Need ${cost - run.scrap} more Scrap.` : 'Connection prerequisites are not complete.');
       return { id: depth, name: depth, summary: complete ? 'CONNECTED' : `${cost} SCRAP · NEW CONNECTION`,
         description: depth === 'D-650' ? 'Build a new shaft segment with the Engineer. Construction takes time; it does not move the miner.'
-          : 'Open a new connection without moving the miner. Then choose the destination from TRAVEL.',
+          : 'Open this connection, then select it in TRAVEL.',
         reason, actionLabel: complete ? `${depth} CONNECTED` : depth === 'D-650' ? `BUILD ${depth}` : `OPEN ${depth}`,
         command: ready && !complete ? command : null, complete };
     });
