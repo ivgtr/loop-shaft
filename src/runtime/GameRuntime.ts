@@ -1,3 +1,5 @@
+import { fieldActionHint, type FieldHint } from '../game/fieldUi';
+import { surveyRequest } from '../game/management/survey';
 import { loadPresentationSettings, savePresentationSettings, type PresentationSettings } from '../game/presentationSettings';
 import { togglePorterHold } from '../game/simulation';
 import { restoreFossil } from '../game/appraisal';
@@ -84,6 +86,7 @@ export interface GameSnapshot {
   readonly workshop: WorkshopState | null;
   readonly elevatorUi: ElevatorUiState | null;
   readonly helpOpen: boolean;
+  readonly controlHint: FieldHint | null;
   readonly management: ManagementState | null;
 }
 
@@ -112,6 +115,8 @@ export class GameRuntime {
   private workshop: WorkshopState | null = null;
   private elevatorUi: ElevatorUiState | null = null;
   private helpOpen = false;
+  private controlHint: FieldHint | null = null;
+  private hintExpiresAt = 0;
   private management: ManagementState | null = null;
 
   private get windowOpen(): boolean { return this.workshop !== null || this.elevatorUi !== null || this.helpOpen || this.management !== null; }
@@ -191,6 +196,17 @@ export class GameRuntime {
     this.publish();
   }
 
+  explainControl(command: GameCommand): void {
+    if (this.windowOpen) return;
+    this.setControlHint(command);
+    this.publish();
+  }
+
+  private setControlHint(command: GameCommand): void {
+    this.controlHint = fieldActionHint(this.state, command);
+    this.hintExpiresAt = performance.now() + 2200;
+  }
+
   focusCanvas(): void { this.canvas?.focus({ preventScroll: true }); }
 
   setPointerMovement(direction: -1 | 0 | 1): void {
@@ -235,6 +251,8 @@ export class GameRuntime {
     const ref = target.ref;
     if (ref.type === 'node') {
       const node = currentFloor(this.state).nodes.find((candidate) => candidate.id === ref.id);
+      if (node?.hp === 0) this.setControlHint({ type: 'mine', nodeId: ref.id });
+      else this.controlHint = null;
       if (node && !canPlayerAccessNode(node)) {
         this.miningInput.cancel();
         this.openManagement({ station: 'logistics', tab: 'bore', selectedId: ref.id });
@@ -457,6 +475,7 @@ export class GameRuntime {
       if (!allowed || command.type !== allowed.type
         || ('itemId' in allowed && (!('itemId' in command) || command.itemId !== allowed.itemId))) return;
     }
+    if (!this.windowOpen) this.setControlHint(command);
     if (command.type === 'interact' && playerInteraction(this.state).type === 'scanner') {
       this.openManagement({ station: 'scanner' }); return;
     }
@@ -557,7 +576,8 @@ export class GameRuntime {
       }
     }
     this.refreshPointerTarget();
-    this.renderer?.render(this.state, now, this.hoveredKey);
+    if (this.controlHint && now >= this.hintExpiresAt) this.controlHint = null;
+    this.renderer?.render(this.state, now, this.hoveredKey, this.windowOpen ? null : this.controlHint);
     if (now - this.lastUiUpdate >= UI_UPDATE_INTERVAL) {
       this.lastUiUpdate = now;
       this.publish();
@@ -576,7 +596,7 @@ export class GameRuntime {
     }
     // Native UI buttons retain Space/Enter activation; text editing never controls the miner.
     if (this.windowOpen || !canvasFocused) return;
-    if (![...LEFT_KEYS, ...RIGHT_KEYS, 'Space', 'KeyE', 'KeyF'].includes(event.code)) return;
+    if (![...LEFT_KEYS, ...RIGHT_KEYS, 'Space', 'KeyE', 'KeyF', 'KeyI'].includes(event.code)) return;
     event.preventDefault();
     if (event.repeat) return;
     this.unlockAudio();
@@ -586,6 +606,7 @@ export class GameRuntime {
     } else if (event.code === 'Space') this.dispatch({ type: 'mine' });
     else if (event.code === 'KeyE') this.dispatch({ type: 'interact' });
     else if (event.code === 'KeyF') this.dispatch({ type: 'send' });
+    else if (event.code === 'KeyI') this.openManagement(surveyRequest(this.state));
   };
 
   private readonly handleKeyUp = (event: KeyboardEvent): void => {
@@ -642,6 +663,7 @@ export class GameRuntime {
   }
 
   private clearPointer(): void {
+    this.controlHint = null;
     this.pointerClient = null;
     this.pointerWorld = null;
     this.setHoveredTarget(null);
@@ -654,7 +676,7 @@ export class GameRuntime {
   }
 
   private createSnapshot(): GameSnapshot {
-    return Object.freeze({ revision: this.revision, presentation: { ...this.presentation }, state: structuredClone(this.state),
+    return Object.freeze({ revision: this.revision, controlHint: this.controlHint ? { ...this.controlHint } : null, presentation: { ...this.presentation }, state: structuredClone(this.state),
       workshop: this.workshop ? { ...this.workshop } : null,
       elevatorUi: this.elevatorUi ? { ...this.elevatorUi } : null, helpOpen: this.helpOpen, management: this.management ? structuredClone(this.management) : null });
   }

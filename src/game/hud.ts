@@ -7,7 +7,7 @@ import { miningTarget, playerInteraction } from './playerControls';
 import { currentFloor, mineBlockReason } from './simulation';
 import type { GameState } from './types';
 
-/** One readout source for paint, contextual help and assistive technology. */
+/** Detailed readout for assistive technology and help, not the always-visible HUD. */
 export function sceneReadout(state: GameState) {
   const guide = deriveInitialLogisticsGuide(state);
   const goal = guide?.label ?? nextObjective(state);
