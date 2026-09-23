@@ -625,7 +625,7 @@ function spawnAncientSiteDrop(state: GameState, floor: FloorState, node: MiningN
   floor.loot.push(loot);
   state.run.phase5.equipment.drops.push({ lootId: loot.id, seed: equipmentSeed, baseId: equipmentBaseId(slot, node.id), slot, sourceDepth: D180 });
   emit(state, 'EQUIPMENT_DROP', { id: loot.id, slot, nodeId: node.id, depth: D180, seed: equipmentSeed });
-  emit(state, 'DISCOVERY_FOUND', { id: loot.id, name: loot.name, rarity: loot.rarity, category: loot.category, nodeId: node.id, depth: D180 });
+  emit(state, 'DISCOVERY_FOUND', { id: loot.id, name: loot.name, rarity: loot.rarity, category: loot.category, nodeId: node.id, depth: D180, publicKind: 'SEALED' });
   emitLootSpawn(state, loot, node.id);
 }
 

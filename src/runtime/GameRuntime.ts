@@ -1,3 +1,4 @@
+import { loadPresentationSettings, savePresentationSettings, type PresentationSettings } from '../game/presentationSettings';
 import { togglePorterHold } from '../game/simulation';
 import { restoreFossil } from '../game/appraisal';
 import { setDispatchPolicy } from '../game/dispatch';
@@ -78,6 +79,7 @@ const RIGHT_KEYS = ['KeyD', 'ArrowRight'];
 
 export interface GameSnapshot {
   readonly revision: number;
+  readonly presentation: PresentationSettings;
   readonly state: GameState;
   readonly workshop: WorkshopState | null;
   readonly elevatorUi: ElevatorUiState | null;
@@ -89,6 +91,7 @@ type Listener = () => void;
 
 export class GameRuntime {
   private readonly audio = new GameAudio();
+  private presentation = loadPresentationSettings();
   private readonly listeners = new Set<Listener>();
   private readonly heldKeys = new Set<string>();
   private readonly miningInput: MiningInput;
@@ -140,13 +143,14 @@ export class GameRuntime {
   attachCanvas(canvas: HTMLCanvasElement): void {
     if (this.canvas === canvas) return;
     this.canvas = canvas;
-    this.renderer = new GameRenderer(canvas);
+    this.renderer = new GameRenderer(canvas, { reward: notice => this.audio.playReward(notice), settings: () => this.presentation });
   }
 
   detachCanvas(canvas: HTMLCanvasElement): void {
     if (this.canvas !== canvas) return;
     this.releaseInputs();
     this.clearPointer();
+    this.renderer?.clearFeedback(); this.audio.reset();
     this.canvas = null;
     this.renderer = null;
   }
@@ -165,6 +169,7 @@ export class GameRuntime {
   stop(): void {
     if (this.animationFrame !== null) cancelAnimationFrame(this.animationFrame);
     this.animationFrame = null;
+    this.renderer?.clearFeedback(); this.audio.reset();
     this.releaseInputs();
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
@@ -174,7 +179,17 @@ export class GameRuntime {
     saveToStorage(this.state);
   }
 
-  unlockAudio(): void { this.audio.unlock(); }
+  unlockAudio(): void { this.audio.setVolume(this.presentation.volume); this.audio.unlock(); }
+
+  changePresentation(setting: keyof PresentationSettings): void {
+    if (!this.helpOpen) return;
+    this.presentation = { ...this.presentation, [setting]: setting === 'volume'
+      ? this.presentation.volume === 0 ? .5 : this.presentation.volume < 1 ? 1 : 0
+      : !this.presentation[setting] };
+    this.audio.setVolume(this.presentation.volume);
+    savePresentationSettings(this.presentation);
+    this.publish();
+  }
 
   focusCanvas(): void { this.canvas?.focus({ preventScroll: true }); }
 
@@ -521,8 +536,10 @@ export class GameRuntime {
     processPhase5Events(this.state, baseEvents);
     const events = [...baseEvents, ...drainEvents(this.state)];
     for (const gameEvent of events) {
-      this.renderer?.handleEvent(gameEvent, this.state, now);
-      this.audio.handle(gameEvent);
+      if (!document.hidden) {
+        this.renderer?.handleEvent(gameEvent, this.state, now);
+        this.audio.handle(gameEvent, this.state);
+      }
     }
     if (this.saveTimer >= SAVE_INTERVAL) {
       saveToStorage(this.state);
@@ -601,7 +618,7 @@ export class GameRuntime {
   private readonly handleBeforeUnload = (): void => { this.releaseInputs(); saveToStorage(this.state); };
 
   private readonly handleVisibilityChange = (): void => {
-    if (document.visibilityState === 'hidden') { this.releaseInputs(); saveToStorage(this.state); }
+    if (document.visibilityState === 'hidden') { this.releaseInputs(); this.renderer?.clearFeedback(); this.audio.reset(); saveToStorage(this.state); }
   };
 
   private refreshPointerTarget(): void {
@@ -637,7 +654,7 @@ export class GameRuntime {
   }
 
   private createSnapshot(): GameSnapshot {
-    return Object.freeze({ revision: this.revision, state: structuredClone(this.state),
+    return Object.freeze({ revision: this.revision, presentation: { ...this.presentation }, state: structuredClone(this.state),
       workshop: this.workshop ? { ...this.workshop } : null,
       elevatorUi: this.elevatorUi ? { ...this.elevatorUi } : null, helpOpen: this.helpOpen, management: this.management ? structuredClone(this.management) : null });
   }

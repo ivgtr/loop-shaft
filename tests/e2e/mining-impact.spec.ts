@@ -45,6 +45,7 @@ test('merged world layers share impacts, ancient clues stay in front, and gear u
     renderer.render(state, 100); const resting = images;
     reset();
     renderer.handleEvent({ id: 1, at: 0, type: 'MINER_SWING_HIT', data: { depth: 'D-001', nodeId: state.run.character.targetNodeId, damage: 1 } }, state, 100);
+    renderer.handleEvent({ id: 10, at: 0, type: 'NODE_BREAK', data: { depth: 'D-001', nodeId: state.run.character.targetNodeId } }, state, 100);
     renderer.handleEvent({ id: 2, at: 0, type: 'DATA_GAIN', data: { amount: 1 } }, state, 100);
     renderer.render(state, 100);
     const shifts = images.map((paint, i) => ({ file: paint.file, same: paint.file === resting[i]?.file && JSON.stringify(paint.source) === JSON.stringify(resting[i]?.source), dx: paint.x - resting[i]!.x, dy: paint.y - resting[i]!.y }));

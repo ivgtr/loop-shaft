@@ -144,7 +144,8 @@ export function rollMiningLoot(state: GameState, floor: FloorState, node: Mining
       // A sealed tool is not a passive relic: do not consume the first-passive safeguard.
       if (fieldGearSeed === null && !categories.includes(item.category)) categories.push(item.category);
       state.run.discovery.foundThisRun += 1;
-      emit('DISCOVERY_FOUND', { id: item.id, name: item.name, rarity: item.rarity, category: item.category });
+      emit('DISCOVERY_FOUND', { id: item.id, name: item.name, rarity: item.rarity, category: item.category,
+        publicKind: item.specimen || item.equipmentSeed !== undefined ? 'SEALED' : item.kind });
     }
     emit('LOOT_SPAWN', { id: item.id, name: item.name, rarity: item.rarity, category: item.category,
       value: item.value, data: item.dataValue, core: item.coreValue, x: item.x, y: item.y });
