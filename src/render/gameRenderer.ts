@@ -48,14 +48,17 @@ export class GameRenderer {
   }
 
   render(state: GameState, now: number, hoveredKey: string | null = null): void {
+    const shake = this.base.worldShake(state, now);
+    this.ctx.save();
+    this.ctx.translate(shake, 0);
     const semantic = deriveSemanticRenderState(state, now);
     this.base.render(state, now, semantic);
     if (state.run.elevator.travel) {
+      this.ctx.restore();
       this.base.drawForegroundFx(now);
       return;
     }
     const depth = state.run.depth.current;
-    this.ctx.save();
     if (depth === 'D-250') drawTheLost(this.ctx, state);
     if (depth === 'D-400') drawNullStrata(this.ctx, state, now);
     if (depth === 'D-650') drawD650(this.ctx, now);
@@ -79,12 +82,12 @@ export class GameRenderer {
     const guide = deriveInitialLogisticsGuide(state);
     const guideTargetKey = initialGuideTargetKey(guide, targets);
     drawInteractionOverlay(this.ctx, targets, state.selection, hoveredKey, guideTargetKey);
+    this.ctx.restore();
     // The shared Canvas HUD owns instructions; world overlay only marks the target.
     if (this.deliveryNotice && now < this.deliveryNotice.expiresAt) {
       drawDeliveryNotice(this.ctx, this.deliveryNotice.amount);
     } else if (this.deliveryNotice) this.deliveryNotice = null;
-    this.ctx.restore();
-    this.base.drawForegroundFx(now);
+    this.base.drawForegroundFx(now, shake);
   }
 
   clientToWorld(clientX: number, clientY: number): Point | null {

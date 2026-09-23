@@ -1,4 +1,4 @@
-import type { CollectionEntry } from '../types';
+import type { CollectionEntry, EquipmentItem } from '../types';
 import type { GameCommand } from '../../runtime/commands';
 import type { DepthId, EquipmentSlot, Selection } from '../types';
 
@@ -17,6 +17,8 @@ export interface EquipmentMetric { label: string; before: number; after: number;
 export interface EquipmentPreview {
   slot: EquipmentSlot; current: string; candidate: string;
   metrics: EquipmentMetric[]; gained: string[]; lost: string[];
+  currentTool?: Pick<EquipmentItem, 'affixes'>; candidateTool?: Pick<EquipmentItem, 'affixes'>;
+  currentToolLevel?: number;
 }
 export interface RouteStop { label: string; detail: string; blocked: boolean; }
 export interface StationOption { id: string; label: string; active: boolean; selected: boolean; }

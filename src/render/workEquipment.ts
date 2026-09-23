@@ -14,6 +14,13 @@ export function equippedItem(state: Readonly<GameState>, slot: EquipmentSlot): E
   return equipment.inventory.find((item) => item.id === equipment.equippedPlayer[slot] && item.slot === slot);
 }
 
+/** Shared by the equipped actor and inventory comparison; multi-affix precedence stays identical. */
+export function toolSpriteRow(item?: Pick<EquipmentItem, 'affixes'>, workshopLevel = 1): WorkEquipment['tool'] {
+  const has = (id: EquipmentItem['affixes'][number]['id']) => item?.affixes.some((affix) => affix.id === id);
+  return has('FOSSIL_BREAKER') ? 2 : has('RESEARCH_PRISM') ? 4 : has('LIGHT_FRAME') ? 3
+    : item || workshopLevel === 2 ? 1 : 0;
+}
+
 /** Only the equipped, appraised inventory is consulted; no drop seeds or new progression. */
 export function workEquipment(state: Readonly<GameState>): WorkEquipment {
   const tool = equippedItem(state, 'TOOL');
@@ -21,8 +28,7 @@ export function workEquipment(state: Readonly<GameState>): WorkEquipment {
   const lamp = equippedItem(state, 'LAMP');
   const has = (item: EquipmentItem | undefined, id: EquipmentItem['affixes'][number]['id']) => item?.affixes.some((affix) => affix.id === id);
   return {
-    tool: has(tool, 'FOSSIL_BREAKER') ? 2 : has(tool, 'RESEARCH_PRISM') ? 4 : has(tool, 'LIGHT_FRAME') ? 3
-      : tool || state.run.tool.level === 2 ? 1 : 0,
+    tool: toolSpriteRow(tool, state.run.tool.level),
     stowed: Boolean(tool),
     pack: !pack ? null : has(pack, 'CARGO_HOOK') || has(pack, 'LOAD_HOOK') ? 2
       : pack.baseId === 'field-frame' || has(pack, 'LIGHT_FRAME') ? 1 : 0,
@@ -53,9 +59,9 @@ export function equipmentAttachment(actor: Pick<CharacterRenderState, 'clip' | '
 }
 
 /** Contact is on the near face of the rock; the same point drives the impact tool and debris. */
-export function miningContact(state: Readonly<GameState>): { x: number; y: number } | null {
+export function miningContact(state: Readonly<GameState>, nodeId = state.run.character.targetNodeId): { x: number; y: number } | null {
   const character = state.run.character;
-  const node = state.run.floors[state.run.depth.current].nodes.find((item) => item.id === character.targetNodeId);
+  const node = state.run.floors[state.run.depth.current].nodes.find((item) => item.id === nodeId);
   if (!node) return null;
   // Horizontal input may stop anywhere within mining reach. Keep the contact inside the rock.
   return {

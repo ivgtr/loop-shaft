@@ -1,8 +1,7 @@
-import { miningContact } from './workEquipment';
+import { MiningImpactEffects } from './miningImpactEffects';
 import { collectionSpriteFrame } from './discoveryVisuals';
 import { rewardNotice, RewardNoticeQueue } from '../game/rewardFeedback';
 import { WORLD } from '../game/config';
-import { currentFloor } from '../game/simulation';
 import type { GameEvent, GameState } from '../game/types';
 import { drawD001ElevatorFrontLayer, drawEntities } from './entities';
 import { drawEnvironment } from './environment';
@@ -11,14 +10,12 @@ import type { D001AssetStore } from './d001ImageRenderer';
 import { deriveSemanticRenderState, type SemanticRenderState } from './semanticRenderState';
 import { drawPixelText } from './pixelText';
 
-type DebrisFx = { x: number; y: number; startedAt: number };
 type GainFx = { label: string; startedAt: number };
 
 export class CanvasRenderer {
   readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private shakeUntil = 0;
-  private debris: DebrisFx[] = [];
+  private readonly impacts = new MiningImpactEffects();
   private readonly notices = new RewardNoticeQueue();
   private gain: GainFx | null = null;
 
@@ -33,12 +30,7 @@ export class CanvasRenderer {
   }
 
   handleEvent(event: GameEvent, state: GameState, now: number): void {
-    if (event.type === 'MINER_SWING_HIT' && (!event.data?.depth || event.data.depth === state.run.depth.current)) {
-      const node = currentFloor(state).nodes.find((candidate) => candidate.id === event.data?.nodeId);
-      const contact = event.data?.crewId ? null : miningContact(state);
-      if (node) this.debris.push({ x: contact?.x ?? node.x, y: contact?.y ?? node.y - 8 + (state.run.depth.current === 'D-001' ? 13 : 0), startedAt: now });
-      this.shakeUntil = Math.max(this.shakeUntil, now + 110);
-    }
+    this.impacts.hit(event, state, now);
     if (event.type === 'REBOOT_COMMITTED') this.notices.clear();
     const notice = rewardNotice(event);
     if (notice) this.notices.push(notice, now);
@@ -48,12 +40,14 @@ export class CanvasRenderer {
     if (event.type === 'CORE_GAINED') this.gain = { label: `CORE +${Number(event.data?.amount ?? 0)}`, startedAt: now };
   }
 
+  worldShake(state: GameState, now: number): number {
+    return this.impacts.shake(state, now);
+  }
+
   render(state: GameState, now: number, frame?: SemanticRenderState): void {
     this.ctx.save();
-    const shake = now < this.shakeUntil ? (Math.floor(now / 28) % 2 === 0 ? 1 : -1) : 0;
-    this.ctx.translate(shake, 0);
     const semantic = frame ?? deriveSemanticRenderState(state, now);
-    drawEnvironment(this.ctx, state, this.assets);
+    drawEnvironment(this.ctx, state, this.assets, now);
     drawEntities(this.ctx, state, now, semantic, this.assets);
     if (state.run.depth.current === 'D-001' && state.run.elevator.travel) {
       drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets);
@@ -62,8 +56,8 @@ export class CanvasRenderer {
     if (state.run.elevator.travel) this.drawTravel(state);
   }
 
-  drawForegroundFx(now: number): void {
-    this.drawFx(now);
+  drawForegroundFx(now: number, shake = 0): void {
+    this.drawFx(now, shake);
   }
 
   private drawTravel(state: GameState): void {
@@ -83,17 +77,12 @@ export class CanvasRenderer {
     drawPixelText(this.ctx, `${travel.from} → ${travel.to}`, WORLD.width / 2, 137, { font: 'standard', align: 'center', baseline: 'bottom' });
   }
 
-  private drawFx(now: number): void {
-    this.debris = this.debris.filter((fx) => now - fx.startedAt < 260);
-    const offsets = [[-8, -4], [-4, -8], [3, -7], [7, -3], [10, -6]] as const;
-    for (const fx of this.debris) {
-      const age = (now - fx.startedAt) / 260;
-      this.ctx.fillStyle = '#8b7770';
-      offsets.forEach(([ox, oy], index) => {
-        const dx = ox * age; const dy = oy * age + 12 * age * age;
-        this.ctx.fillRect(Math.round(fx.x + dx), Math.round(fx.y + dy + index % 2), 2, 2);
-      });
-    }
+  private drawFx(now: number, shake: number): void {
+    this.ctx.save();
+    this.ctx.translate(shake, 0);
+    this.ctx.fillStyle = '#8b7770';
+    for (const pixel of this.impacts.pixels(now)) this.ctx.fillRect(pixel.x, pixel.y, 2, 2);
+    this.ctx.restore();
     const notice = this.notices.at(now);
     if (notice) {
       const accent = notice.priority >= 4 ? '#dcc79f' : PALETTE.rare;

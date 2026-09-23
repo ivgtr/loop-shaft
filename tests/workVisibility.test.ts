@@ -5,7 +5,8 @@ import { generateEquipmentItem } from '../src/game/phase5';
 import { cargoWeight, updateGame } from '../src/game/simulation';
 import { deriveSemanticRenderState } from '../src/render/semanticRenderState';
 import { carriedCargoPoint, liftCargoPoint } from '../src/render/cargoMotion';
-import { workEquipment } from '../src/render/workEquipment';
+import { equipmentPreview } from '../src/game/management/equipment';
+import { workEquipment, toolSpriteRow } from '../src/render/workEquipment';
 import { boreMotion, railMotion } from '../src/render/worksiteRenderer';
 import type { RemoteBore, TransportLine, RailCart } from '../src/game/types';
 import { loot } from './fixtures/discovery';
@@ -21,6 +22,12 @@ describe('visible equipment and physical hand-offs', () => {
       state.run.phase5.equipment.inventory.push(item); state.run.phase5.equipment.equippedPlayer.TOOL = item.id;
       const before = JSON.stringify(state);
       expect(workEquipment(state)).toMatchObject({ tool: expected, stowed: true });
+      const candidate = { ...item, affixes: [] };
+      const preview = equipmentPreview(state, candidate);
+      expect(preview.currentTool).toBe(item);
+      expect(preview.candidateTool).toBe(candidate);
+      expect(toolSpriteRow(preview.currentTool, preview.currentToolLevel)).toBe(expected);
+      expect(toolSpriteRow(preview.candidateTool)).toBe(1);
       frame(state); expect(JSON.stringify(state)).toBe(before);
     }
     for (const [slot, base, affix] of [['PACK', 'field-frame', 'CARGO_HOOK'], ['LAMP', 'survey-lamp', 'SURVEY_LAMP_MK2']] as const) {
@@ -31,6 +38,9 @@ describe('visible equipment and physical hand-offs', () => {
     expect(workEquipment(state)).toMatchObject({ pack: 2, lamp: 2 });
     state.run.phase5.equipment.equippedPlayer.TOOL = 'missing-item';
     expect(workEquipment(state)).toMatchObject({ tool: 0, stowed: false });
+    state.run.tool.level = 2;
+    const basic = equipmentPreview(state, state.run.phase5.equipment.inventory[0]!);
+    expect(toolSpriteRow(basic.currentTool, basic.currentToolLevel)).toBe(1);
   });
 
   it('moves a floor item toward its eventual hand without creating another owner', () => {

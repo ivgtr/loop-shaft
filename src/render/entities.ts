@@ -94,6 +94,7 @@ function drawNodes(
   for (const node of currentFloor(state).nodes) {
     if (state.run.depth.current === 'D-001' && semantic && assets && drawD001Node(ctx, node, semantic, assets)) continue;
     drawWithD001GroundOffset(ctx, state.run.depth.current, () => drawNode(ctx, node, state.run.depth.current));
+    if (state.run.depth.current === 'D-180') drawAncientNode(ctx, node);
   }
 }
 
@@ -311,3 +312,21 @@ export function lootColor(kind: LootKind): string {
 }
 function rarityRank(r: Rarity): number { return ({ COMMON: 0, UNCOMMON: 1, RARE: 2, EPIC: 3, RELIC: 4, ANOMALY: 5 } as const)[r]; }
 function rarityColor(r: Rarity): string { if (r === 'ANOMALY') return '#9a8ba1'; if (r === 'RELIC') return '#c2a36f'; if (r === 'EPIC') return '#a990bd'; if (r === 'RARE') return PALETTE.rare; return PALETTE.white; }
+
+// Site facades belong to the rock layer, before clues and moving actors.
+function drawAncientNode(ctx: CanvasRenderingContext2D, node: MiningNode): void {
+  if (node.hp <= 0) return;
+  if (node.id === 'ruined-workshop') {
+    ctx.fillStyle = '#403c34'; ctx.fillRect(node.x - 17, 188, 34, 19);
+    ctx.fillStyle = '#746b5d'; ctx.fillRect(node.x - 12, 191, 21, 3); ctx.fillRect(node.x + 8, 194, 3, 11);
+    ctx.fillStyle = '#5c5143'; ctx.fillRect(node.x - 10, 199, 8, 6);
+  } else if (node.id === 'archive-vault') {
+    ctx.fillStyle = '#343633'; ctx.fillRect(node.x - 18, 184, 36, 23);
+    ctx.fillStyle = '#77766c'; ctx.fillRect(node.x - 13, 188, 26, 2); ctx.fillRect(node.x - 13, 197, 26, 2);
+    ctx.fillStyle = '#202320'; ctx.fillRect(node.x - 8, 191, 16, 5);
+  } else if (node.id === 'sealed-chamber') {
+    ctx.fillStyle = '#302f2b'; ctx.fillRect(node.x - 22, 178, 44, 29);
+    ctx.strokeStyle = '#706a5c'; ctx.strokeRect(node.x - 16.5, 183.5, 33, 22);
+    ctx.fillStyle = '#514a3f'; ctx.fillRect(node.x - 2, 185, 4, 18);
+  }
+}

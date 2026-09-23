@@ -1,3 +1,4 @@
+import { toolSpriteRow } from './workEquipment';
 import type { D001AssetStore } from './d001ImageRenderer';
 import { collectionSpriteFrame, DISCOVERY_ATLAS } from './discoveryVisuals';
 import { stationView, type ManagementState, type StationItem, type StationRequest } from '../game/management';
@@ -286,7 +287,12 @@ export function drawManagementUi(ctx: CanvasRenderingContext2D, viewport: UiView
   if (layout.item.equipment) for (const { box: b, current } of layout.gear) {
     const equipment = layout.item.equipment;
     text(ctx, current ? 'CURRENT' : 'CANDIDATE', b.x, b.y + 11, 11, current ? C.muted : C.gold);
-    icon(ctx, equipment.slot === 'TOOL' ? 'pick' : equipment.slot === 'BOOTS' ? 'boots' : equipment.slot === 'PACK' ? 'pack' : 'lamp', b.x + 2, b.y + 18, 3, current);
+    const tools = equipment.slot === 'TOOL' && assets?.ready('workTools');
+    if (tools) {
+      const row = toolSpriteRow(current ? equipment.currentTool : equipment.candidateTool, current ? equipment.currentToolLevel : 1);
+      // The tool-only part of the existing ready pose, at the same integer scale as other gear icons.
+      ctx.drawImage(tools, 64, row * 40 + 14, 16, 18, b.x + 2, b.y + 18, 48, 54);
+    } else icon(ctx, equipment.slot === 'TOOL' ? 'pick' : equipment.slot === 'BOOTS' ? 'boots' : equipment.slot === 'PACK' ? 'pack' : 'lamp', b.x + 2, b.y + 18, 3, current);
     text(ctx, elide(ctx, current ? equipment.current : equipment.candidate, b.width, 12), b.x, b.y + 82, 12);
     if (current) text(ctx, '→', b.x + b.width + 8, b.y + 44, 16, C.gold);
   }
