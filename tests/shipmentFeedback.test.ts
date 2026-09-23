@@ -106,9 +106,10 @@ describe('shipment and completed work feedback', () => {
     expect(feedback.handle(event('MINER_SWING_HIT', { nodeId: 'rock', damage: 2 }), state)[0]?.label).toBe('AUTO SWING WORKING');
     expect(feedback.handle(event('MINER_SWING_HIT', { nodeId: 'rock', damage: 2 }), state)).toEqual([]);
     feedback.handle(event('PORTER_UNLOCKED'), state);
+    state.run.porter.x = 275;
     expect(feedback.handle(event('PORTER_PICKUP', { items: 1 }), state)).toEqual([]);
     expect(feedback.handle(event('PORTER_DEPOSIT', { items: 0 }), state)).toEqual([]);
-    expect(feedback.handle(event('PORTER_DEPOSIT', { items: 1 }), state)).toHaveLength(1);
+    expect(feedback.handle(event('PORTER_DEPOSIT', { items: 1, carrier: 'PORTER' }), state)[0]?.work?.x).toBe(275);
     feedback.handle(event('AUTOMATION_UNLOCKED', { automation: 'AUTO_DISPATCH' }), state);
     feedback.handle(event('AUTO_DISPATCH_TRIGGER', { shipmentId: 'CENTRAL:auto' }), state);
     expect(feedback.handle(event('SHIPMENT_APPRAISED', { shipmentId: 'CENTRAL:manual' }), state)).toEqual([]);

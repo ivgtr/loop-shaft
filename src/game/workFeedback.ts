@@ -50,7 +50,7 @@ export class WorkFeedback {
     if (event.type === 'MINER_SWING_START' && !data.crewId && data.nodeId !== this.autoNode) this.autoNode = null;
     if (event.type === 'PLAYER_INPUT_MINE' || event.type === 'PLAYER_INPUT_MOVE') this.autoNode = null;
     if (event.type === 'AUTO_DISPATCH_TRIGGER' && this.armed.has('AUTO_DISPATCH')) this.autoShipment = String(data.shipmentId);
-    const actor = String(data.crewId ?? data.actor ?? 'PLAYER');
+    const actor = String(data.crewId ?? data.actor ?? data.carrier ?? 'PLAYER');
     const local = !state.run.elevator.travel && (!data.depth || data.depth === state.run.depth.current);
     const hit = event.type === 'MINER_SWING_HIT' && Number(data.damage) > 0 && !data.boreId;
     const pickup = event.type === 'CARGO_TRANSFERRED' && data.stage === 'PICKUP' && Number(data.items) > 0;
