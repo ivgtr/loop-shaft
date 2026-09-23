@@ -16,7 +16,7 @@ export function drawRewardEffect(ctx: CanvasRenderingContext2D, notice: ActiveRe
   if (point && notice.startedAt - notice.queuedAt > 350) return;
   const effect = notice.effect ?? 'find';
   const x = Math.round(point?.x ?? 102); const y = Math.round(point?.y ?? 66);
-  const t = Math.floor(age / 65);
+  const t = settings.motion ? Math.floor(age / 65) : 4;
   const travel = settings.motion ? Math.min(12, t * 2) : 0;
   ctx.save();
   if (point) { ctx.beginPath(); ctx.rect(0, 82, 480, 154); ctx.clip(); }

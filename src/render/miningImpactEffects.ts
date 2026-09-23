@@ -14,6 +14,8 @@ export class MiningImpactEffects {
   private shakeUntil = 0;
   private lastTime = 0;
 
+  clear(): void { this.impacts = []; this.shakeUntil = 0; }
+
   private sync(state: GameState, now: number): void {
     if (this.run !== state.run || this.depth !== state.run.depth.current || state.run.elevator.travel || now < this.lastTime) {
       this.impacts = []; this.shakeUntil = 0;

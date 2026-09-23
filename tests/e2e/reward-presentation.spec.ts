@@ -26,14 +26,15 @@ test('reward motifs share one presentation onset, keep cargo intact and respect 
     renderer.render(state, 100); renderer.render(state, 165);
     const afterRender = starts.slice();
     const firstImage = canvas.toDataURL();
-    const shots: Array<{ name: string; image: string }> = [];
+    const shots: Array<{ name: string; image: string; site: string }> = [];
+    const sitePixels = () => Array.from(canvas.getContext('2d')!.getImageData(Math.round(node.x) - 30, Math.round(node.y) - 28, 60, 50).data).join(',');
     for (const [index, kind] of ['NATURAL_GOLD', 'GEM', 'FRACTURE_CORE', 'BLACK_GLASS_HEART'].entries()) {
       const at = 3000 + index * 3000;
       const category = index < 2 ? 'VALUABLE' : index === 2 ? 'RELIC' : 'ANOMALY';
       renderer.clearFeedback();
       renderer.handleEvent({ id: 10 + index, type: 'DISCOVERY_FOUND', at: 0, data: { id: kind, publicKind: kind, name: kind, category, nodeId: node.id, depth: 'D-001' } }, state, at);
       renderer.render(state, at); renderer.render(state, at + 260);
-      shots.push({ name: kind, image: canvas.toDataURL() });
+      shots.push({ name: kind, image: canvas.toDataURL(), site: sitePixels() });
     }
     const startsBeforeRemote = starts.length;
     renderer.clearFeedback();
@@ -53,16 +54,19 @@ test('reward motifs share one presentation onset, keep cargo intact and respect 
     renderer.handleEvent({ id: 41, type: 'DISCOVERY_FOUND', at: 0, data: { id: 'quiet', publicKind: 'GEM', category: 'VALUABLE', nodeId: node.id, depth: 'D-001' } }, state, 21000);
     renderer.render(state, 21000);
     const quietImage = canvas.toDataURL();
+    const stillSite = sitePixels(); renderer.render(state, 21260);
+    const reducedStatic = stillSite === sitePixels();
     const unchanged = JSON.stringify(state) === before;
     const audioRunning = context.state === 'running';
     audio.reset(); await context.close();
-    return { beforeRender, afterRender, remoteIgnored, cleared, unchanged, audioRunning, firstImage, quietImage, shots };
+    return { beforeRender, afterRender, remoteIgnored, cleared, unchanged, audioRunning, firstImage, quietImage, shots, reducedStatic };
   });
   expect(result.beforeRender).toBe(0);
   expect(result.afterRender).toEqual(['SPECIMEN_APPRAISED:first']);
   expect(result.remoteIgnored).toBe(true); expect(result.cleared).toBe(true);
   expect(result.unchanged).toBe(true); expect(result.audioRunning).toBe(true);
-  expect(new Set(result.shots.map(shot => shot.image)).size).toBe(4);
+  expect(new Set(result.shots.map(shot => shot.site)).size).toBe(4);
+  expect(result.reducedStatic).toBe(true);
   for (const shot of [{ name: 'first-specimen', image: result.firstImage }, ...result.shots, { name: 'reduced-effects', image: result.quietImage }]) {
     await info.attach(shot.name, { body: Buffer.from(shot.image.split(',')[1]!, 'base64'), contentType: 'image/png' });
   }

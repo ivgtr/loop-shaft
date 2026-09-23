@@ -35,7 +35,7 @@ export class CanvasRenderer {
   }
 
   clearFeedback(): void {
-    this.notices.clear();
+    this.notices.clear(); this.impacts.clear();
     if (this.presented) this.output?.reward(null);
     this.presented = null; this.gain = null;
   }
