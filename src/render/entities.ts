@@ -15,6 +15,7 @@ import {
   drawD001ElevatorBack,
   drawD001ElevatorCargo,
   drawD001ElevatorFront,
+  drawD001FixedControl,
   drawD001Node,
   drawD001Player,
   drawD001Porter,
@@ -52,6 +53,7 @@ export function drawEntities(
   if (d001 && !(assets && drawD001ElevatorCargo(ctx, state, semantic!, assets))) {
     drawElevatorCargoFallback(ctx, state, semantic!);
   }
+  drawLiftControl(ctx, state, Boolean(assets && drawD001FixedControl(ctx, assets)));
   if (state.run.porter.enabled) {
     if (semantic?.porter && assets?.ready('npcPorter')) {
       drawD001ActorShadow(ctx, semantic.porter);
@@ -72,7 +74,6 @@ export function drawEntities(
   drawLoot(ctx, state, now, assets, semantic);
   if (!d001) {
     drawElevator(ctx, state, now, assets, locale, ui);
-    drawLiftControl(ctx, state, false);
   }
 }
 
@@ -87,7 +88,6 @@ export function drawD001ElevatorFrontLayer(
 ): boolean {
   const imageDrawn = Boolean(assets && drawD001ElevatorFront(ctx, state, semantic, assets));
   if (!imageDrawn) drawD001ElevatorFrontFallback(ctx, state, semantic, now, locale, ui);
-  drawLiftControl(ctx, state, imageDrawn);
   return imageDrawn;
 }
 

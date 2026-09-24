@@ -9,6 +9,7 @@ import {
 } from '../src/render/interactionTargets';
 import { D001_VISUAL_GROUND_OFFSET, D001_WORKBENCH_FALLBACK_OFFSET } from '../src/render/semanticRenderState';
 import { createD001Nodes } from '../src/game/config';
+import { INTERACTION_LAYOUT } from '../src/render/interactionLayout';
 const SCRAP_X = createD001Nodes()[0]!.x;
 
 
@@ -68,6 +69,18 @@ describe('interaction targets', () => {
     const pendingKeys = deriveInteractionTargets(state).map((target) => target.key);
     expect(pendingKeys).toContain('scanner');
     expect(pendingKeys.some((key) => key.startsWith('node:'))).toBe(false);
+  });
+
+  it('removes the upper Archive target while keeping other unlocked equipment below the HUD', () => {
+    const state = createGameState();
+    state.run.depth.unlocked.push('D-030', 'D-060'); state.meta.runIndex = 2;
+    const targets = deriveInteractionTargets(state);
+    expect(targets.map(target => target.key)).not.toContain('archive');
+    for (const key of ['research', 'crew-board', 'core-console'] as const) {
+      const rect = INTERACTION_LAYOUT[key === 'research' ? 'research' : key === 'crew-board' ? 'crewBoard' : 'coreConsole'];
+      expect(rect.y).toBeGreaterThan(36);
+      expect(resolveInteractionTarget({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }, targets)?.key).toBe(key);
+    }
   });
 
   it('prioritizes Bore and logistics controls over overlapping nodes', () => {

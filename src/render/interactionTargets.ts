@@ -68,9 +68,6 @@ export function deriveInteractionTargets(state: GameState): InteractionTarget[] 
   if (state.run.depth.unlocked.includes('D-060')) add(rectTarget({
     ref: { type: 'research' }, rect: INTERACTION_LAYOUT.research, displayName: 'Surface Analyzer', priority: PRIORITY.machine, visualLayer: 10,
   }));
-  if (state.run.depth.unlocked.includes('D-030')) add(rectTarget({
-    ref: { type: 'archive' }, rect: INTERACTION_LAYOUT.archive, displayName: 'Archive Terminal', priority: PRIORITY.machine, visualLayer: 10,
-  }));
   if (state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) add(rectTarget({
     ref: { type: 'core-console' }, rect: INTERACTION_LAYOUT.coreConsole, displayName: 'Core Console', priority: PRIORITY.machine, visualLayer: 10,
   }));

@@ -1,6 +1,6 @@
 import { DEFAULT_PRESENTATION, type PresentationSetting, type PresentationSettings } from '../game/presentationSettings';
 import { ELEVATOR_TABS, elevatorItems, selectedElevatorItem, shipmentStatus, type ElevatorItem, type ElevatorTab, type ElevatorUiState } from '../game/elevatorUi';
-import { fieldResources, fieldInstruction, liftNeedsAttention } from '../game/fieldUi';
+import { fieldResources, fieldInstruction } from '../game/fieldUi';
 import { stationAvailable } from '../game/management';
 import { surveyRequest } from '../game/management/survey';
 import { drawMeter } from './meters';
@@ -12,6 +12,8 @@ import { C, drawButton, lines, text, icon, type UiButton, type UiViewport, type 
 import type { Rect } from './interactionTargets';
 import { LOCALES, t, type Locale } from '../i18n';
 import { displayText, localizeDisplayModel } from '../i18n/display';
+import { WORLD } from '../game/config';
+import { INTERACTION_LAYOUT } from './interactionLayout';
 const localeNames: Record<Locale, string> = { en: 'English', ja: '日本語' };
 
 export type GameUiAction = import('./managementUi').ManagementUiAction | WorkshopUiAction | { type: 'lift-open'; tab?: ElevatorTab; id?: string }
@@ -28,6 +30,7 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
   const { width: w, height: h, world } = viewport;
   const compact = w < 680;
   const buttons: UiButton<GameUiAction>[] = [];
+  if (state.run.elevator.travel) return { buttons, panel: null, compact, item: null };
   if (elevator || help) {
     const panel: Rect = { x: compact ? 8 : (w - Math.min(660, w - 32)) / 2, y: compact ? 8 : Math.max(12, (h - 386) / 2),
       width: compact ? w - 16 : Math.min(660, w - 32), height: compact ? h - 16 : 386 };
@@ -98,11 +101,13 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
     buttons.push({ ...control, x: start + rowWidths.slice(0, index).reduce((sum, width) => sum + width + gap, 0),
       y: h - (compact ? 100 : 52) + row * 48, width: rowWidths[index]!, height: 44 });
   });
+  const panel = INTERACTION_LAYOUT.sendPanel;
+  const sendWidth = Math.max(44, panel.width * world.width / WORLD.width);
+  const sendHeight = Math.max(44, panel.height * world.height / WORLD.height);
   buttons.push({ id: 'send', label: t(locale, 'ui.send'), text: t(locale, 'ui.send'), action: { type: 'command', command: { type: 'send' } },
-    x: Math.min(w - 106, world.x + world.width * .55),
-    // The fixed-size cabinet must stay below the scene's notification strip when the world is scaled down.
-    y: Math.max(world.y + world.height * .43, world.y + world.height * .30 + 42),
-    width: 96, height: 44, disabled: !canDispatchElevator(state), tone: 'primary' });
+    x: world.x + (panel.x + panel.width / 2) * world.width / WORLD.width - sendWidth / 2,
+    y: world.y + (panel.y + panel.height / 2) * world.height / WORLD.height - sendHeight / 2,
+    width: sendWidth, height: sendHeight, disabled: !canDispatchElevator(state) });
   const top = h - (compact ? 144 : 100);
   buttons.push({ id: 'pack-inspect', label: `Inspect backpack: ${Number(carriedWeight(state).toFixed(1))} of ${state.run.character.backpackCapacity} kilograms`, text: '',
     action: { type: 'station-open', request: { station: 'survey', tab: 'cargo', selectedId: 'backpack' } },
@@ -119,6 +124,7 @@ export function drawGameUi(ctx: CanvasRenderingContext2D, state: GameState, elev
   viewport: UiViewport, layout: GameUiLayout, focused: string | null, hovered: string | null, locale: Locale = 'en'): void {
   const { width: w, height: h } = viewport; const { compact, panel: p, item } = layout;
   ctx.clearRect(0, 0, w, h);
+  if (state.run.elevator.travel) return;
   if (p) {
     ctx.fillStyle = '#08080b66'; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = C.background; ctx.fillRect(p.x, p.y, p.width, p.height);
@@ -162,23 +168,18 @@ export function drawGameUi(ctx: CanvasRenderingContext2D, state: GameState, elev
     if (bagFocused) text(ctx, `${Number(weight.toFixed(1))}/${capacity} kg`, bag.x + 40, bag.y + 13, 10, C.light);
 
     const send = layout.buttons.find(button => button.id === 'send')!;
-    const cabinet = { x: send.x - 4, y: send.y - 32, width: send.width + 8, height: 80 };
-    ctx.fillStyle = C.surface; ctx.fillRect(cabinet.x, cabinet.y, cabinet.width, cabinet.height);
-    ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.strokeRect(cabinet.x, cabinet.y, cabinet.width, cabinet.height);
-    ctx.beginPath(); ctx.moveTo(viewport.world.x + viewport.world.width / 2, cabinet.y + 17); ctx.lineTo(cabinet.x, cabinet.y + 17); ctx.stroke();
     const load = cargoWeight(run.elevator.cargo);
-    drawMeter(ctx, { x: send.x + 4, y: send.y - 13, width: send.width - 8, height: 8 }, load, run.elevator.maxLoad, load >= run.elevator.maxLoad);
-    if (focused === 'send' || hovered === 'send') text(ctx, `${Number(load.toFixed(1))}/${run.elevator.maxLoad} kg`, send.x + 4, send.y - 18, 10, C.light);
-    else if (liftNeedsAttention(state)) text(ctx, run.porter.holdForTravel ? 'II' : run.automation.autoDispatch.enabled ? 'A' : 'II', send.x + 4, send.y - 18, 10, C.gold);
-    else if (['ASCENDING', 'DESCENDING', 'UNLOADING'].includes(run.elevator.state)) {
-      // A tiny directional indicator complements the actual moving cage, not another status caption.
-      const x = send.x + 9; const y = send.y - 23; const down = run.elevator.state === 'DESCENDING';
-      ctx.fillStyle = C.muted;
-      for (let row = 0; row < 3; row++) ctx.fillRect(x - row, y + (down ? -row : row), row * 2 + 1, 1);
+    const center = send.x + send.width / 2;
+    text(ctx, displayText(locale, 'SEND'), center, send.y + send.height * .53, 11,
+      send.disabled ? C.muted : focused === 'send' || hovered === 'send' ? C.light : C.gold, 'center');
+    text(ctx, `${Number(load.toFixed(1))}/${run.elevator.maxLoad} kg`, center, send.y + send.height * .78, 9, C.light, 'center');
+    if (focused === 'send' || hovered === 'send') {
+      ctx.strokeStyle = C.gold; ctx.lineWidth = 1;
+      ctx.strokeRect(send.x + 1, send.y + 1, send.width - 2, send.height - 2);
     }
 
   }
-  for (const button of layout.buttons) if (button.id !== 'pack-inspect') drawButton(ctx, button, focused === button.id, compact, hovered === button.id);
+  for (const button of layout.buttons) if (button.id !== 'pack-inspect' && button.id !== 'send') drawButton(ctx, button, focused === button.id, compact, hovered === button.id);
 }
 
 function amount(value: number): string {

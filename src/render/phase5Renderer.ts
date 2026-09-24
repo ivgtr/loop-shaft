@@ -91,7 +91,7 @@ function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: num
     ctx.fillStyle = '#5c5447'; ctx.fillRect(x + 46, y + 19, 4, 1);
   }
   ctx.fillStyle = PALETTE.white;
-  ui.text(ctx, displayText(locale, crew.unlocked ? 'SHIFT BOARD' : 'CREW BOARD'), x + 5, y + 27, { baseline: 'bottom' });
+  ui.text(ctx, displayText(locale, 'CREW'), x + 5, y + 27, { baseline: 'bottom' });
 }
 
 function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, assets: D001AssetStore, ui: WorldUi): void {

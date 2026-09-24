@@ -29,6 +29,7 @@ export function GameUiCanvas() {
   const [focused, setFocused] = useState<string | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const open = workshop !== null || elevatorUi !== null || helpOpen || management !== null;
+  const traveling = Boolean(state.run.elevator.travel);
   const heldPointer = useRef<{ id: number; button: string } | null>(null);
   const managementLayout = useMemo(() => management ? layoutManagementUi(state, management, viewport, locale) : null, [state, management, viewport, locale]);
   const layout = useMemo(() => workshop ? layoutWorkshopUi(state, workshop, viewport, locale) : layoutGameUi(state, elevatorUi, helpOpen, viewport, presentation), [state, workshop, elevatorUi, helpOpen, viewport, presentation, locale]);
@@ -64,13 +65,12 @@ export function GameUiCanvas() {
   }, []);
 
   useLayoutEffect(() => {
-    const obstacles = open ? [] : layout.buttons.map(button => button.id === 'send'
-      ? { x: button.x - 4, y: button.y - 32, width: button.width + 8, height: 80 }
-      : { x: button.x, y: button.y, width: button.width, height: button.height });
-    if (!open) obstacles.push({ x: 0, y: 0, width: viewport.width, height: layout.compact ? 100 : 84 },
+    const obstacles = open || traveling ? [] : layout.buttons.map(button =>
+      ({ x: button.x, y: button.y, width: button.width, height: button.height }));
+    if (!open && !traveling) obstacles.push({ x: 0, y: 0, width: viewport.width, height: layout.compact ? 100 : 84 },
       { x: 0, y: viewport.height - (layout.compact ? 144 : 100), width: viewport.width, height: layout.compact ? 144 : 100 });
     runtime.setWorldUiObstacles(obstacles);
-  }, [runtime, layout, viewport, open]);
+  }, [runtime, layout, viewport, open, traveling]);
 
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
@@ -82,10 +82,11 @@ export function GameUiCanvas() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.imageSmoothingEnabled = false;
-    if (managementLayout) drawManagementUi(ctx, viewport, managementLayout, focused, hovered, assets);
+    if (traveling) ctx.clearRect(0, 0, viewport.width, viewport.height);
+    else if (managementLayout) drawManagementUi(ctx, viewport, managementLayout, focused, hovered, assets);
     else if (workshop && 'itemCount' in layout) drawWorkshopUi(ctx, state, workshop, viewport, layout, focused, hovered, locale);
     else if (!('itemCount' in layout)) drawGameUi(ctx, state, elevatorUi, helpOpen, viewport, layout, focused, hovered, locale);
-  }, [state, workshop, elevatorUi, helpOpen, managementLayout, layout, viewport, focused, hovered, assets, locale]);
+  }, [state, workshop, elevatorUi, helpOpen, managementLayout, layout, viewport, focused, hovered, assets, locale, traveling]);
 
   useLayoutEffect(() => {
     setHovered(null);
@@ -189,15 +190,15 @@ export function GameUiCanvas() {
 
   return <>
     <canvas ref={canvasRef} className="game-ui-canvas" aria-hidden="true" />
-    <div ref={inputsRef} className={`canvas-inputs${open ? ' window-open' : ''}`}
+    <div ref={inputsRef} className={`canvas-inputs${open && !traveling ? ' window-open' : ''}`}
       data-station={management?.station} data-selected-item={managementLayout?.item.id}
       data-detail-open={management?.detailsOpen} data-detail-pages={managementLayout?.pages.length} data-item-count={managementLayout?.count}
-      role={open ? 'dialog' : undefined} aria-modal={open ? true : undefined}
+      role={open && !traveling ? 'dialog' : undefined} aria-modal={open && !traveling ? true : undefined}
       aria-label={management ? managementLayout?.title : workshop ? t(locale, 'ui.workshopDialog') : elevatorUi ? t(locale, 'ui.elevatorDialog') : helpOpen ? t(locale, 'ui.helpDialog') : undefined}
       aria-describedby={management ? 'management-detail' : workshop ? 'workshop-detail' : elevatorUi ? 'elevator-detail' : undefined}
       onPointerDown={(event) => { if (open && event.target === event.currentTarget) event.preventDefault(); }}
       onKeyDown={handleKeyDown} onPointerCancel={() => runtime.releaseInputs()}>
-      {management && managementLayout && <div className="canvas-semantics" id="management-detail">
+      {!traveling && management && managementLayout && <div className="canvas-semantics" id="management-detail">
         <h2>{managementLayout.title}</h2>
         <p>{managementLayout.item.name}. {managementLayout.item.summary}. {managementLayout.item.reason}</p>
         {managementLayout.item.decision && <section data-testid="management-consequences" aria-label={displayText(locale, 'Consequences')}>
@@ -213,21 +214,21 @@ export function GameUiCanvas() {
         <p data-testid="detail-page">{displayText(locale, `Detail ${managementLayout.page + 1}/${managementLayout.pages.length}`)}</p>
         <p role="status" aria-live="polite">{management.notice ? displayText(locale, management.notice) : ''}</p>
       </div>}
-      {workshop && layout.item && <div className="canvas-semantics" id="workshop-detail">
+      {!traveling && workshop && layout.item && <div className="canvas-semantics" id="workshop-detail">
         <h2>{t(locale, 'ui.workshopDialog')} · {state.run.scrap} {t(locale, 'ui.scrapTitle')}</h2>
         <p>{layout.item.name}. {layout.item.description}. {layout.item.reason}</p>
         <p>{displayText(locale, 'Arrow keys browse items.')} {displayText(locale, 'Tab chooses an action.')} {displayText(locale, 'Enter or Space activates it.')} {displayText(locale, 'Escape closes without clearing your vein.')}</p>
         <p role="status" aria-live="polite">{workshop?.notice ? displayText(locale, workshop.notice) : ''}</p>
       </div>}
-      {elevatorUi && <div className="canvas-semantics" id="elevator-detail">
+      {!traveling && elevatorUi && <div className="canvas-semantics" id="elevator-detail">
         <h2>{t(locale, 'ui.centralLift')} · {state.run.depth.current} · {state.run.scrap} {t(locale, 'ui.scrapTitle')}</h2>
         <p>{displayText(locale, layout.item?.name ?? '')}. {displayText(locale, selectedElevatorItem(state, elevatorUi).summary)}. {displayText(locale, layout.item?.description ?? '')}. {displayText(locale, layout.item?.reason ?? '')}</p>
         <p>{displayText(locale, 'Arrow keys browse items.')} {displayText(locale, 'Tab chooses an action.')} {displayText(locale, 'Enter or Space activates it.')} {displayText(locale, 'Escape returns to mining.')}</p>
         <p role="status" aria-live="polite">{elevatorUi.notice ? displayText(locale, elevatorUi.notice) : ''}</p>
       </div>}
-      {helpOpen && <div className="canvas-semantics"><h2>{t(locale, 'ui.helpCurrentGoal')}</h2><p>{readout.detail || readout.goal}</p>
+      {!traveling && helpOpen && <div className="canvas-semantics"><h2>{t(locale, 'ui.helpCurrentGoal')}</h2><p>{readout.detail || readout.goal}</p>
         <p>{t(locale, 'ui.helpHowTo')}</p></div>}
-      {!open && <section className="canvas-semantics" aria-label={t(locale, 'ui.sceneStatus')}>
+      {!open && !traveling && <section className="canvas-semantics" aria-label={t(locale, 'ui.sceneStatus')}>
         <h2 data-testid="scene-title">{readout.title}</h2>
         <p data-testid="scene-detail">{readout.detail}</p>
         <p data-testid="pack-status">{t(locale, 'ui.pack')} {carriedWeight(state).toFixed(1)}/{state.run.character.backpackCapacity}{t(locale, 'ui.kilograms')} · {t(locale, 'ui.value')} {cargoValue(state.run.character.carried)} {t(locale, 'ui.scrap')} · {readout.short}</p>
@@ -242,7 +243,7 @@ export function GameUiCanvas() {
         <p role="status" aria-live="polite">{controlHint?.text}</p>
         <p id="player-control-help">{t(locale, 'ui.helpHowTo')}</p>
       </section>}
-      {viewport.width > 0 && buttons.map((button) => <button key={button.id} type="button"
+      {!traveling && viewport.width > 0 && buttons.map((button) => <button key={button.id} type="button"
         className="canvas-hit" aria-label={button.label} disabled={button.disabled && button.action.type !== 'command'} aria-disabled={button.disabled || undefined}
         data-status={button.badge} aria-describedby={button.id === 'lift-open' ? 'shipment-status' : button.badge || button.detail ? `status-${button.id}` : undefined}
         aria-pressed={button.selected === undefined ? undefined : button.selected}

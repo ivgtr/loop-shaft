@@ -48,7 +48,6 @@ function drawD001DynamicEnvironment(
   locale: Locale,
   ui: WorldUi,
 ): void {
-  if (state.run.depth.unlocked.includes('D-030')) drawArchive(ctx, state, locale, ui);
   if (state.run.depth.unlocked.includes('D-060')) drawResearchTerminal(ctx, state, locale, ui);
   if (state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) drawCoreConsole(ctx, state, locale, ui);
   if (!drawD001Rope(ctx, semantic, assets)) drawRopeFallback(ctx, semantic.elevator.y);
@@ -132,22 +131,8 @@ function drawSurfaceStation(ctx: CanvasRenderingContext2D, state: GameState, loc
   ui.text(ctx, 'LOOP SHAFT', WORLD.elevatorX, 20, { align: 'center', baseline: 'bottom' });
   ctx.fillStyle = depthLamp(state.run.depth.current);
   ui.text(ctx, displayText(locale, 'SURFACE EXCHANGE'), WORLD.elevatorX, 27, { align: 'center', baseline: 'bottom' });
-  if (state.run.depth.unlocked.includes('D-030')) drawArchive(ctx, state, locale, ui);
   if (state.run.depth.unlocked.includes('D-060')) drawResearchTerminal(ctx, state, locale, ui);
   if (state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) drawCoreConsole(ctx, state, locale, ui);
-}
-
-function drawArchive(ctx: CanvasRenderingContext2D, state: GameState, locale: Locale, ui = new WorldUi()): void {
-  const { x, y } = INTERACTION_LAYOUT.archive;
-  ctx.fillStyle = '#22252a'; ctx.fillRect(x, y, 54, 27);
-  ctx.fillStyle = PALETTE.metal; ctx.fillRect(x + 3, y + 3, 48, 2); ctx.fillRect(x + 3, y + 20, 48, 2);
-  ctx.fillStyle = '#0d1012'; ctx.fillRect(x + 5, y + 7, 25, 11);
-  const lamps = Math.min(6, state.meta.collection.entries.filter((entry) => entry.discovered).length);
-  for (let i = 0; i < 6; i += 1) {
-    ctx.fillStyle = i < lamps ? PALETTE.d030Lamp : '#45433a';
-    ctx.fillRect(x + 34 + (i % 3) * 5, y + 8 + Math.floor(i / 3) * 6, 2, 2);
-  }
-  ctx.fillStyle = PALETTE.white; ui.text(ctx, displayText(locale, 'ARCHIVE'), x + 5, y + 27, { baseline: 'bottom' });
 }
 
 function drawResearchTerminal(ctx: CanvasRenderingContext2D, state: GameState, locale: Locale, ui = new WorldUi()): void {
@@ -158,7 +143,7 @@ function drawResearchTerminal(ctx: CanvasRenderingContext2D, state: GameState, l
   const active = state.run.research.active;
   ctx.fillStyle = active ? (Math.floor(state.elapsed * 4) % 2 === 0 ? PALETTE.d060Lamp : '#42616a') : '#3c4a4e';
   ctx.fillRect(x + 42, y + 10, 3, 3); ctx.fillRect(x + 48, y + 10, 3, 3);
-  ctx.fillStyle = PALETTE.white; ui.text(ctx, displayText(locale, 'ANALYZER'), x + 6, y + 27, { baseline: 'bottom' });
+  ctx.fillStyle = PALETTE.white; ui.text(ctx, displayText(locale, 'LAB'), x + 6, y + 27, { baseline: 'bottom' });
 }
 
 function drawCoreConsole(ctx: CanvasRenderingContext2D, state: GameState, locale: Locale, ui = new WorldUi()): void {
@@ -168,7 +153,7 @@ function drawCoreConsole(ctx: CanvasRenderingContext2D, state: GameState, locale
   ctx.fillStyle = '#100f0e'; ctx.fillRect(x + 6, y + 9, 34, 10);
   const lit = Math.min(5, state.meta.protocols.length + (state.meta.core > 0 ? 1 : 0));
   for (let i = 0; i < 5; i += 1) { ctx.fillStyle = i < lit ? PALETTE.d100Lamp : '#4a4339'; ctx.fillRect(x + 48 + i * 5, y + 11, 2, 2); }
-  ctx.fillStyle = PALETTE.white; ui.text(ctx, displayText(locale, 'CORE CONSOLE'), x + 6, y + 27, { baseline: 'bottom' });
+  ctx.fillStyle = PALETTE.white; ui.text(ctx, displayText(locale, 'CORE'), x + 6, y + 27, { baseline: 'bottom' });
 }
 
 function drawShaft(ctx: CanvasRenderingContext2D, state: GameState, ui: WorldUi): void {

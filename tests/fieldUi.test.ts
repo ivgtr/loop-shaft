@@ -11,6 +11,7 @@ import { drawInteractionOverlay } from '../src/render/interactionOverlay';
 import { deriveInteractionTargets } from '../src/render/interactionTargets';
 import { layoutManagementUi } from '../src/render/managementUi';
 import { drawMeter } from '../src/render/meters';
+import { INTERACTION_LAYOUT } from '../src/render/interactionLayout';
 import { GameRuntime } from '../src/runtime/GameRuntime';
 
 function paint() {
@@ -124,5 +125,34 @@ describe('quiet worksite UI', () => {
           && Math.min(b.y + b.height, other.y + other.height) > Math.max(b.y, other.y)).toBe(false);
       }
     }
+  });
+
+  it('removes normal HUD and all input targets during floor travel, then restores them', () => {
+    const state = createGameState(); const view = viewport(390);
+    state.run.elevator.travel = { from: 'D-001', to: 'D-030', remaining: 2, duration: 2.8, viaSurface: true };
+    const during = layoutGameUi(state, null, false, view);
+    const painted = paint(); drawGameUi(painted.ctx, state, null, false, view, during, null, null);
+    expect(during.buttons).toEqual([]);
+    expect(painted.captions).toEqual([]);
+    state.run.elevator.travel = null;
+    expect(layoutGameUi(state, null, false, view).buttons.map(button => button.id)).toContain('send');
+  });
+
+  it('retains the unlocked Archive in BASE', () => {
+    const state = createGameState(); state.run.depth.unlocked.push('D-030');
+    const base = createManagementState(state, { station: 'facilities' });
+    expect(stationView(state, base).items.find(item => item.id === 'archive')?.action).toEqual({
+      type: 'navigate', request: { station: 'archive' },
+    });
+  });
+
+  it.each([320, 390, 960])('anchors the SEND target on the world panel at %ipx', width => {
+    const view = viewport(width); const state = createGameState();
+    const send = layoutGameUi(state, null, false, view).buttons.find(button => button.id === 'send')!;
+    const panel = INTERACTION_LAYOUT.sendPanel;
+    expect(send.x + send.width / 2).toBeCloseTo(view.world.x + (panel.x + panel.width / 2) * view.world.width / 480);
+    expect(send.y + send.height / 2).toBeCloseTo(view.world.y + (panel.y + panel.height / 2) * view.world.height / 270);
+    expect(send.width).toBeGreaterThanOrEqual(44);
+    expect(send.height).toBeGreaterThanOrEqual(44);
   });
 });

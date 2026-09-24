@@ -306,10 +306,15 @@ export function drawD001ElevatorFront(
     if (gate) ctx.drawImage(gate, variant * 56, 0, 56, 44, x, y, 56, 44);
     else ctx.drawImage(image, variant * 56, 44, 56, 44, x, y, 56, 44);
   }
-  ctx.drawImage(image, 2 * 56, 44, 56, 44, 269 - 28, 198 - 20, 56, 44);
-
   ctx.fillStyle = state.run.elevator.state !== 'IDLE_BOTTOM' || state.run.elevator.cargo.length > 0 ? '#e6a02b' : '#564537';
   ctx.fillRect(WORLD.elevatorX + (narrow ? 8 : 13), Math.round(semantic.elevator.y) - 12, 3, 3);
+  return true;
+}
+
+export function drawD001FixedControl(ctx: CanvasRenderingContext2D, assets: D001AssetStore): boolean {
+  const image = assets.ready('elevator');
+  if (!image) return false;
+  ctx.drawImage(image, 2 * 56, 44, 56, 44, 241, 178, 56, 44);
   return true;
 }
 
