@@ -1,11 +1,10 @@
 import { D001_VISUAL_GROUND_OFFSET } from './semanticRenderState';
 import { drawMeter } from './meters';
 import type { FieldHint } from '../game/fieldUi';
-import { WORLD } from '../game/config';
 import type { GameState, Selection } from '../game/types';
 import type { InteractionTarget, Rect } from './interactionTargets';
 import { sameInteractionTarget } from './interactionTargets';
-import { drawPixelText, fitPixelFont, measurePixelText } from './pixelText';
+import { WorldUi } from './worldUi';
 import type { Locale } from '../i18n';
 import { displayText } from '../i18n/display';
 
@@ -28,6 +27,7 @@ export function drawInteractionOverlay(
   state?: GameState,
   hint: FieldHint | null = null,
   locale: Locale = 'en',
+  ui = new WorldUi(),
 ): void {
   ctx.save();
   ctx.lineWidth = 1;
@@ -54,8 +54,8 @@ export function drawInteractionOverlay(
     }
   }
   const hovered = targets.find((target) => target.key === hoveredKey);
-  if (hovered && hovered.key !== guideTargetKey) drawHoverLabel(ctx, hovered, locale);
-  if (hint) drawFieldHint(ctx, { ...hint, y: hint.y + (state?.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) });
+  if (hovered && hovered.key !== guideTargetKey) drawHoverLabel(ctx, hovered, locale, ui);
+  if (hint) drawFieldHint(ctx, { ...hint, y: hint.y + (state?.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) }, ui);
   ctx.restore();
 }
 
@@ -72,39 +72,17 @@ function drawCornerFrame(ctx: CanvasRenderingContext2D, rect: Rect, hovered: boo
   ctx.stroke();
 }
 
-function drawHoverLabel(ctx: CanvasRenderingContext2D, target: InteractionTarget, locale: Locale): void {
+function drawHoverLabel(ctx: CanvasRenderingContext2D, target: InteractionTarget, locale: Locale, ui: WorldUi): void {
   const warning = target.shortStatus && !/^(DEPLETED|TRAVELING|ASCENDING|DESCENDING|UNLOADING|LOADING|MOVING|SWINGING|COLLECTING)/.test(target.shortStatus) ? displayText(locale, target.shortStatus) : null;
   const name = displayText(locale, target.displayName);
   const text = warning ? `${name} · ${warning}` : name;
-  const font = fitPixelFont(text, WORLD.width - 12);
-  const width = measurePixelText(text, font) + 6;
-  const height = 10;
-  const x = Math.round(clamp(target.labelAnchor.x - width / 2, 2, WORLD.width - width - 2));
-  let y = Math.round(target.labelAnchor.y - height - 8);
-  if (y < 39) y = Math.round(Math.max(39, target.emphasisRects[0]!.y + target.emphasisRects[0]!.height + 3));
-  if (y + height > WORLD.height - 2) y = WORLD.height - height - 2;
-  ctx.fillStyle = COLORS.labelBackground;
-  ctx.fillRect(x, y, width, height);
-  ctx.strokeStyle = target.primaryActionAvailable ? COLORS.available : COLORS.unavailable;
-  ctx.strokeRect(crisp(x), crisp(y), width, height);
-  ctx.fillStyle = COLORS.labelText;
-  drawPixelText(ctx, text, x + 3, y + 7, { font, baseline: 'bottom' });
+  ui.label(ctx, text, target.labelAnchor.x, target.labelAnchor.y - 8, target.primaryActionAvailable ? COLORS.available : COLORS.unavailable);
 }
 
 function crisp(value: number): number {
   return Math.round(value) + 0.5;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-export function drawFieldHint(ctx: CanvasRenderingContext2D, hint: FieldHint): void {
-  const font = fitPixelFont(hint.text, WORLD.width - 12);
-  const width = measurePixelText(hint.text, font) + 8;
-  const x = Math.round(clamp(hint.x - width / 2, 2, WORLD.width - width - 2));
-  const y = Math.round(clamp(hint.y - 12, 39, WORLD.height - 14));
-  ctx.fillStyle = COLORS.labelBackground; ctx.fillRect(x, y, width, 12);
-  ctx.fillStyle = COLORS.selected; ctx.fillRect(x, y + 11, width, 1);
-  ctx.fillStyle = COLORS.labelText; drawPixelText(ctx, hint.text, x + 4, y + 8, { font, baseline: 'bottom' });
+export function drawFieldHint(ctx: CanvasRenderingContext2D, hint: FieldHint, ui = new WorldUi()): void {
+  ui.label(ctx, hint.text, hint.x, hint.y, COLORS.selected);
 }

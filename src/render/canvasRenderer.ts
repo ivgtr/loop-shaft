@@ -13,7 +13,7 @@ import { drawEnvironment } from './environment';
 import { PALETTE } from './palette';
 import type { D001AssetStore } from './d001ImageRenderer';
 import { D001_VISUAL_GROUND_OFFSET, deriveSemanticRenderState, type SemanticRenderState } from './semanticRenderState';
-import { drawPixelText, truncatePixelText } from './pixelText';
+import { WorldUi } from './worldUi';
 import { formatDisplay, displayText, type DynamicCopyKey } from '../i18n/display';
 import type { NoticeMessage, RewardNotice } from '../game/rewardFeedback';
 import type { Locale } from '../i18n';
@@ -42,7 +42,7 @@ export class CanvasRenderer {
   private lastTime = 0;
   private gain: GainFx | null = null;
 
-  constructor(canvas: HTMLCanvasElement, private readonly assets: D001AssetStore, private readonly output?: FeedbackOutput) {
+  constructor(canvas: HTMLCanvasElement, private readonly assets: D001AssetStore, private readonly output?: FeedbackOutput, private readonly ui = new WorldUi()) {
     this.canvas = canvas;
     canvas.width = WORLD.width; canvas.height = WORLD.height;
     const context = canvas.getContext('2d');
@@ -92,9 +92,9 @@ export class CanvasRenderer {
     this.ctx.save();
     const semantic = frame ?? deriveSemanticRenderState(state, now);
     const displayLocale = locale ?? (this.output?.settings() ?? DEFAULT_PRESENTATION).locale;
-    drawEnvironment(this.ctx, state, this.assets, now, displayLocale);
-    drawEntities(this.ctx, state, now, semantic, this.assets, displayLocale);
-    if (state.run.depth.current === 'D-001' && state.run.elevator.travel) drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets, displayLocale);
+    drawEnvironment(this.ctx, state, this.assets, now, displayLocale, this.ui);
+    drawEntities(this.ctx, state, now, semantic, this.assets, displayLocale, this.ui);
+    if (state.run.depth.current === 'D-001' && state.run.elevator.travel) drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets, displayLocale, this.ui);
     this.ctx.restore();
     if (state.run.elevator.travel) this.drawTravel(state);
   }
@@ -104,6 +104,7 @@ export class CanvasRenderer {
   private drawTravel(state: GameState): void {
     const travel = state.run.elevator.travel;
     if (!travel) return;
+    this.ui.clear(); // The travel curtain covers all world labels.
     const progress = 1 - travel.remaining / travel.duration;
     this.ctx.fillStyle = '#08090bdd'; this.ctx.fillRect(0, 38, WORLD.width, WORLD.height - 38);
     this.ctx.fillStyle = '#171c1f';
@@ -112,9 +113,10 @@ export class CanvasRenderer {
     }
     this.ctx.fillStyle = PALETTE.white;
     const locale = (this.output?.settings() ?? DEFAULT_PRESENTATION).locale;
-    drawPixelText(this.ctx, displayText(locale, travel.viaSurface ? 'SURFACE RELAY' : 'ELEVATOR TRAVEL'), WORLD.width / 2, 124, { font: 'standard', align: 'center', baseline: 'bottom' });
-    this.ctx.fillStyle = PALETTE.d060Lamp;
-    drawPixelText(this.ctx, `${travel.from} → ${travel.to}`, WORLD.width / 2, 137, { font: 'standard', align: 'center', baseline: 'bottom' });
+    this.ui.notice([
+      { text: displayText(locale, travel.viaSurface ? 'SURFACE RELAY' : 'ELEVATOR TRAVEL') },
+      { text: `${travel.from} → ${travel.to}`, color: PALETTE.d060Lamp },
+    ], 108, PALETTE.d060Lamp);
   }
 
   private drawFx(now: number, shake: number): void {
@@ -137,31 +139,23 @@ export class CanvasRenderer {
       const point = workPoint ? { x: workPoint.x + shake, y: workPoint.y } : node ? { x: Math.round(node.x) + shake, y: Math.round(node.y) - 10 + (origin?.depth === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) } : null;
       if (point) drawRewardEffect(this.ctx, notice, point, now, settings);
       // Fine ore is a quiet local glint, not another full-width banner.
-      if (notice.shipment) drawShipmentNotice(this.ctx, notice, this.assets, now, settings);
+      if (notice.shipment) drawShipmentNotice(this.ui, notice, this.assets, now, settings);
       else if (notice.effect !== 'fine') {
         const accent = rewardAccent(notice);
-        this.ctx.fillStyle = '#111014'; this.ctx.fillRect(87, 53, 306, 26);
-        this.ctx.strokeStyle = accent; this.ctx.strokeRect(87.5, 53.5, 305, 25);
         const image = (notice.specimen || notice.artifact) && this.assets.ready('discoveryCollection');
-        if (image && (notice.specimen || notice.artifact)) {
-          const frame = collectionSpriteFrame({ kind: notice.artifact ?? notice.specimen!.kind, discovered: true, count: 1, bestSpecimenGrade: notice.specimen?.grade });
-          this.ctx.drawImage(image, frame % 5 * 24, Math.floor(frame / 5) * 24, 24, 24, 90, 54, 24, 24);
-        }
         if (!point && notice.priority >= 4) drawRewardEffect(this.ctx, notice, null, now, settings);
-        const center = image ? 254 : 240; const limit = image ? 43 : 48;
-        this.ctx.fillStyle = accent;
         const locale = settings.locale;
-        drawPixelText(this.ctx, truncatePixelText(noticeCopy(locale, notice, 'detail'), limit * 6), center, 64, { font: 'standard', align: 'center', baseline: 'bottom' });
-        this.ctx.fillStyle = PALETTE.white;
-        drawPixelText(this.ctx, truncatePixelText(noticeCopy(locale, notice, 'label'), limit * 6), center, 75, { font: 'standard', align: 'center', baseline: 'bottom' });
+        const frame = image ? collectionSpriteFrame({ kind: notice.artifact ?? notice.specimen!.kind, discovered: true, count: 1, bestSpecimenGrade: notice.specimen?.grade }) : 0;
+        this.ui.notice([
+          { text: noticeCopy(locale, notice, 'detail'), color: accent },
+          { text: noticeCopy(locale, notice, 'label'), color: PALETTE.white },
+        ], 53, accent, image ? (ctx, x, y) => ctx.drawImage(image, frame % 5 * 24, Math.floor(frame / 5) * 24, 24, 24, x, y, 24, 24) : undefined);
       }
     }
     if (this.gain && now - this.gain.startedAt < 1200) {
-      this.ctx.fillStyle = '#101214e8'; this.ctx.fillRect(147, 9, 186, 16);
-      this.ctx.fillStyle = PALETTE.d060Lamp;
       const values = this.gain.key === 'feedback.researchComplete'
         ? { ...this.gain.values, name: displayText(settings.locale, String(this.gain.values.name ?? '')) } : this.gain.values;
-      drawPixelText(this.ctx, formatDisplay(settings.locale, this.gain.key, values), 240, 19, { font: 'standard', align: 'center', baseline: 'bottom' });
+      this.ui.notice([{ text: formatDisplay(settings.locale, this.gain.key, values), color: PALETTE.d060Lamp }], 28, PALETTE.d060Lamp);
     } else if (this.gain) this.gain = null;
   }
 }

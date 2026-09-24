@@ -64,11 +64,21 @@ export function GameUiCanvas() {
   }, []);
 
   useLayoutEffect(() => {
+    const obstacles = open ? [] : layout.buttons.map(button => button.id === 'send'
+      ? { x: button.x - 4, y: button.y - 32, width: button.width + 8, height: 80 }
+      : { x: button.x, y: button.y, width: button.width, height: button.height });
+    if (!open) obstacles.push({ x: 0, y: 0, width: viewport.width, height: layout.compact ? 100 : 84 },
+      { x: 0, y: viewport.height - (layout.compact ? 144 : 100), width: viewport.width, height: layout.compact ? 144 : 100 });
+    runtime.setWorldUiObstacles(obstacles);
+  }, [runtime, layout, viewport, open]);
+
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || viewport.width === 0) return;
     const dpr = window.devicePixelRatio || 1;
     const width = Math.round(viewport.width * dpr); const height = Math.round(viewport.height * dpr);
     if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+    canvas.style.width = `${width / dpr}px`; canvas.style.height = `${height / dpr}px`;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.imageSmoothingEnabled = false;

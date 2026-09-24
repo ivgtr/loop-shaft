@@ -65,7 +65,7 @@ import {
 } from '../game/simulation';
 import type { DepthId, GameState } from '../game/types';
 import { GameRenderer } from '../render/gameRenderer';
-import type { InteractionTarget, Point } from '../render/interactionTargets';
+import type { InteractionTarget, Point, Rect } from '../render/interactionTargets';
 import type { GameCommand } from './commands';
 import { MiningInput } from './MiningInput';
 import { elevatorItems, selectedElevatorItem, type ElevatorTab, type ElevatorUiState } from '../game/elevatorUi';
@@ -102,6 +102,7 @@ export class GameRuntime {
   private pointerDirection: -1 | 0 | 1 = 0;
   private directMoving = false;
   private renderer: GameRenderer | null = null;
+  private worldUiObstacles: Rect[] = [];
   private canvas: HTMLCanvasElement | null = null;
   private animationFrame: number | null = null;
   private accumulator = 0;
@@ -146,10 +147,12 @@ export class GameRuntime {
 
   readonly getSnapshot = (): GameSnapshot => this.snapshot;
 
-  attachCanvas(canvas: HTMLCanvasElement): void {
+  setWorldUiObstacles(obstacles: Rect[]): void { this.worldUiObstacles = obstacles; }
+
+  attachCanvas(canvas: HTMLCanvasElement, uiCanvas?: HTMLCanvasElement): void {
     if (this.canvas === canvas) return;
     this.canvas = canvas;
-    this.renderer = new GameRenderer(canvas, { reward: notice => this.audio.playReward(notice), settings: () => this.presentation });
+    this.renderer = new GameRenderer(canvas, { reward: notice => this.audio.playReward(notice), settings: () => this.presentation }, uiCanvas);
   }
 
   detachCanvas(canvas: HTMLCanvasElement): void {
@@ -586,7 +589,7 @@ export class GameRuntime {
     }
     this.refreshPointerTarget();
     if (this.controlHint && now >= this.hintExpiresAt) this.controlHint = null;
-    this.renderer?.render(this.state, now, this.hoveredKey, this.windowOpen ? null : this.controlHint, this.presentation.locale);
+    this.renderer?.render(this.state, now, this.hoveredKey, this.windowOpen ? null : this.controlHint, this.presentation.locale, this.worldUiObstacles);
     if (now - this.lastUiUpdate >= UI_UPDATE_INTERVAL) {
       this.lastUiUpdate = now;
       this.publish();

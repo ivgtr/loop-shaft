@@ -19,32 +19,34 @@ import {
   resolveInteractionTarget,
   type InteractionTarget,
   type Point,
+  type Rect,
 } from './interactionTargets';
 import { AssetStore } from './assets/assetStore';
 import { type D001AssetKey } from './assets/d001Manifest';
 import { drawD001ActorShadow, drawD001Cargo, drawD001Engineer } from './d001ImageRenderer';
 import { drawD001ElevatorFrontLayer } from './entities';
 import { D001_VISUAL_GROUND_OFFSET, deriveSemanticRenderState } from './semanticRenderState';
-import { drawPixelText } from './pixelText';
+import { WorldUi } from './worldUi';
 
 export class GameRenderer {
   private readonly base: Phase5Renderer;
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly assets: AssetStore<D001AssetKey>;
+  private readonly ui = new WorldUi();
   private deliveryNotice: { amount: number; expiresAt: number } | null = null;
 
-  constructor(canvas: HTMLCanvasElement, output?: FeedbackOutput) {
+  constructor(canvas: HTMLCanvasElement, output?: FeedbackOutput, private readonly uiCanvas?: HTMLCanvasElement) {
     this.canvas = canvas;
     this.assets = gameAssets();
-    this.base = new Phase5Renderer(canvas, this.assets, output);
+    this.base = new Phase5Renderer(canvas, this.assets, output, this.ui);
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D context is required.');
     ctx.imageSmoothingEnabled = false;
     this.ctx = ctx;
   }
 
-  clearFeedback(): void { this.base.clearFeedback(); }
+  clearFeedback(): void { this.base.clearFeedback(); this.deliveryNotice = null; this.ui.clear(); }
 
   handleEvent(event: GameEvent, state: GameState, now: number, batch: readonly GameEvent[] = [event]): void {
     this.base.handleEvent(event, state, now, batch);
@@ -53,7 +55,8 @@ export class GameRenderer {
     }
   }
 
-  render(state: GameState, now: number, hoveredKey: string | null = null, hint: FieldHint | null = null, locale: Locale = 'en'): void {
+  render(state: GameState, now: number, hoveredKey: string | null = null, hint: FieldHint | null = null, locale: Locale = 'en', obstacles: readonly Rect[] = []): void {
+    this.ui.clear();
     const shake = this.base.worldShake(state, now);
     this.ctx.save();
     this.ctx.translate(shake, 0);
@@ -62,12 +65,13 @@ export class GameRenderer {
     if (state.run.elevator.travel) {
       this.ctx.restore();
       this.base.drawForegroundFx(now);
+      if (this.uiCanvas) this.ui.render(this.uiCanvas, this.canvas, obstacles);
       return;
     }
     const depth = state.run.depth.current;
-    if (depth === 'D-250') drawTheLost(this.ctx, state);
-    if (depth === 'D-400') drawNullStrata(this.ctx, state, now);
-    if (depth === 'D-650') drawD650(this.ctx, now);
+    if (depth === 'D-250') drawTheLost(this.ctx, state, this.ui);
+    if (depth === 'D-400') drawNullStrata(this.ctx, state, now, this.ui);
+    if (depth === 'D-650') drawD650(this.ctx, now, this.ui);
     if (!drawWorksite(this.ctx, state, this.assets)) {
       drawTransportLine(this.ctx, state, this.assets);
       drawFreightCage(this.ctx, state, this.assets);
@@ -83,17 +87,18 @@ export class GameRenderer {
       drawEngineer(this.ctx, state, now);
       this.ctx.restore();
     }
-    if (depth === 'D-001') drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets, locale);
+    if (depth === 'D-001') drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets, locale, this.ui);
     const targets = deriveInteractionTargets(state);
     const guide = fieldGuideTarget(state);
     const guideTargetKey = targets.find(target => sameInteractionTarget(target.ref, guide))?.key ?? null;
-    drawInteractionOverlay(this.ctx, targets, state.selection, hoveredKey, guideTargetKey, state, hint, locale);
+    drawInteractionOverlay(this.ctx, targets, state.selection, hoveredKey, guideTargetKey, state, hint, locale, this.ui);
     this.ctx.restore();
     // The shared Canvas HUD owns instructions; world overlay only marks the target.
     if (this.deliveryNotice && now < this.deliveryNotice.expiresAt) {
-      drawDeliveryNotice(this.ctx, this.deliveryNotice.amount, locale);
+      drawDeliveryNotice(this.ctx, this.deliveryNotice.amount, locale, this.ui);
     } else if (this.deliveryNotice) this.deliveryNotice = null;
     this.base.drawForegroundFx(now, shake);
+    if (this.uiCanvas) this.ui.render(this.uiCanvas, this.canvas, obstacles);
   }
 
   clientToWorld(clientX: number, clientY: number): Point | null {
@@ -106,7 +111,7 @@ export class GameRenderer {
   }
 }
 
-function drawTheLost(ctx: CanvasRenderingContext2D, state: GameState): void {
+function drawTheLost(ctx: CanvasRenderingContext2D, state: GameState, ui: WorldUi): void {
   ctx.fillStyle = '#111314';
   ctx.fillRect(0, 44, 182, 119);
   ctx.fillRect(302, 44, 178, 119);
@@ -145,10 +150,10 @@ function drawTheLost(ctx: CanvasRenderingContext2D, state: GameState): void {
     ctx.fillRect(321, WORLD.floorY - 3, 38, 2);
     ctx.fillRect(380, WORLD.floorY - 3, 22, 2);
   }
-  label(ctx, 'THE LOST', 8, 48);
+  label(ctx, 'THE LOST', 8, 48, ui);
 }
 
-function drawNullStrata(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
+function drawNullStrata(ctx: CanvasRenderingContext2D, state: GameState, now: number, ui: WorldUi): void {
   ctx.fillStyle = '#090a0b';
   ctx.fillRect(0, 43, 480, 126);
   ctx.fillStyle = '#1d2020';
@@ -171,10 +176,10 @@ function drawNullStrata(ctx: CanvasRenderingContext2D, state: GameState, now: nu
       ctx.fillRect(node.x - 2, WORLD.floorY - 59, 4, 5);
     }
   }
-  label(ctx, 'NULL STRATA', 8, 48);
+  label(ctx, 'NULL STRATA', 8, 48, ui);
 }
 
-function drawD650(ctx: CanvasRenderingContext2D, now: number): void {
+function drawD650(ctx: CanvasRenderingContext2D, now: number, ui: WorldUi): void {
   ctx.fillStyle = '#090909';
   ctx.fillRect(0, 40, 480, 130);
   ctx.fillStyle = '#242422';
@@ -187,8 +192,8 @@ function drawD650(ctx: CanvasRenderingContext2D, now: number): void {
   ctx.fillStyle = Math.floor(now / 1200) % 2 ? '#635e53' : '#4e4b43';
   ctx.fillRect(230, 101, 20, 4);
   ctx.fillStyle = '#8d887b';
-  drawPixelText(ctx, '???', 232, 95, { font: 'standard', baseline: 'bottom' });
-  drawPixelText(ctx, 'D-650', 8, 48, { font: 'standard', baseline: 'bottom' });
+  ui.text(ctx, '???', 232, 95, { baseline: 'bottom' });
+  ui.text(ctx, 'D-650', 8, 48, { baseline: 'bottom' });
 }
 
 function drawTransportLine(ctx: CanvasRenderingContext2D, state: GameState, assets: AssetStore<D001AssetKey>): void {
@@ -302,7 +307,7 @@ function cargoPips(
   }
 }
 
-function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
+function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, ui: WorldUi): void {
   ctx.fillStyle = '#8c877d';
-  drawPixelText(ctx, text, x, y, { font: 'standard', baseline: 'bottom' });
+  ui.text(ctx, text, x, y, { baseline: 'bottom' });
 }

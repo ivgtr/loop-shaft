@@ -23,7 +23,7 @@ import {
   deriveSemanticRenderState,
   type SemanticRenderState,
 } from './semanticRenderState';
-import { drawPixelText } from './pixelText';
+import { WorldUi } from './worldUi';
 import { displayText } from '../i18n/display';
 import type { Locale } from '../i18n';
 
@@ -31,8 +31,8 @@ export class Phase5Renderer {
   private readonly base: CanvasRenderer;
   private readonly ctx: CanvasRenderingContext2D;
 
-  constructor(canvas: HTMLCanvasElement, private readonly assets: D001AssetStore, output?: FeedbackOutput) {
-    this.base = new CanvasRenderer(canvas, assets, output);
+  constructor(canvas: HTMLCanvasElement, private readonly assets: D001AssetStore, output?: FeedbackOutput, private readonly ui = new WorldUi()) {
+    this.base = new CanvasRenderer(canvas, assets, output, ui);
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Canvas 2D context is required.');
     context.imageSmoothingEnabled = false;
@@ -59,18 +59,18 @@ export class Phase5Renderer {
     if (state.run.elevator.travel) return;
     this.ctx.save();
     if (state.run.phase5.crew.unlocked) {
-      drawCargoPlatform(this.ctx, state, this.assets);
+      drawCargoPlatform(this.ctx, state, this.assets, this.ui);
       drawCrew(this.ctx, state, now, semantic, this.assets);
     }
-    drawCrewBoard(this.ctx, state, now, locale);
-    drawCargoRouteIndicator(this.ctx, state);
+    drawCrewBoard(this.ctx, state, now, locale, this.ui);
+    drawCargoRouteIndicator(this.ctx, state, this.ui);
     if (!canDrawD001Player(this.assets)) drawPlayerEquipment(this.ctx, state);
     this.ctx.restore();
   }
 
 }
 
-function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: number, locale: Locale): void {
+function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: number, locale: Locale, ui: WorldUi): void {
   if (!canShowCrewBoard(state)) return;
   const crew = state.run.phase5.crew;
   const { x, y } = INTERACTION_LAYOUT.crewBoard;
@@ -91,10 +91,10 @@ function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: num
     ctx.fillStyle = '#5c5447'; ctx.fillRect(x + 46, y + 19, 4, 1);
   }
   ctx.fillStyle = PALETTE.white;
-  drawPixelText(ctx, displayText(locale, crew.unlocked ? 'SHIFT BOARD' : 'CREW BOARD'), x + 5, y + 27, { font: 'standard', baseline: 'bottom' });
+  ui.text(ctx, displayText(locale, crew.unlocked ? 'SHIFT BOARD' : 'CREW BOARD'), x + 5, y + 27, { baseline: 'bottom' });
 }
 
-function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, assets: D001AssetStore): void {
+function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, assets: D001AssetStore, ui: WorldUi): void {
   const floor = phase5Floor(state, state.run.depth.current as Phase5DepthId);
   if (!floor) return;
   const groups = new Map<number, typeof floor.cargo>([[WORLD.elevatorX + 48, []]]);
@@ -126,7 +126,7 @@ function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, asse
     }
     if (items.length > 8) {
       ctx.fillStyle = '#c8bda8';
-      drawPixelText(ctx, `+${items.length - 8}`, x + 27, y - 10, { font: 'compact', baseline: 'bottom' });
+      ui.text(ctx, `+${items.length - 8}`, x + 27, y - 10, { baseline: 'bottom' });
     }
   }
 }
@@ -186,12 +186,12 @@ function drawCrewPick(ctx: CanvasRenderingContext2D, state: GameState, member: C
   ctx.fillStyle = metal; ctx.fillRect(headX - (dir < 0 ? 4 : 0), headY - 1, 5, 2);
 }
 
-function drawCargoRouteIndicator(ctx: CanvasRenderingContext2D, state: GameState): void {
+function drawCargoRouteIndicator(ctx: CanvasRenderingContext2D, state: GameState, ui: WorldUi): void {
   const route = state.run.phase5.cargo.route;
   if (!route) return;
   ctx.fillStyle = '#16181a'; ctx.fillRect(267, 41, 36, 11);
   ctx.fillStyle = '#9f9278';
-  drawPixelText(ctx, `LIFT→${route.targetDepth.replace('D-', '')}`, 270, 48, { font: 'compact', baseline: 'bottom' });
+  ui.text(ctx, `LIFT→${route.targetDepth.replace('D-', '')}`, 270, 48, { baseline: 'bottom' });
   const ratio = 1 - route.remaining / route.duration;
   ctx.fillStyle = '#776a50'; ctx.fillRect(270, 50, Math.max(1, Math.round(29 * ratio)), 1);
 }

@@ -6,6 +6,7 @@ test('exceptional cargo retains its silhouette through discovery, handling and a
   await page.goto('/');
   await page.locator('.game-canvas').click({ position: { x: 10, y: 10 } });
   const result = await page.evaluate(async () => {
+    const { createRenderSurface } = await import('/tests/fixtures/' + 'renderSurface.ts');
     const [rendering, fixture, create, appraisal, assetModule, audioModule] = await Promise.all([
       '/src/render/gameRenderer.ts', '/tests/fixtures/discovery.ts', '/src/game/createGame.ts',
       '/src/game/appraisal.ts', '/src/render/assets/gameAssets.ts', '/src/game/audio.ts',
@@ -22,30 +23,31 @@ test('exceptional cargo retains its silhouette through discovery, handling and a
       state.run.depth.unlocked.push('D-030', 'D-060', 'D-100'); state.meta.bestDepth = 'D-100';
       const floor = state.run.floors['D-100']; const node = floor.nodes[0];
       const item = fixture.loot(kind, kind, 'D-100'); item.x = node.x; item.y = node.y - 4; floor.loot.push(item);
-      const canvas = document.createElement('canvas'); const notices: RewardNotice[] = [];
+      const surface = createRenderSurface(); const { canvas, ui } = surface; const notices: RewardNotice[] = [];
       const renderer = new rendering.GameRenderer(canvas, { settings: () => settings, reward: (notice: RewardNotice | null) => {
         if (notice) notices.push(notice); audio.playReward(notice);
-      } });
+      } }, ui);
       const event: GameEvent = { id: 1, type: 'DISCOVERY_FOUND', at: 0, data: { id: item.id, name: item.name,
         category: item.category, publicKind: kind, depth: 'D-100', nodeId: node.id } };
       renderer.handleEvent(event, state, 1000, [event]); renderer.render(state, 1000); renderer.render(state, 1330);
-      shots.push({ name: `${kind}-found`, image: canvas.toDataURL() });
+      shots.push({ name: `${kind}-found`, image: surface.capture() });
       const effect = notices[0]?.effect;
       renderer.clearFeedback(); floor.loot = []; state.run.character.carried = [item]; renderer.render(state, 2000);
-      shots.push({ name: `${kind}-carried`, image: canvas.toDataURL() });
+      shots.push({ name: `${kind}-carried`, image: surface.capture() });
       state.run.character.carried = [];
       const batch: GameEvent[] = []; appraisal.appraisePhysicalCargo(state, [item], (type: GameEvent['type'], data: GameEvent['data']) => batch.push({ id: batch.length + 2, at: 0, type, data }));
       const before = JSON.stringify(state); const starts = notices.length;
       for (const e of batch) renderer.handleEvent(e, state, 3000, batch);
       renderer.render(state, 3000); renderer.render(state, 3900);
-      shots.push({ name: `${kind}-appraised`, image: canvas.toDataURL() });
+      shots.push({ name: `${kind}-appraised`, image: surface.capture() });
       const artifact = notices.at(-1)?.shipment?.highlight?.artifact;
       const immutable = JSON.stringify(state) === before;
       rows.push({ effect, artifact, starts: notices.length - starts, immutable });
       renderer.clearFeedback(); settings.motion = false; settings.highlights = false;
       renderer.handleEvent(event, state, 5000, [event]); renderer.render(state, 5000); renderer.render(state, 5300);
-      shots.push({ name: `${kind}-reduced`, image: canvas.toDataURL() });
+      shots.push({ name: `${kind}-reduced`, image: surface.capture() });
       renderer.clearFeedback(); settings.motion = true; settings.highlights = true;
+      surface.dispose();
     }
     const audioRunning = context.state === 'running'; audio.reset(); await context.close();
     return { rows, shots, audioRunning };

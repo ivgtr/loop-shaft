@@ -138,7 +138,7 @@ export function drawGameUi(ctx: CanvasRenderingContext2D, state: GameState, elev
     } else if (help) {
       const x = p.x + 14; const width = p.width - 28;
       const controls = ['ui.walkHelp', 'ui.mineHelp', 'ui.interactHelp', 'ui.sendHelp', 'ui.returnHelp', 'ui.closeHelpHint', 'ui.inspectHelp'] as const;
-      controls.forEach((key, n) => text(ctx, t(locale, key), x, p.y + 112 + n * (p.height < 350 ? 18 : 24), 12));
+      controls.forEach((key, n) => text(ctx, t(locale, key), x, p.y + 124 + n * (p.height < 350 ? 20 : 24), 16));
       if (p.height >= 350) lines(ctx, sceneReadout(state, locale).goal, x, p.y + 286, width, 12, 2, C.gold);
     }
   } else {

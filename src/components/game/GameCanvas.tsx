@@ -6,15 +6,17 @@ export function GameCanvas() {
   const runtime = useGameRuntime();
   const { state, workshop, elevatorUi, helpOpen, management } = useGameSnapshot();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const uiRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    runtime.attachCanvas(canvas);
+    runtime.attachCanvas(canvas, uiRef.current ?? undefined);
     return () => runtime.detachCanvas(canvas);
   }, [runtime]);
 
   return (
+    <>
     <canvas
       ref={canvasRef}
       className="game-canvas"
@@ -45,5 +47,7 @@ export function GameCanvas() {
         if (!snapshot.workshop && !snapshot.elevatorUi && !snapshot.helpOpen && !snapshot.management) event.currentTarget.focus({ preventScroll: true });
       }}
     />
+    <canvas ref={uiRef} className="world-ui-canvas" aria-hidden="true" />
+    </>
   );
 }

@@ -10,24 +10,24 @@ import {
   type D001AssetStore,
 } from './d001ImageRenderer';
 import { d001RopeEndY, deriveSemanticRenderState } from './semanticRenderState';
-import { drawPixelText } from './pixelText';
+import { WorldUi } from './worldUi';
 import { displayText } from '../i18n/display';
 import type { Locale } from '../i18n';
 
-export function drawEnvironment(ctx: CanvasRenderingContext2D, state: GameState, assets?: D001AssetStore, now = state.elapsed * 1000, locale: Locale = 'en'): void {
+export function drawEnvironment(ctx: CanvasRenderingContext2D, state: GameState, assets?: D001AssetStore, now = state.elapsed * 1000, locale: Locale = 'en', ui = new WorldUi()): void {
   const depth = state.run.depth.current;
   if (depth === 'D-001' && assets && drawD001Background(ctx, assets)) {
-    drawD001SurfaceJunction(ctx, assets) || drawSurfaceStationFrame(ctx, locale);
+    drawD001SurfaceJunction(ctx, assets) || drawSurfaceStationFrame(ctx, locale, ui);
     const semantic = deriveSemanticRenderState(state, state.elapsed * 1000);
     drawD001ShaftBottom(ctx, semantic, assets) || drawShaftBottomFallback(ctx, semantic.shaftBottom);
-    drawD001DynamicEnvironment(ctx, state, semantic, assets, locale);
+    drawD001DynamicEnvironment(ctx, state, semantic, assets, locale, ui);
     return;
   }
   ctx.fillStyle = PALETTE.void;
   ctx.fillRect(0, 0, WORLD.width, WORLD.height);
   drawRock(ctx, depth);
-  drawSurfaceStation(ctx, state, locale);
-  drawShaft(ctx, state);
+  drawSurfaceStation(ctx, state, locale, ui);
+  drawShaft(ctx, state, ui);
   drawTunnel(ctx, depth);
   if (depth === 'D-030') drawD030Details(ctx, state);
   if (depth === 'D-060') drawD060Details(ctx, state);
@@ -46,20 +46,21 @@ function drawD001DynamicEnvironment(
   semantic: ReturnType<typeof deriveSemanticRenderState>,
   assets: D001AssetStore,
   locale: Locale,
+  ui: WorldUi,
 ): void {
-  if (state.run.depth.unlocked.includes('D-030')) drawArchive(ctx, state, locale);
-  if (state.run.depth.unlocked.includes('D-060')) drawResearchTerminal(ctx, state, locale);
-  if (state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) drawCoreConsole(ctx, state, locale);
+  if (state.run.depth.unlocked.includes('D-030')) drawArchive(ctx, state, locale, ui);
+  if (state.run.depth.unlocked.includes('D-060')) drawResearchTerminal(ctx, state, locale, ui);
+  if (state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) drawCoreConsole(ctx, state, locale, ui);
   if (!drawD001Rope(ctx, semantic, assets)) drawRopeFallback(ctx, semantic.elevator.y);
   for (const [label, y] of [['001', 65], ['030', 103], ['060', 141], ['100', 179]] as const) {
     const depth = `D-${label}` as DepthId;
     ctx.fillStyle = state.run.depth.unlocked.includes(depth) ? depthLamp(depth) : '#43413e';
     ctx.fillRect(258, y - 4, 2, 2);
-    drawPixelText(ctx, label, 267, y, { font: 'compact', baseline: 'bottom' });
+    ui.text(ctx, label, 267, y, { baseline: 'bottom' });
   }
 }
 
-function drawSurfaceStationFrame(ctx: CanvasRenderingContext2D, locale: Locale = 'en'): void {
+function drawSurfaceStationFrame(ctx: CanvasRenderingContext2D, locale: Locale = 'en', ui = new WorldUi()): void {
   ctx.fillStyle = '#17121b';
   ctx.fillRect(199, 0, 82, 38);
   ctx.fillStyle = PALETTE.metalDark;
@@ -68,7 +69,7 @@ function drawSurfaceStationFrame(ctx: CanvasRenderingContext2D, locale: Locale =
   ctx.fillRect(204, 8, 72, 3);
   ctx.fillRect(204, 30, 72, 3);
   ctx.fillStyle = PALETTE.white;
-  drawPixelText(ctx, displayText(locale, 'SURFACE EXCHANGE'), WORLD.elevatorX, 27, { font: 'standard', align: 'center', baseline: 'bottom' });
+  ui.text(ctx, displayText(locale, 'SURFACE EXCHANGE'), WORLD.elevatorX, 27, { align: 'center', baseline: 'bottom' });
 }
 
 function drawRopeFallback(ctx: CanvasRenderingContext2D, elevatorYPosition: number): void {
@@ -119,7 +120,7 @@ function drawRock(ctx: CanvasRenderingContext2D, depth: DepthId): void {
   }
 }
 
-function drawSurfaceStation(ctx: CanvasRenderingContext2D, state: GameState, locale: Locale): void {
+function drawSurfaceStation(ctx: CanvasRenderingContext2D, state: GameState, locale: Locale, ui = new WorldUi()): void {
   ctx.fillStyle = '#17121b';
   ctx.fillRect(0, 0, WORLD.width, 38);
   ctx.fillStyle = PALETTE.metalDark;
@@ -128,15 +129,15 @@ function drawSurfaceStation(ctx: CanvasRenderingContext2D, state: GameState, loc
   ctx.fillRect(204, 8, 72, 3);
   ctx.fillRect(204, 30, 72, 3);
   ctx.fillStyle = PALETTE.white;
-  drawPixelText(ctx, 'LOOP SHAFT', WORLD.elevatorX, 20, { font: 'standard', align: 'center', baseline: 'bottom' });
+  ui.text(ctx, 'LOOP SHAFT', WORLD.elevatorX, 20, { align: 'center', baseline: 'bottom' });
   ctx.fillStyle = depthLamp(state.run.depth.current);
-  drawPixelText(ctx, displayText(locale, 'SURFACE EXCHANGE'), WORLD.elevatorX, 27, { font: 'standard', align: 'center', baseline: 'bottom' });
-  if (state.run.depth.unlocked.includes('D-030')) drawArchive(ctx, state, locale);
-  if (state.run.depth.unlocked.includes('D-060')) drawResearchTerminal(ctx, state, locale);
-  if (state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) drawCoreConsole(ctx, state, locale);
+  ui.text(ctx, displayText(locale, 'SURFACE EXCHANGE'), WORLD.elevatorX, 27, { align: 'center', baseline: 'bottom' });
+  if (state.run.depth.unlocked.includes('D-030')) drawArchive(ctx, state, locale, ui);
+  if (state.run.depth.unlocked.includes('D-060')) drawResearchTerminal(ctx, state, locale, ui);
+  if (state.meta.runIndex > 1 || state.meta.core > 0 || state.meta.protocols.length > 0) drawCoreConsole(ctx, state, locale, ui);
 }
 
-function drawArchive(ctx: CanvasRenderingContext2D, state: GameState, locale: Locale): void {
+function drawArchive(ctx: CanvasRenderingContext2D, state: GameState, locale: Locale, ui = new WorldUi()): void {
   const { x, y } = INTERACTION_LAYOUT.archive;
   ctx.fillStyle = '#22252a'; ctx.fillRect(x, y, 54, 27);
   ctx.fillStyle = PALETTE.metal; ctx.fillRect(x + 3, y + 3, 48, 2); ctx.fillRect(x + 3, y + 20, 48, 2);
@@ -146,10 +147,10 @@ function drawArchive(ctx: CanvasRenderingContext2D, state: GameState, locale: Lo
     ctx.fillStyle = i < lamps ? PALETTE.d030Lamp : '#45433a';
     ctx.fillRect(x + 34 + (i % 3) * 5, y + 8 + Math.floor(i / 3) * 6, 2, 2);
   }
-  ctx.fillStyle = PALETTE.white; drawPixelText(ctx, displayText(locale, 'ARCHIVE'), x + 5, y + 27, { font: 'standard', baseline: 'bottom' });
+  ctx.fillStyle = PALETTE.white; ui.text(ctx, displayText(locale, 'ARCHIVE'), x + 5, y + 27, { baseline: 'bottom' });
 }
 
-function drawResearchTerminal(ctx: CanvasRenderingContext2D, state: GameState, locale: Locale): void {
+function drawResearchTerminal(ctx: CanvasRenderingContext2D, state: GameState, locale: Locale, ui = new WorldUi()): void {
   const { x, y } = INTERACTION_LAYOUT.research;
   ctx.fillStyle = '#20272b'; ctx.fillRect(x, y, 58, 27);
   ctx.fillStyle = PALETTE.metal; ctx.fillRect(x + 4, y + 4, 50, 2);
@@ -157,20 +158,20 @@ function drawResearchTerminal(ctx: CanvasRenderingContext2D, state: GameState, l
   const active = state.run.research.active;
   ctx.fillStyle = active ? (Math.floor(state.elapsed * 4) % 2 === 0 ? PALETTE.d060Lamp : '#42616a') : '#3c4a4e';
   ctx.fillRect(x + 42, y + 10, 3, 3); ctx.fillRect(x + 48, y + 10, 3, 3);
-  ctx.fillStyle = PALETTE.white; drawPixelText(ctx, displayText(locale, 'ANALYZER'), x + 6, y + 27, { font: 'standard', baseline: 'bottom' });
+  ctx.fillStyle = PALETTE.white; ui.text(ctx, displayText(locale, 'ANALYZER'), x + 6, y + 27, { baseline: 'bottom' });
 }
 
-function drawCoreConsole(ctx: CanvasRenderingContext2D, state: GameState, locale: Locale): void {
+function drawCoreConsole(ctx: CanvasRenderingContext2D, state: GameState, locale: Locale, ui = new WorldUi()): void {
   const { x, y } = INTERACTION_LAYOUT.coreConsole;
   ctx.fillStyle = '#242321'; ctx.fillRect(x, y, 76, 27);
   ctx.fillStyle = PALETTE.metal; ctx.fillRect(x + 4, y + 4, 68, 2);
   ctx.fillStyle = '#100f0e'; ctx.fillRect(x + 6, y + 9, 34, 10);
   const lit = Math.min(5, state.meta.protocols.length + (state.meta.core > 0 ? 1 : 0));
   for (let i = 0; i < 5; i += 1) { ctx.fillStyle = i < lit ? PALETTE.d100Lamp : '#4a4339'; ctx.fillRect(x + 48 + i * 5, y + 11, 2, 2); }
-  ctx.fillStyle = PALETTE.white; drawPixelText(ctx, displayText(locale, 'CORE CONSOLE'), x + 6, y + 27, { font: 'standard', baseline: 'bottom' });
+  ctx.fillStyle = PALETTE.white; ui.text(ctx, displayText(locale, 'CORE CONSOLE'), x + 6, y + 27, { baseline: 'bottom' });
 }
 
-function drawShaft(ctx: CanvasRenderingContext2D, state: GameState): void {
+function drawShaft(ctx: CanvasRenderingContext2D, state: GameState, ui: WorldUi): void {
   ctx.fillStyle = '#09090d'; ctx.fillRect(216, 38, 49, 196);
   ctx.fillStyle = PALETTE.metalDark; ctx.fillRect(216, 38, 3, 196); ctx.fillRect(262, 38, 3, 196);
   ctx.fillStyle = PALETTE.rail; ctx.fillRect(225, 38, 2, 196); ctx.fillRect(253, 38, 2, 196);
@@ -181,7 +182,7 @@ function drawShaft(ctx: CanvasRenderingContext2D, state: GameState): void {
     const depth = `D-${label}` as DepthId;
     ctx.fillStyle = state.run.depth.unlocked.includes(depth) ? depthLamp(depth) : '#3e3b3a';
     ctx.fillRect(258, y - 4, 2, 2);
-    drawPixelText(ctx, label, 267, y, { font: 'compact', baseline: 'bottom' });
+    ui.text(ctx, label, 267, y, { baseline: 'bottom' });
   }
 }
 

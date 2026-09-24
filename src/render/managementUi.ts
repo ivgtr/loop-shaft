@@ -1,3 +1,4 @@
+import { UI_FONT_SIZE, UI_LINE_HEIGHT, wrapUiText } from './uiTypography';
 import { toolSpriteRow } from './workEquipment';
 import type { D001AssetStore } from './d001ImageRenderer';
 import { collectionSpriteFrame, DISCOVERY_ATLAS } from './discoveryVisuals';
@@ -23,19 +24,9 @@ export interface ManagementLayout {
   essentialBox: Rect | null; reading: boolean; detailsAvailable: boolean;
 }
 
-/** Conservative cells are deliberately wider than the 12px monospace glyphs.
- * Every paragraph is available in details, including words longer than a line. */
+/** Match the bundled font's full-width Japanese and half-width Latin advances. */
 export function wrapDetails(paragraphs: string[], width: number): string[] {
-  const limit = Math.max(1, Math.floor(width / 8));
-  return paragraphs.flatMap((paragraph) => {
-    const output: string[] = []; let remaining = paragraph;
-    while (remaining.length > limit) {
-      const space = remaining.lastIndexOf(' ', limit); const cut = space > limit / 3 ? space : limit;
-      output.push(remaining.slice(0, cut)); remaining = remaining.slice(cut).trimStart();
-    }
-    if (remaining) output.push(remaining);
-    return output;
-  });
+  return paragraphs.flatMap(paragraph => wrapUiText(paragraph, width));
 }
 
 export function layoutManagementUi(state: GameState, ui: ManagementState, viewport: UiViewport, locale: Locale = 'en'): ManagementLayout {
@@ -55,10 +46,10 @@ export function layoutManagementUi(state: GameState, ui: ManagementState, viewpo
   };
   const box = (x: number, y: number, width: number, height = 44): Rect => ({ x, y, width, height });
   const put = (label: string, x: number, y: number, width: number, color: string = C.text, size = 12, essential = false) => {
-    texts.push({ label, x, y, width, size, color, essential });
+    texts.push({ label, x, y, width, size: Math.max(UI_FONT_SIZE, size), color, essential });
   };
   const paragraph = (label: string, area: Rect, y: number, color: string = C.text, essential = false): number => {
-    for (const line of wrapDetails([displayText(locale, label)], area.width)) { put(line, area.x, y, area.width, color, 12, essential); y += 17; }
+    for (const line of wrapDetails([displayText(locale, label)], area.width)) { put(line, area.x, y, area.width, color, 12, essential); y += UI_LINE_HEIGHT; }
     return y;
   };
   add('station-close', 'Close facility', { type: 'station-close' }, box(p.x + p.width - 52, p.y + 6, 44), undefined, false, 'X');
@@ -160,7 +151,7 @@ export function layoutManagementUi(state: GameState, ui: ManagementState, viewpo
     const start = y;
     y = paragraph(item.name, main, y, C.gold, true) + 8;
     for (const fact of decision.facts) y = paragraph(`${fact.label}: ${fact.value}`, main, y, fact.warning ? C.warning : C.text, true) + 6;
-    essentialBox = { x: main.x, y: start - 13, width: main.width, height: y - start + 10 };
+    essentialBox = { x: main.x, y: start - UI_FONT_SIZE, width: main.width, height: y - start + 12 };
   }
   if (!decision && view.running) {
     bars.push({ box: box(main.x, y + 22, main.width, 6), value: view.running.value, total: view.running.total, label: `${view.running.name} · ${view.running.remaining}s` });
@@ -205,19 +196,19 @@ export function layoutManagementUi(state: GameState, ui: ManagementState, viewpo
   const reading = ui.detailsOpen;
   // In details mode, illustrations give their space back; irreversible consequences do not.
   if (reading && !decision) { y = overviewStart; gear.length = 0; route.length = 0; }
-  const textBox = { x: main.x, y, width: main.width, height: Math.max(17, contentEnd - y) };
+  const textBox = { x: main.x, y, width: main.width, height: Math.max(UI_LINE_HEIGHT, contentEnd - y) };
   const detailLines = wrapDetails([item.name, item.summary, ...(item.reason ? [item.reason] : []), ...item.lines]
     .map((line) => displayText(locale, line)), textBox.width);
-  const perPage = Math.max(1, Math.floor(textBox.height / 17));
+  const perPage = Math.max(1, Math.floor(textBox.height / UI_LINE_HEIGHT));
   const pages: string[][] = [];
   for (let i = 0; i < detailLines.length; i += perPage) pages.push(detailLines.slice(i, i + perPage));
   if (!pages.length) pages.push([]);
   const page = Math.min(ui.detailPage, pages.length - 1);
   const overviewLines = wrapDetails(overview.map((line) => displayText(locale, line)), main.width);
-  const availableLines = Math.max(0, Math.floor((contentEnd - y) / 17));
+  const availableLines = Math.max(0, Math.floor((contentEnd - y) / UI_LINE_HEIGHT));
   const detailsAvailable = Boolean(item.lines.length && (item.equipment || decision || item.route || overviewLines.length > availableLines));
-  if (reading) pages[page]!.forEach((line, n) => put(line, main.x, y + n * 17, main.width));
-  else overviewLines.slice(0, availableLines).forEach((line, n) => put(line, main.x, y + n * 17, main.width,
+  if (reading) pages[page]!.forEach((line, n) => put(line, main.x, y + n * UI_LINE_HEIGHT, main.width));
+  else overviewLines.slice(0, availableLines).forEach((line, n) => put(line, main.x, y + n * UI_LINE_HEIGHT, main.width,
     line.startsWith('LOSE:') ? C.warning : line.includes(' → ') || n === 0 ? C.gold : C.text));
 
   const detailTitle = item.equipment ? 'EFFECTS & STATS' : decision ? ui.station === 'reboot' ? 'RESET & KEEP' : 'FULL EFFECTS' : item.route ? 'ROUTE DETAILS' : 'READ MORE';
@@ -231,7 +222,7 @@ export function layoutManagementUi(state: GameState, ui: ManagementState, viewpo
       box(main.x + (multiple ? 48 : 0), footerTop, main.width - (multiple ? 96 : 0)), undefined, false,
       reading ? multiple ? `BACK · ${page + 1}/${pages.length}` : 'BACK TO OVERVIEW' : detailTitle);
   }
-  if (ui.notice) wrapDetails([ui.notice], main.width).slice(0, 2).forEach((line, n) => put(line, main.x, footerTop - 24 + n * 15, main.width, C.installed, 11));
+  if (ui.notice) wrapDetails([ui.notice], main.width).slice(0, 2).forEach((line, n) => put(line, main.x, footerTop - 24 + n * UI_LINE_HEIGHT, main.width, C.installed, 11));
   const actionY = p.y + p.height - 54;
   const actionWidth = confirming ? (main.width - 6) / 2 : main.width;
   if (confirming) add('station-cancel', decision?.cancelLabel ?? 'Cancel confirmation',

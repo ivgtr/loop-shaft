@@ -3,7 +3,7 @@ import type { GameState } from '../game/types';
 import { selectedWorkshopItem, workshopItems, type WorkshopIcon, type WorkshopItem, type WorkshopState } from '../game/workshop';
 import type { GameCommand } from '../runtime/commands';
 import type { Rect } from './interactionTargets';
-import { drawPixelText } from './pixelText';
+import { UI_LINE_HEIGHT, uiFont, wrapUiText } from './uiTypography';
 import type { Locale } from '../i18n';
 import { displayText, localizeDisplayModel } from '../i18n/display';
 
@@ -84,7 +84,7 @@ export function drawWorkshopUi(ctx: CanvasRenderingContext2D, state: GameState, 
     ctx.fillStyle = C.background; ctx.fillRect(p.x, p.y, p.width, p.height);
     ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.strokeRect(p.x + 1, p.y + 1, p.width - 2, p.height - 2);
     ctx.fillStyle = C.surface; ctx.fillRect(p.x + 3, p.y + 3, p.width - 6, 46);
-    pixel(ctx, displayText(locale, 'WORKSHOP'), p.x + 12, p.y + 15, C.gold, 2);
+    text(ctx, displayText(locale, 'WORKSHOP'), p.x + 12, p.y + 29, 16, C.gold);
     text(ctx, `${displayText(locale, 'SCRAP')} ${state.run.scrap}`, p.x + p.width - 64, p.y + 26, 12, C.light, 'right');
     if (!compact) {
       ctx.strokeStyle = '#40373a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p.x + 202.5, p.y + 56); ctx.lineTo(p.x + 202.5, p.y + p.height - 12); ctx.stroke();
@@ -123,48 +123,35 @@ export function drawButton<Action>(ctx: CanvasRenderingContext2D, b: UiButton<Ac
   } else if (b.icon) {
     icon(ctx, b.icon, b.x + 7, b.y + 8, 2, Boolean(b.owned));
     const available = b.width - 42;
-    lines(ctx, b.text, b.x + 38, b.y + 18, available, 11, 2, C.text);
+    lines(ctx, b.text, b.x + 38, b.y + 17, available, 16, 2, C.text);
     if (b.owned) { ctx.fillStyle = C.installed; ctx.fillRect(b.x + b.width - 7, b.y + 4, 3, 3); }
   } else if (b.id === 'goal') {
     lines(ctx, b.text, b.x + 10, b.y + (compact ? 17 : 23), b.width - 20, 12, compact ? 2 : 1, C.gold);
   } else {
     const label = elide(ctx, b.text, b.width - 14, 12);
-    text(ctx, label, b.x + b.width / 2, b.y + b.height / 2 + 4, 12, dimmed ? C.disabled : b.tone === 'quiet' ? C.muted : C.light, 'center');
+    const color = dimmed ? C.disabled : b.tone === 'quiet' ? C.muted : C.light;
+    const rows = label === b.text ? [label] : wrapUiText(b.text, b.width - 14);
+    rows.slice(0, 2).forEach((row, index) => text(ctx,
+      index === 1 && rows.length > 2 ? elide(ctx, `${row}…`, b.width - 14, 16) : row,
+      b.x + b.width / 2, b.y + b.height / 2 + 4 + (rows.length > 1 ? index * UI_LINE_HEIGHT - 10 : 0), 16, color, 'center'));
   }
 }
 
 export function text(ctx: CanvasRenderingContext2D, label: string, x: number, y: number, size: number, color: string = C.text, align: CanvasTextAlign = 'left'): void {
-  ctx.font = `${size}px "Cascadia Mono", Consolas, monospace`; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = color;
+  ctx.font = uiFont(size); ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = color;
   ctx.fillText(label, Math.round(x), Math.round(y));
 }
-function pixel(ctx: CanvasRenderingContext2D, label: string, x: number, y: number, color: string, scale: number): void {
-  ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(scale, scale); ctx.fillStyle = color;
-  drawPixelText(ctx, label, 0, 0, { baseline: 'top' }); ctx.restore();
-}
 export function lines(ctx: CanvasRenderingContext2D, label: string, x: number, y: number, width: number, size: number, max: number, color: string = C.text): void {
-  ctx.font = `${size}px "Cascadia Mono", Consolas, monospace`;
-  const output: string[] = []; let line = '';
-  for (const character of Array.from(label)) {
-    const next = line + character;
-    if (ctx.measureText(next).width > width && line) {
-      const space = line.lastIndexOf(' ');
-      if (space > 0) {
-        output.push(line.slice(0, space));
-        line = line.slice(space + 1) + character;
-      } else {
-        output.push(line); line = character;
-      }
-    } else line = next;
-  }
-  if (line) output.push(line);
-  output.slice(0, max).forEach((value, i) => text(ctx, i === max - 1 && output.length > max ? elide(ctx, `${value} …`, width, size) : value, x, y + i * (size + 3), size, color));
+  ctx.font = uiFont(size);
+  const output = wrapUiText(label, width);
+  output.slice(0, max).forEach((value, i) => text(ctx, i === max - 1 && output.length > max ? elide(ctx, `${value} …`, width, size) : value, x, y + i * UI_LINE_HEIGHT, size, color));
 }
 export function elide(ctx: CanvasRenderingContext2D, label: string, width: number, size: number): string {
-  ctx.font = `${size}px "Cascadia Mono", Consolas, monospace`;
+  ctx.font = uiFont(size);
   if (ctx.measureText(label).width <= width) return label;
-  let result = label;
-  while (result.length && ctx.measureText(`${result}…`).width > width) result = result.slice(0, -1);
-  return `${result}…`;
+  const result = Array.from(label);
+  while (result.length && ctx.measureText(`${result.join('')}…`).width > width) result.pop();
+  return `${result.join('')}…`;
 }
 export function icon(ctx: CanvasRenderingContext2D, kind: WorkshopIcon, x: number, y: number, scale: number, owned: boolean): void {
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.scale(scale, scale);
