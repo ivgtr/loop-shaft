@@ -4,8 +4,9 @@ import { APPRAISAL_TIMING, shipmentPayoutStart } from '../game/shipmentFeedback'
 import type { PresentationSettings } from '../game/presentationSettings';
 import type { D001AssetStore } from './d001ImageRenderer';
 import { collectionSpriteFrame } from './discoveryVisuals';
-import { drawPixelText } from './pixelText';
+import { drawPixelText, truncatePixelText } from './pixelText';
 import { rewardAccent } from './rewardEffects';
+import { displayText, formatDisplay } from '../i18n/display';
 
 /** This desk is a receipt, never a second physical cargo owner or a new roll. */
 export function drawShipmentNotice(ctx: CanvasRenderingContext2D, notice: ActiveRewardNotice,
@@ -13,10 +14,17 @@ export function drawShipmentNotice(ctx: CanvasRenderingContext2D, notice: Active
   const receipt = notice.shipment!; const highlight = receipt.highlight;
   const age = Math.max(0, now - notice.startedAt); const payout = shipmentPayoutStart(receipt);
   const accent = rewardAccent(notice);
+  const locale = settings.locale;
+  const via = receipt.via === 'CENTRAL' ? formatDisplay(locale, 'shipment.central') : displayText(locale, receipt.via);
+  const phrase = (key: Parameters<typeof formatDisplay>[1], values: Record<string, string | number> = {}) => formatDisplay(locale, key, values);
+  const valueText = (value: string, key: typeof notice.labelMessage | typeof notice.detailMessage): string => key
+    ? formatDisplay(locale, key.key, Object.fromEntries(Object.entries(key.values ?? {}).map(([name, entry]) => [name,
+      typeof entry === 'string' ? displayText(locale, entry) : entry])))
+    : displayText(locale, value);
   ctx.fillStyle = '#151519'; ctx.fillRect(87, 49, 306, 38);
   ctx.strokeStyle = '#756650'; ctx.strokeRect(87.5, 49.5, 305, 37);
   const text = (value: string, y: number, color = '#e1d8c3', x = 254) => {
-    ctx.fillStyle = color; drawPixelText(ctx, value.toUpperCase().slice(0, 43), x, y, { font: 'standard', align: 'center', baseline: 'bottom' });
+    ctx.fillStyle = color; drawPixelText(ctx, truncatePixelText(value.toUpperCase(), 270), x, y, { font: 'standard', align: 'center', baseline: 'bottom' });
   };
   if (highlight && age < payout) {
     const revealed = age >= APPRAISAL_TIMING.reveal;
@@ -39,11 +47,12 @@ export function drawShipmentNotice(ctx: CanvasRenderingContext2D, notice: Active
       for (let i = step; i < 4; i++) ctx.fillRect(95 + i * 5, 57 + i % 2 * 5, 4, 6);
       if (settings.motion) { ctx.fillStyle = '#b8aa88'; ctx.fillRect(93 + step * 5, 54, 9, 2); }
     }
-    const label = !revealed ? 'BRUSHING OFF THE SHIPMENT' : !graded && highlight.specimen
-      ? LOOT[highlight.specimen.kind].name : highlight.label;
-    text(`${receipt.via} · ${receipt.items} ITEMS DELIVERED`, 59, '#a39887');
+    const label = !revealed ? phrase('shipment.brushing') : !graded && highlight.specimen
+      ? displayText(locale, LOOT[highlight.specimen.kind].name) : valueText(highlight.label, highlight.labelMessage);
+    text(phrase('shipment.viaItems', { via, items: receipt.items }), 59, '#a39887');
     text(label, 71, revealed ? accent : '#b6a78e');
-    text(graded ? (highlight.benefit || highlight.detail) : 'SURFACE APPRAISAL', 82, '#c8bfae');
+    text(graded ? (highlight.benefit ? displayText(locale, highlight.benefit) : valueText(highlight.detail, highlight.detailMessage))
+      : phrase('shipment.surfaceAppraisal'), 82, '#c8bfae');
     if (graded && settings.highlights) { ctx.fillStyle = accent; ctx.fillRect(91, 54, 1, 8); ctx.fillRect(116, 69, 1, 8); }
     return;
   }
@@ -51,8 +60,9 @@ export function drawShipmentNotice(ctx: CanvasRenderingContext2D, notice: Active
   const total = elapsed >= APPRAISAL_TIMING.total - APPRAISAL_TIMING.payout;
   const special = elapsed >= APPRAISAL_TIMING.special - APPRAISAL_TIMING.payout;
   const displayed = total ? receipt.scrap : receipt.ordinary + (special ? receipt.special : 0);
-  text(`${receipt.via} · ${receipt.items} ITEMS · ${total ? 'SETTLED' : 'COUNTING'}`, 59, '#a39887');
-  text(`+${displayed.toLocaleString('en-US')} SCRAP`, 72, accent);
-  const extra = [receipt.data ? `+${receipt.data} DATA` : '', receipt.core ? `+${receipt.core} CORE` : ''].filter(Boolean).join(' · ');
-  text(total ? extra || 'CREDITED ON ARRIVAL' : special ? `SPECIAL CARGO +${receipt.special}` : `ORDINARY CARGO +${receipt.ordinary}`, 83, '#c8bfae');
+  text(phrase('shipment.viaStatus', { via, items: receipt.items, status: phrase(total ? 'shipment.settled' : 'shipment.counting') }), 59, '#a39887');
+  text(phrase('shipment.scrapGain', { amount: displayed.toLocaleString('en-US') }), 72, accent);
+  const extra = [receipt.data ? phrase('shipment.dataGain', { amount: receipt.data }) : '', receipt.core ? phrase('shipment.coreGain', { amount: receipt.core }) : ''].filter(Boolean).join(' · ');
+  text(total ? extra || phrase('shipment.credited') : special ? phrase('shipment.specialCargo', { amount: receipt.special })
+    : phrase('shipment.ordinaryCargo', { amount: receipt.ordinary }), 83, '#c8bfae');
 }

@@ -145,6 +145,14 @@ test.describe('small-screen touch', () => {
     await expect(canvas).toHaveAttribute('data-swing', 'ready');
     await page.getByRole('button', { name: 'MINE', exact: true }).tap();
     await expect.poll(async () => Number(await rock.getAttribute('aria-valuenow'))).toBeLessThan(remainingHp);
+    await action(page, 'help').tap();
+    await action(page, 'locale-ja').tap();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
+    await action(page, 'window-close').tap();
+    await expect(action(page, 'mine')).toHaveAccessibleName('採掘');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
+    await expect(action(page, 'mine')).toHaveAccessibleName('採掘');
     expect(errors).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 import { fieldActionHint, type FieldHint } from '../game/fieldUi';
 import { surveyRequest } from '../game/management/survey';
-import { loadPresentationSettings, savePresentationSettings, type PresentationSettings } from '../game/presentationSettings';
+import { loadPresentationSettings, savePresentationSettings, type PresentationSetting, type PresentationSettings } from '../game/presentationSettings';
 import { togglePorterHold } from '../game/simulation';
 import { restoreFossil } from '../game/appraisal';
 import { setDispatchPolicy } from '../game/dispatch';
@@ -70,6 +70,7 @@ import type { GameCommand } from './commands';
 import { MiningInput } from './MiningInput';
 import { elevatorItems, selectedElevatorItem, type ElevatorTab, type ElevatorUiState } from '../game/elevatorUi';
 import { nextWorkshopUpgrade, selectedWorkshopItem, workshopItems, type WorkshopState } from '../game/workshop';
+import type { Locale } from '../i18n';
 
 import { managementFeedback } from '../game/management/feedback';
 import { createManagementState, selectedStationItem, stationAvailable, stationSelection, stationView, type ManagementState, type StationRequest } from '../game/management';
@@ -186,12 +187,20 @@ export class GameRuntime {
 
   unlockAudio(): void { this.audio.setVolume(this.presentation.volume); this.audio.unlock(); }
 
-  changePresentation(setting: keyof PresentationSettings): void {
+  changePresentation(setting: PresentationSetting): void {
     if (!this.helpOpen) return;
     this.presentation = { ...this.presentation, [setting]: setting === 'volume'
       ? this.presentation.volume === 0 ? .5 : this.presentation.volume < 1 ? 1 : 0
       : !this.presentation[setting] };
     this.audio.setVolume(this.presentation.volume);
+    savePresentationSettings(this.presentation);
+    this.publish();
+  }
+
+  setLocale(locale: Locale): void {
+    if (this.presentation.locale === locale) return;
+    this.presentation = { ...this.presentation, locale };
+    this.controlHint = null;
     savePresentationSettings(this.presentation);
     this.publish();
   }
@@ -203,7 +212,7 @@ export class GameRuntime {
   }
 
   private setControlHint(command: GameCommand): void {
-    this.controlHint = fieldActionHint(this.state, command);
+    this.controlHint = fieldActionHint(this.state, command, this.presentation.locale);
     this.hintExpiresAt = performance.now() + 2200;
   }
 
@@ -577,7 +586,7 @@ export class GameRuntime {
     }
     this.refreshPointerTarget();
     if (this.controlHint && now >= this.hintExpiresAt) this.controlHint = null;
-    this.renderer?.render(this.state, now, this.hoveredKey, this.windowOpen ? null : this.controlHint);
+    this.renderer?.render(this.state, now, this.hoveredKey, this.windowOpen ? null : this.controlHint, this.presentation.locale);
     if (now - this.lastUiUpdate >= UI_UPDATE_INTERVAL) {
       this.lastUiUpdate = now;
       this.publish();

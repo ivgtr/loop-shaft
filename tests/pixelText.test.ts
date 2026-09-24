@@ -31,4 +31,18 @@ describe('pixel text', () => {
     expect(Math.min(...rectangles.map(([, y]) => y))).toBe(1);
     expect(Math.max(...rectangles.map(([, y]) => y))).toBe(7);
   });
+
+  it('draws CJK characters through the native canvas font while keeping unknown Latin fallback', () => {
+    const native: string[] = [];
+    const context = {
+      fillRect: () => undefined,
+      save: () => undefined,
+      restore: () => undefined,
+      fillText: (value: string) => native.push(value),
+    } as unknown as CanvasRenderingContext2D;
+    const metrics = drawPixelText(context, '採掘', 0, 0);
+    expect(metrics.width).toBe(17);
+    expect(native).toEqual(['採', '掘']);
+    expect(measurePixelText('é', 'standard')).toBe(measurePixelText('?', 'standard'));
+  });
 });

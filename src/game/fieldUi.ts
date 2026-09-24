@@ -6,6 +6,8 @@ import { canDispatchElevator, carriedWeight, currentFloor, mineBlockReason } fro
 import { workshopGuide } from './workshop';
 import type { GameState, Selection } from './types';
 import type { GameCommand } from '../runtime/commands';
+import { t, type Locale } from '../i18n';
+import { displayText } from '../i18n/display';
 
 /** Presentation only. Detailed state and prerequisites remain in sceneReadout. */
 export function inspectedNode(state: GameState) {
@@ -23,16 +25,16 @@ export function fieldResources(state: GameState) {
   };
 }
 
-export function fieldInstruction(state: GameState): string | null {
+export function fieldInstruction(state: GameState, locale: Locale = 'en'): string | null {
   const guide = deriveInitialLogisticsGuide(state);
   if (!guide) return null;
   switch (guide.step) {
-    case 'choose-vein': return 'SELECT A VEIN';
-    case 'mine-ready': return state.run.stats.manualSwings === 0 ? 'SPACE / MINE' : null;
-    case 'pickup-ready': return 'E / PICK UP ORE';
-    case 'carrying': return 'RETURN TO UNLOAD';
-    case 'load-ready': return playerInteraction(state).reason ? null : 'E / LOAD CARGO';
-    case 'select-elevator': case 'send-to-surface': return 'SEND CARGO TO SURFACE';
+    case 'choose-vein': return t(locale, 'field.selectVein');
+    case 'mine-ready': return state.run.stats.manualSwings === 0 ? t(locale, 'field.spaceMine') : null;
+    case 'pickup-ready': return t(locale, 'field.pickupOre');
+    case 'carrying': return t(locale, 'field.returnUnload');
+    case 'load-ready': return playerInteraction(state).reason ? null : t(locale, 'field.loadCargo');
+    case 'select-elevator': case 'send-to-surface': return t(locale, 'field.sendCargo');
     default: return null; // Walking, swinging, loading and delivery are visible work.
   }
 }
@@ -60,7 +62,7 @@ export function fieldGuideTarget(state: GameState): Selection {
 
 export interface FieldHint { text: string; x: number; y: number; }
 /** Only explicit unsuccessful attempts get a short local hint. Never narrate normal work. */
-export function fieldActionHint(state: GameState, command: GameCommand): FieldHint | null {
+export function fieldActionHint(state: GameState, command: GameCommand, locale: Locale = 'en'): FieldHint | null {
   const player = { x: state.run.character.x, y: state.run.character.y - 35 };
   const lift = { x: WORLD.elevatorX, y: WORLD.floorY - 55 };
   if (command.type === 'mine') {
@@ -70,20 +72,21 @@ export function fieldActionHint(state: GameState, command: GameCommand): FieldHi
     const text = node?.access === 'REMOTE_ONLY' ? 'NO WALKWAY'
       : node?.hp === 0 ? 'CHOOSE ANOTHER VEIN'
       : reason === 'CHOOSE ANOMALY' ? 'USE THE SCANNER' : 'MOVE CLOSER TO A VEIN';
-    return { text, ...(node ? { x: node.x, y: node.y - 44 } : player) };
+    return { text: displayText(locale, text),
+      ...(node ? { x: node.x, y: node.y - 44 } : player) };
   }
   if (command.type === 'interact') {
     const reason = playerInteraction(state).reason;
     if (!reason || /^(TRAVELING|COLLECTING|LOADING)/.test(reason)) return null;
-    if (reason.startsWith('PACK FULL')) return { text: 'BAG FULL - ORE STAYS HERE', ...player };
-    if (reason.startsWith('LIFT FULL')) return { text: 'SEND CARGO FIRST', ...lift };
-    if (reason.startsWith('LIFT UNAVAILABLE')) return { text: 'LIFT AWAY', ...lift };
-    return { text: 'NOTHING IN REACH', ...player };
+    if (reason.startsWith('PACK FULL')) return { text: displayText(locale, 'BAG FULL - ORE STAYS HERE'), ...player };
+    if (reason.startsWith('LIFT FULL')) return { text: displayText(locale, 'SEND CARGO FIRST'), ...lift };
+    if (reason.startsWith('LIFT UNAVAILABLE')) return { text: displayText(locale, 'LIFT AWAY'), ...lift };
+    return { text: displayText(locale, 'NOTHING IN REACH'), ...player };
   }
   if (command.type === 'send' && !canDispatchElevator(state)) {
-    if (state.run.elevator.state === 'IDLE_BOTTOM' && !state.run.elevator.travel) return { text: 'LOAD CARGO FIRST', ...lift };
+    if (state.run.elevator.state === 'IDLE_BOTTOM' && !state.run.elevator.travel) return { text: displayText(locale, 'LOAD CARGO FIRST'), ...lift };
   }
-  if (command.type === 'return' && carriedWeight(state) === 0) return { text: 'BAG EMPTY', ...player };
+  if (command.type === 'return' && carriedWeight(state) === 0) return { text: displayText(locale, 'BAG EMPTY'), ...player };
   return null;
 }
 

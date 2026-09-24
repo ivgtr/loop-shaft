@@ -1,4 +1,4 @@
-import { DEFAULT_PRESENTATION, type PresentationSettings } from '../game/presentationSettings';
+import { DEFAULT_PRESENTATION, type PresentationSetting, type PresentationSettings } from '../game/presentationSettings';
 import { ELEVATOR_TABS, elevatorItems, selectedElevatorItem, shipmentStatus, type ElevatorItem, type ElevatorTab, type ElevatorUiState } from '../game/elevatorUi';
 import { fieldResources, fieldInstruction, liftNeedsAttention } from '../game/fieldUi';
 import { stationAvailable } from '../game/management';
@@ -10,71 +10,82 @@ import { canDispatchElevator, canRequestMine, cargoWeight, carriedWeight } from 
 import type { GameState } from '../game/types';
 import { C, drawButton, lines, text, icon, type UiButton, type UiViewport, type WorkshopUiAction } from './workshopUi';
 import type { Rect } from './interactionTargets';
+import { LOCALES, t, type Locale } from '../i18n';
+import { displayText, localizeDisplayModel } from '../i18n/display';
+const localeNames: Record<Locale, string> = { en: 'English', ja: '日本語' };
 
 export type GameUiAction = import('./managementUi').ManagementUiAction | WorkshopUiAction | { type: 'lift-open'; tab?: ElevatorTab; id?: string }
   | { type: 'lift-close' | 'lift-activate' | 'help-open' | 'help-close' }
-  | { type: 'presentation'; setting: keyof PresentationSettings }
+  | { type: 'presentation'; setting: PresentationSetting }
+  | { type: 'locale'; locale: Locale }
   | { type: 'lift-tab'; tab: ElevatorTab } | { type: 'lift-select'; id: string } | { type: 'direction'; direction: -1 | 1 };
 export interface GameUiLayout {
   buttons: UiButton<GameUiAction>[]; panel: Rect | null; compact: boolean; item: ElevatorItem | null;
 }
 
 export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null, help: boolean, viewport: UiViewport, presentation: PresentationSettings = DEFAULT_PRESENTATION): GameUiLayout {
+  const locale = presentation.locale;
   const { width: w, height: h, world } = viewport;
   const compact = w < 680;
   const buttons: UiButton<GameUiAction>[] = [];
   if (elevator || help) {
     const panel: Rect = { x: compact ? 8 : (w - Math.min(660, w - 32)) / 2, y: compact ? 8 : Math.max(12, (h - 386) / 2),
       width: compact ? w - 16 : Math.min(660, w - 32), height: compact ? h - 16 : 386 };
-    buttons.push({ id: 'window-close', text: 'X', label: help ? 'Close controls help' : 'Close elevator controls', action: { type: help ? 'help-close' : 'lift-close' },
+    buttons.push({ id: 'window-close', text: 'X', label: t(locale, help ? 'ui.closeHelp' : 'ui.closeLift'), action: { type: help ? 'help-close' : 'lift-close' },
       x: panel.x + panel.width - 52, y: panel.y + 6, width: 44, height: 44 });
     if (help) {
-      const settings: Array<{ setting: keyof PresentationSettings; text: string; label: string }> = [
-        { setting: 'volume', text: `VOL ${Math.round(presentation.volume * 100)}%`, label: `Sound volume ${Math.round(presentation.volume * 100)} percent` },
-        { setting: 'motion', text: `MOTION ${presentation.motion ? 'ON' : 'OFF'}`, label: `Screen shake and effect motion ${presentation.motion ? 'on' : 'off'}` },
-        { setting: 'highlights', text: `LIGHT ${presentation.highlights ? 'ON' : 'OFF'}`, label: `Effect highlights ${presentation.highlights ? 'on' : 'off'}` },
+      const settings: Array<{ setting: PresentationSetting; text: string; label: string }> = [
+        { setting: 'volume', text: `${t(locale, 'ui.volume')} ${Math.round(presentation.volume * 100)}%`, label: `${t(locale, 'ui.volume')} ${Math.round(presentation.volume * 100)}%` },
+        { setting: 'motion', text: `${t(locale, 'ui.motion')} ${t(locale, presentation.motion ? 'ui.on' : 'ui.off')}`, label: `${t(locale, 'ui.motion')} ${t(locale, presentation.motion ? 'ui.on' : 'ui.off')}` },
+        { setting: 'highlights', text: `${t(locale, 'ui.highlights')} ${t(locale, presentation.highlights ? 'ui.on' : 'ui.off')}`, label: `${t(locale, 'ui.highlights')} ${t(locale, presentation.highlights ? 'ui.on' : 'ui.off')}` },
       ];
       settings.forEach((setting, n) => buttons.push({ id: `presentation-${setting.setting}`, text: setting.text, label: setting.label,
         action: { type: 'presentation', setting: setting.setting }, x: panel.x + 8 + n * (panel.width - 16) / 3,
         y: panel.y + panel.height - 54, width: (panel.width - 16) / 3 - 4, height: 44 }));
-      return { buttons, panel, compact, item: null };
+      const localeOptions = [locale, ...LOCALES.filter((option) => option !== locale)];
+      localeOptions.forEach((option, index) => buttons.push({ id: `locale-${option}`,
+        text: `${t(locale, 'ui.language')}: ${localeNames[option]}${locale === option ? ' ✓' : ''}`,
+        label: `${t(locale, 'ui.language')}: ${localeNames[option]}${locale === option ? `, ${t(locale, 'ui.selected')}` : ''}`,
+        action: { type: 'locale', locale: option }, selected: locale === option,
+        x: panel.x + 8 + index * ((panel.width - 20) / 2 + 4), y: panel.y + 54, width: (panel.width - 20) / 2, height: 44 }));
+      return localizeDisplayModel(locale, { buttons, panel, compact, item: null });
     }
     const ui = elevator!;
-    ELEVATOR_TABS.forEach((tab, n) => buttons.push({ id: `lift-tab-${tab}`, text: tab === 'dispatch' ? 'SHIP' : tab.toUpperCase(), label: `Elevator ${tab}`,
+    ELEVATOR_TABS.forEach((tab, n) => buttons.push({ id: `lift-tab-${tab}`, text: displayText(locale, tab === 'dispatch' ? 'SHIP' : tab.toUpperCase()), label: `Elevator ${tab}`,
       selected: tab === ui.tab, action: { type: 'lift-tab', tab }, x: panel.x + 8 + n * (panel.width - 16) / 3, y: panel.y + 56,
       width: (panel.width - 16) / 3 - 4, height: 44 }));
     const items = elevatorItems(state, ui.tab); const item = selectedElevatorItem(state, ui); const index = items.findIndex((candidate) => candidate.id === item.id);
     const select = (offset: number): GameUiAction => ({ type: 'lift-select', id: items[(index + offset + items.length) % items.length]!.id });
     if (compact) {
-      buttons.push({ id: 'lift-previous', text: '<', label: 'Previous elevator item', action: select(-1), x: panel.x + 8, y: panel.y + 108, width: 44, height: 44 });
+      buttons.push({ id: 'lift-previous', text: '<', label: t(locale, 'ui.previousLiftItem'), action: select(-1), x: panel.x + 8, y: panel.y + 108, width: 44, height: 44 });
       buttons.push({ id: 'lift-selected', text: item.name, label: item.name, selected: true, action: { type: 'lift-select', id: item.id },
         x: panel.x + 56, y: panel.y + 108, width: panel.width - 112, height: 44 });
-      buttons.push({ id: 'lift-next', text: '>', label: 'Next elevator item', action: select(1), x: panel.x + panel.width - 52, y: panel.y + 108, width: 44, height: 44 });
+      buttons.push({ id: 'lift-next', text: '>', label: t(locale, 'ui.nextLiftItem'), action: select(1), x: panel.x + panel.width - 52, y: panel.y + 108, width: 44, height: 44 });
     } else {
       const start = Math.floor(index / 4) * 4;
       items.slice(start, start + 4).forEach((candidate, n) => buttons.push({ id: `lift-item-${candidate.id}`, text: candidate.name, label: candidate.name,
         selected: item.id === candidate.id, action: { type: 'lift-select', id: candidate.id }, x: panel.x + 12, y: panel.y + 110 + n * 48, width: 180, height: 44 }));
       if (items.length > 4) {
-        buttons.push({ id: 'lift-previous', text: '<', label: 'Previous elevator item', action: select(-1), x: panel.x + 12, y: panel.y + 308, width: 44, height: 44 });
-        buttons.push({ id: 'lift-next', text: '>', label: 'Next elevator item', action: select(1), x: panel.x + 148, y: panel.y + 308, width: 44, height: 44 });
+        buttons.push({ id: 'lift-previous', text: '<', label: t(locale, 'ui.previousLiftItem'), action: select(-1), x: panel.x + 12, y: panel.y + 308, width: 44, height: 44 });
+        buttons.push({ id: 'lift-next', text: '>', label: t(locale, 'ui.nextLiftItem'), action: select(1), x: panel.x + 148, y: panel.y + 308, width: 44, height: 44 });
       }
     }
     buttons.push({ id: 'lift-activate', text: item.actionLabel, label: item.actionLabel, action: { type: 'lift-activate' }, disabled: item.command === null,
       x: panel.x + (compact ? 8 : 212), y: panel.y + panel.height - 54, width: panel.width - (compact ? 16 : 228), height: 44 });
-    return { buttons, panel, compact, item };
+    return localizeDisplayModel(locale, { buttons, panel, compact, item });
   }
   const interaction = playerInteraction(state);
   const available = playerControlAvailable(state);
   // Fixed dock: no target-dependent movement, no duplicate contextual action by the miner.
-  const controls: Omit<UiButton<GameUiAction>, keyof Rect>[] = [
-    { id: 'left', label: 'Walk left', text: '<', action: { type: 'direction', direction: -1 }, tone: 'quiet', disabled: !available },
-    { id: 'right', label: 'Walk right', text: '>', action: { type: 'direction', direction: 1 }, tone: 'quiet', disabled: !available },
-    { id: 'mine', label: 'MINE', text: 'MINE', action: { type: 'command', command: { type: 'mine' } }, disabled: !canRequestMine(state), tone: 'primary', busy: available && Boolean(state.run.character.swing) },
-    { id: 'interact', label: interaction.label, text: interaction.label, action: { type: 'command', command: { type: 'interact' } }, disabled: interaction.reason !== null, tone: 'primary', busy: ['COLLECTING', 'LOADING'].includes(state.run.character.state) },
-    { id: 'return', label: 'RETURN', text: 'RETURN', tone: 'quiet', action: { type: 'command', command: { type: 'return' } }, disabled: !available || carriedWeight(state) === 0 },
-    { id: 'stop', label: 'CANCEL', text: 'STOP', action: { type: 'command', command: { type: 'cancel' } }, disabled: state.run.character.state === 'IDLE' && state.selection === null, tone: 'quiet' },
-    { id: 'lift-open', label: 'Open elevator controls', text: 'LIFT', tone: 'quiet', action: { type: 'lift-open' }, disabled: Boolean(state.run.elevator.travel) },
-    { id: 'help', label: 'Controls and current objective', text: '?', tone: 'quiet', action: { type: 'help-open' } },
+    const controls: Omit<UiButton<GameUiAction>, keyof Rect>[] = [
+    { id: 'left', label: t(locale, 'ui.walkLeft'), text: '<', action: { type: 'direction', direction: -1 }, tone: 'quiet', disabled: !available },
+    { id: 'right', label: t(locale, 'ui.walkRight'), text: '>', action: { type: 'direction', direction: 1 }, tone: 'quiet', disabled: !available },
+    { id: 'mine', label: t(locale, 'ui.mine'), text: t(locale, 'ui.mine'), action: { type: 'command', command: { type: 'mine' } }, disabled: !canRequestMine(state), tone: 'primary', busy: available && Boolean(state.run.character.swing) },
+    { id: 'interact', label: t(locale, 'ui.interact'), text: t(locale, 'ui.interact'), action: { type: 'command', command: { type: 'interact' } }, disabled: interaction.reason !== null, tone: 'primary', busy: ['COLLECTING', 'LOADING'].includes(state.run.character.state) },
+    { id: 'return', label: t(locale, 'ui.return'), text: t(locale, 'ui.return'), tone: 'quiet', action: { type: 'command', command: { type: 'return' } }, disabled: !available || carriedWeight(state) === 0 },
+    { id: 'stop', label: t(locale, 'ui.cancel'), text: t(locale, 'ui.stop'), action: { type: 'command', command: { type: 'cancel' } }, disabled: state.run.character.state === 'IDLE' && state.selection === null, tone: 'quiet' },
+    { id: 'lift-open', label: t(locale, 'ui.openLift'), text: 'LIFT', tone: 'quiet', action: { type: 'lift-open' }, disabled: Boolean(state.run.elevator.travel) },
+    { id: 'help', label: t(locale, 'ui.openHelp'), text: '?', tone: 'quiet', action: { type: 'help-open' } },
   ];
   const gap = 4; const margin = 8;
   controls.forEach((control, n) => {
@@ -87,7 +98,7 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
     buttons.push({ ...control, x: start + rowWidths.slice(0, index).reduce((sum, width) => sum + width + gap, 0),
       y: h - (compact ? 100 : 52) + row * 48, width: rowWidths[index]!, height: 44 });
   });
-  buttons.push({ id: 'send', label: 'SEND', text: 'SEND', action: { type: 'command', command: { type: 'send' } },
+  buttons.push({ id: 'send', label: t(locale, 'ui.send'), text: t(locale, 'ui.send'), action: { type: 'command', command: { type: 'send' } },
     x: Math.min(w - 106, world.x + world.width * .55),
     // The fixed-size cabinet must stay below the scene's notification strip when the world is scaled down.
     y: Math.max(world.y + world.height * .43, world.y + world.height * .30 + 42),
@@ -96,16 +107,16 @@ export function layoutGameUi(state: GameState, elevator: ElevatorUiState | null,
   buttons.push({ id: 'pack-inspect', label: `Inspect backpack: ${Number(carriedWeight(state).toFixed(1))} of ${state.run.character.backpackCapacity} kilograms`, text: '',
     action: { type: 'station-open', request: { station: 'survey', tab: 'cargo', selectedId: 'backpack' } },
     x: 8, y: top, width: 156, height: 44, disabled: !stationAvailable(state, 'survey') || Boolean(state.run.elevator.travel) });
-  buttons.push({ id: 'inspect', label: 'Inspect mining site', text: 'INSPECT', tone: 'quiet',
+  buttons.push({ id: 'inspect', label: t(locale, 'ui.inspect'), text: t(locale, 'ui.inspect'), tone: 'quiet',
     action: { type: 'station-open', request: surveyRequest(state) }, x: w - 104, y: top, width: 96, height: 44,
     disabled: !stationAvailable(state, 'survey') || Boolean(state.run.elevator.travel) });
-  buttons.push({ id: 'base', label: 'Open base facilities', text: 'BASE', tone: 'quiet', action: { type: 'station-open', request: { station: 'facilities' } },
+  buttons.push({ id: 'base', label: t(locale, 'ui.openBase'), text: 'BASE', tone: 'quiet', action: { type: 'station-open', request: { station: 'facilities' } },
     x: w - 82, y: compact ? 56 : 46, width: 72, height: 44, disabled: Boolean(state.run.elevator.travel) });
-  return { buttons, panel: null, compact, item: null };
+  return localizeDisplayModel(locale, { buttons, panel: null, compact, item: null });
 }
 
 export function drawGameUi(ctx: CanvasRenderingContext2D, state: GameState, elevator: ElevatorUiState | null, help: boolean,
-  viewport: UiViewport, layout: GameUiLayout, focused: string | null, hovered: string | null): void {
+  viewport: UiViewport, layout: GameUiLayout, focused: string | null, hovered: string | null, locale: Locale = 'en'): void {
   const { width: w, height: h } = viewport; const { compact, panel: p, item } = layout;
   ctx.clearRect(0, 0, w, h);
   if (p) {
@@ -113,7 +124,7 @@ export function drawGameUi(ctx: CanvasRenderingContext2D, state: GameState, elev
     ctx.fillStyle = C.background; ctx.fillRect(p.x, p.y, p.width, p.height);
     ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.strokeRect(p.x + 1, p.y + 1, p.width - 2, p.height - 2);
     ctx.fillStyle = C.surface; ctx.fillRect(p.x + 3, p.y + 3, p.width - 6, 46);
-    text(ctx, help ? 'CONTROLS' : 'CENTRAL LIFT', p.x + 12, p.y + 31, 16, C.gold);
+    text(ctx, help ? t(locale, 'ui.controls') : t(locale, 'ui.centralLift'), p.x + 12, p.y + 31, 16, C.gold);
     if (!compact && !help) text(ctx, `SCRAP ${state.run.scrap} · ${state.run.depth.current}`, p.x + p.width - 64, p.y + 30, 12, C.light, 'right');
     if (item && elevator) {
       const x = p.x + (compact ? 14 : 212); const width = p.width - (compact ? 28 : 228);
@@ -126,19 +137,19 @@ export function drawGameUi(ctx: CanvasRenderingContext2D, state: GameState, elev
       if (elevator.notice) lines(ctx, elevator.notice, x, p.y + p.height - 70, width, 11, 1, C.gold);
     } else if (help) {
       const x = p.x + 14; const width = p.width - 28;
-      const controls = ['A / D or arrows: walk', 'Space / MINE: one swing', 'E: pick up, load, or inspect', 'F / SEND: send loaded cargo', 'RETURN: walk back and unload', 'Esc: close a window / stop', 'I / INSPECT: field notes'];
-      controls.forEach((label, n) => text(ctx, label, x, p.y + 72 + n * (p.height < 350 ? 18 : 24), 12));
-      if (p.height >= 350) lines(ctx, sceneReadout(state).goal, x, p.y + 258, width, 12, 2, C.gold);
+      const controls = ['ui.walkHelp', 'ui.mineHelp', 'ui.interactHelp', 'ui.sendHelp', 'ui.returnHelp', 'ui.closeHelpHint', 'ui.inspectHelp'] as const;
+      controls.forEach((key, n) => text(ctx, t(locale, key), x, p.y + 112 + n * (p.height < 350 ? 18 : 24), 12));
+      if (p.height >= 350) lines(ctx, sceneReadout(state, locale).goal, x, p.y + 286, width, 12, 2, C.gold);
     }
   } else {
     const run = state.run;
     const resources = fieldResources(state);
     ctx.fillStyle = '#0b0a0def'; ctx.fillRect(0, 0, w, compact ? 52 : 36);
-    const wallet = [`SCRAP ${amount(run.scrap)}`, resources.data ? `DATA ${amount(run.data)}` : '', resources.core ? `CORE ${amount(state.meta.core)}` : ''].filter(Boolean).join('  ');
+    const wallet = [`${t(locale, 'ui.scrap')} ${amount(run.scrap)}`, resources.data ? `${t(locale, 'ui.data')} ${amount(run.data)}` : '', resources.core ? `${t(locale, 'ui.core')} ${amount(state.meta.core)}` : ''].filter(Boolean).join('  ');
     text(ctx, wallet, 10, 22, 12, C.gold);
-    text(ctx, `${run.depth.current}${resources.run ? `  RUN ${String(state.meta.runIndex).padStart(2, '0')}` : ''}`,
+    text(ctx, `${run.depth.current}${resources.run ? `  ${t(locale, 'ui.run')} ${String(state.meta.runIndex).padStart(2, '0')}` : ''}`,
       compact ? 10 : w - 10, compact ? 44 : 22, 12, C.light, compact ? 'left' : 'right');
-    const instruction = fieldInstruction(state);
+    const instruction = fieldInstruction(state, locale);
     if (instruction) lines(ctx, instruction, 12, compact ? 77 : 62, Math.min(w - 104, 440), 12, 2, C.gold);
     const top = h - (compact ? 144 : 100);
     ctx.fillStyle = C.background; ctx.fillRect(0, top, w, h - top);

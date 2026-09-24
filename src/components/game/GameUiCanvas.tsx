@@ -1,7 +1,7 @@
 import { inspectedNode } from '../../game/fieldUi';
 import { shipmentStatus } from '../../game/elevatorUi';
 import { gameAssets } from '../../render/assets/gameAssets';
-import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useGameRuntime, useGameSnapshot } from '../../app/GameProvider';
 import { selectedWorkshopItem, workshopItems } from '../../game/workshop';
 import { drawWorkshopUi, layoutWorkshopUi, type UiViewport } from '../../render/workshopUi';
@@ -12,6 +12,8 @@ import { sceneReadout } from '../../game/hud';
 import { stationView, selectedStationItem } from '../../game/management';
 import { drawManagementUi, layoutManagementUi } from '../../render/managementUi';
 import { cargoValue, carriedWeight, cargoWeight } from '../../game/simulation';
+import { t } from '../../i18n';
+import { displayText } from '../../i18n/display';
 
 /** The visible interface is painted on Canvas. Transparent native buttons supply
  * focus, touch hit areas and screen-reader semantics from the SAME layout. */
@@ -19,6 +21,7 @@ export function GameUiCanvas() {
   const runtime = useGameRuntime();
   const assets = useMemo(gameAssets, []);
   const { state, workshop, elevatorUi, helpOpen, management, presentation, controlHint } = useGameSnapshot();
+  const locale = presentation.locale;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const inputsRef = useRef<HTMLDivElement>(null);
   const focusSelectedItem = useRef(false);
@@ -27,11 +30,13 @@ export function GameUiCanvas() {
   const [hovered, setHovered] = useState<string | null>(null);
   const open = workshop !== null || elevatorUi !== null || helpOpen || management !== null;
   const heldPointer = useRef<{ id: number; button: string } | null>(null);
-  const managementLayout = useMemo(() => management ? layoutManagementUi(state, management, viewport) : null, [state, management, viewport]);
-  const layout = useMemo(() => workshop ? layoutWorkshopUi(state, workshop, viewport) : layoutGameUi(state, elevatorUi, helpOpen, viewport, presentation), [state, workshop, elevatorUi, helpOpen, viewport, presentation]);
+  const managementLayout = useMemo(() => management ? layoutManagementUi(state, management, viewport, locale) : null, [state, management, viewport, locale]);
+  const layout = useMemo(() => workshop ? layoutWorkshopUi(state, workshop, viewport, locale) : layoutGameUi(state, elevatorUi, helpOpen, viewport, presentation), [state, workshop, elevatorUi, helpOpen, viewport, presentation, locale]);
   const buttons = managementLayout?.buttons ?? layout.buttons;
-  const readout = sceneReadout(state);
+  const readout = sceneReadout(state, locale);
   const node = inspectedNode(state);
+
+  useEffect(() => { document.documentElement.lang = locale; }, [locale]);
 
   useLayoutEffect(() => {
     // A lost browser focus may never deliver pointerup to the original button.
@@ -68,9 +73,9 @@ export function GameUiCanvas() {
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.imageSmoothingEnabled = false;
     if (managementLayout) drawManagementUi(ctx, viewport, managementLayout, focused, hovered, assets);
-    else if (workshop && 'itemCount' in layout) drawWorkshopUi(ctx, state, workshop, viewport, layout, focused, hovered);
-    else if (!('itemCount' in layout)) drawGameUi(ctx, state, elevatorUi, helpOpen, viewport, layout, focused, hovered);
-  }, [state, workshop, elevatorUi, helpOpen, managementLayout, layout, viewport, focused, hovered, assets]);
+    else if (workshop && 'itemCount' in layout) drawWorkshopUi(ctx, state, workshop, viewport, layout, focused, hovered, locale);
+    else if (!('itemCount' in layout)) drawGameUi(ctx, state, elevatorUi, helpOpen, viewport, layout, focused, hovered, locale);
+  }, [state, workshop, elevatorUi, helpOpen, managementLayout, layout, viewport, focused, hovered, assets, locale]);
 
   useLayoutEffect(() => {
     setHovered(null);
@@ -97,6 +102,7 @@ export function GameUiCanvas() {
   function activate(action: GameUiAction): void {
     runtime.unlockAudio();
     if (action.type === 'presentation') runtime.changePresentation(action.setting);
+    else if (action.type === 'locale') runtime.setLocale(action.locale);
     else if (action.type === 'station-open') runtime.openManagement(action.request);
     else if (action.type === 'station-close') runtime.closeManagement();
     else if (action.type === 'station-back') runtime.backManagement();
@@ -177,54 +183,54 @@ export function GameUiCanvas() {
       data-station={management?.station} data-selected-item={managementLayout?.item.id}
       data-detail-open={management?.detailsOpen} data-detail-pages={managementLayout?.pages.length} data-item-count={managementLayout?.count}
       role={open ? 'dialog' : undefined} aria-modal={open ? true : undefined}
-      aria-label={management ? stationView(state, management).title : workshop ? 'Workshop' : elevatorUi ? 'Elevator controls' : helpOpen ? 'Controls help' : undefined}
+      aria-label={management ? managementLayout?.title : workshop ? t(locale, 'ui.workshopDialog') : elevatorUi ? t(locale, 'ui.elevatorDialog') : helpOpen ? t(locale, 'ui.helpDialog') : undefined}
       aria-describedby={management ? 'management-detail' : workshop ? 'workshop-detail' : elevatorUi ? 'elevator-detail' : undefined}
       onPointerDown={(event) => { if (open && event.target === event.currentTarget) event.preventDefault(); }}
       onKeyDown={handleKeyDown} onPointerCancel={() => runtime.releaseInputs()}>
       {management && managementLayout && <div className="canvas-semantics" id="management-detail">
         <h2>{managementLayout.title}</h2>
         <p>{managementLayout.item.name}. {managementLayout.item.summary}. {managementLayout.item.reason}</p>
-        {managementLayout.item.decision && <section data-testid="management-consequences" aria-label="Consequences">
+        {managementLayout.item.decision && <section data-testid="management-consequences" aria-label={displayText(locale, 'Consequences')}>
           {managementLayout.item.decision.facts.map((fact) => <p key={fact.label}>{fact.label}: {fact.value}</p>)}
         </section>}
-        {managementLayout.item.route && <ol aria-label="Cargo route">{managementLayout.item.route.map((stop, index) =>
+        {managementLayout.item.route && <ol aria-label={displayText(locale, 'Cargo route')}>{managementLayout.item.route.map((stop, index) =>
           <li key={index}>{stop.label}: {stop.detail}{stop.blocked ? ' · BLOCKED' : ''}</li>)}</ol>}
         {managementLayout.item.equipment && <p>Current: {managementLayout.item.equipment.current}. Candidate: {managementLayout.item.equipment.candidate}.</p>}
         {managementLayout.bars.map((bar, index) => <p key={index} role="progressbar" aria-label={bar.label}
           aria-valuemin={0} aria-valuemax={bar.total} aria-valuenow={Math.max(0, Math.min(bar.total, bar.value))}>{bar.label}</p>)}
         {managementLayout.item.lines.map((line, index) => <p key={index}>{line}</p>)}
-        <p>Arrow keys browse items. Page Up/Down reads all details. Tab chooses an action. Escape cancels confirmation, then closes the facility.</p>
-        <p data-testid="detail-page">Detail {managementLayout.page + 1}/{managementLayout.pages.length}</p>
-        <p role="status" aria-live="polite">{management.notice}</p>
+        <p>{displayText(locale, 'Arrow keys browse items.')} {displayText(locale, 'Page Up/Down reads all details.')} {displayText(locale, 'Tab chooses an action.')} {displayText(locale, 'Escape cancels confirmation, then closes the facility.')}</p>
+        <p data-testid="detail-page">{displayText(locale, `Detail ${managementLayout.page + 1}/${managementLayout.pages.length}`)}</p>
+        <p role="status" aria-live="polite">{management.notice ? displayText(locale, management.notice) : ''}</p>
       </div>}
       {workshop && layout.item && <div className="canvas-semantics" id="workshop-detail">
-        <h2>Workshop · {state.run.scrap} Scrap</h2>
-        <p>{selectedWorkshopItem(workshopItems(state), workshop.selectedId).name}. {selectedWorkshopItem(workshopItems(state), workshop.selectedId).comparison}. {layout.item.description}. {layout.item.reason}</p>
-        <p>Arrow keys browse. Tab selects an action. Enter or Space activates it. Escape closes without clearing your vein.</p>
-        <p role="status" aria-live="polite">{workshop?.notice}</p>
+        <h2>{t(locale, 'ui.workshopDialog')} · {state.run.scrap} {t(locale, 'ui.scrapTitle')}</h2>
+        <p>{layout.item.name}. {layout.item.description}. {layout.item.reason}</p>
+        <p>{displayText(locale, 'Arrow keys browse items.')} {displayText(locale, 'Tab chooses an action.')} {displayText(locale, 'Enter or Space activates it.')} {displayText(locale, 'Escape closes without clearing your vein.')}</p>
+        <p role="status" aria-live="polite">{workshop?.notice ? displayText(locale, workshop.notice) : ''}</p>
       </div>}
       {elevatorUi && <div className="canvas-semantics" id="elevator-detail">
-        <h2>Central Elevator · {state.run.depth.current} · {state.run.scrap} Scrap</h2>
-        <p>{layout.item?.name}. {selectedElevatorItem(state, elevatorUi).summary}. {layout.item?.description}. {layout.item?.reason}</p>
-        <p>Arrow keys browse destinations or controls. Tab selects an action. Enter or Space activates it. Escape returns to mining.</p>
-        <p role="status" aria-live="polite">{elevatorUi.notice}</p>
+        <h2>{t(locale, 'ui.centralLift')} · {state.run.depth.current} · {state.run.scrap} {t(locale, 'ui.scrapTitle')}</h2>
+        <p>{displayText(locale, layout.item?.name ?? '')}. {displayText(locale, selectedElevatorItem(state, elevatorUi).summary)}. {displayText(locale, layout.item?.description ?? '')}. {displayText(locale, layout.item?.reason ?? '')}</p>
+        <p>{displayText(locale, 'Arrow keys browse items.')} {displayText(locale, 'Tab chooses an action.')} {displayText(locale, 'Enter or Space activates it.')} {displayText(locale, 'Escape returns to mining.')}</p>
+        <p role="status" aria-live="polite">{elevatorUi.notice ? displayText(locale, elevatorUi.notice) : ''}</p>
       </div>}
-      {helpOpen && <div className="canvas-semantics"><h2>Controls and current objective</h2><p>{readout.detail || readout.goal}</p>
-        <p>A/D or arrows to walk. Space to mine. E to interact. F to send. I to inspect. RETURN to unload. Escape to close or stop. Hold the direction buttons to walk on touch.</p></div>}
-      {!open && <section className="canvas-semantics" aria-label="Mining status">
+      {helpOpen && <div className="canvas-semantics"><h2>{t(locale, 'ui.helpCurrentGoal')}</h2><p>{readout.detail || readout.goal}</p>
+        <p>{t(locale, 'ui.helpHowTo')}</p></div>}
+      {!open && <section className="canvas-semantics" aria-label={t(locale, 'ui.sceneStatus')}>
         <h2 data-testid="scene-title">{readout.title}</h2>
         <p data-testid="scene-detail">{readout.detail}</p>
-        <p data-testid="pack-status">PACK {carriedWeight(state).toFixed(1)}/{state.run.character.backpackCapacity}kg · value {cargoValue(state.run.character.carried)} Scrap · {readout.short}</p>
-        <p data-testid="resource-status">SCRAP {state.run.scrap} · DATA {state.run.data} · CORE {state.meta.core}</p>
-        {node && <p role="progressbar" aria-label={`${node.name} rock remaining`} aria-valuemin={0} aria-valuemax={node.maxHp}
+        <p data-testid="pack-status">{t(locale, 'ui.pack')} {carriedWeight(state).toFixed(1)}/{state.run.character.backpackCapacity}{t(locale, 'ui.kilograms')} · {t(locale, 'ui.value')} {cargoValue(state.run.character.carried)} {t(locale, 'ui.scrap')} · {readout.short}</p>
+        <p data-testid="resource-status">{t(locale, 'ui.scrap')} {state.run.scrap} · {t(locale, 'ui.data')} {state.run.data} · {t(locale, 'ui.core')} {state.meta.core}</p>
+        {node && <p role="progressbar" aria-label={t(locale, 'ui.nodeRemaining', { name: displayText(locale, node.name) })} aria-valuemin={0} aria-valuemax={node.maxHp}
           aria-valuenow={Math.max(0, Math.min(node.maxHp, node.hp))}>HP {node.hp}/{node.maxHp}</p>}
-        <p role="progressbar" aria-label="Backpack capacity" aria-valuemin={0} aria-valuemax={state.run.character.backpackCapacity}
-          aria-valuenow={Math.min(state.run.character.backpackCapacity, carriedWeight(state))}>{carriedWeight(state)} kg</p>
-        <p role="progressbar" aria-label="Lift capacity" aria-valuemin={0} aria-valuemax={state.run.elevator.maxLoad}
-          aria-valuenow={Math.min(state.run.elevator.maxLoad, cargoWeight(state.run.elevator.cargo))}>{cargoWeight(state.run.elevator.cargo)} kg</p>
-        <p id="shipment-status">{shipmentStatus(state)}</p>
+        <p role="progressbar" aria-label={t(locale, 'ui.capacityBackpack')} aria-valuemin={0} aria-valuemax={state.run.character.backpackCapacity}
+          aria-valuenow={Math.min(state.run.character.backpackCapacity, carriedWeight(state))}>{carriedWeight(state)} {t(locale, 'ui.kilograms')}</p>
+        <p role="progressbar" aria-label={t(locale, 'ui.capacityLift')} aria-valuemin={0} aria-valuemax={state.run.elevator.maxLoad}
+          aria-valuenow={Math.min(state.run.elevator.maxLoad, cargoWeight(state.run.elevator.cargo))}>{cargoWeight(state.run.elevator.cargo)} {t(locale, 'ui.kilograms')}</p>
+        <p id="shipment-status">{displayText(locale, shipmentStatus(state))}</p>
         <p role="status" aria-live="polite">{controlHint?.text}</p>
-        <p id="player-control-help">A/D or arrows walk. Space mines. E interacts. F sends. I opens field notes. Escape stops. Click a vein to approach it or click the floor to walk.</p>
+        <p id="player-control-help">{t(locale, 'ui.helpHowTo')}</p>
       </section>}
       {viewport.width > 0 && buttons.map((button) => <button key={button.id} type="button"
         className="canvas-hit" aria-label={button.label} disabled={button.disabled && button.action.type !== 'command'} aria-disabled={button.disabled || undefined}

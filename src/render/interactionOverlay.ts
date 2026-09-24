@@ -6,6 +6,8 @@ import type { GameState, Selection } from '../game/types';
 import type { InteractionTarget, Rect } from './interactionTargets';
 import { sameInteractionTarget } from './interactionTargets';
 import { drawPixelText, fitPixelFont, measurePixelText } from './pixelText';
+import type { Locale } from '../i18n';
+import { displayText } from '../i18n/display';
 
 const COLORS = {
   normal: '#716b63',
@@ -25,6 +27,7 @@ export function drawInteractionOverlay(
   guideTargetKey: string | null = null,
   state?: GameState,
   hint: FieldHint | null = null,
+  locale: Locale = 'en',
 ): void {
   ctx.save();
   ctx.lineWidth = 1;
@@ -51,7 +54,7 @@ export function drawInteractionOverlay(
     }
   }
   const hovered = targets.find((target) => target.key === hoveredKey);
-  if (hovered && hovered.key !== guideTargetKey) drawHoverLabel(ctx, hovered);
+  if (hovered && hovered.key !== guideTargetKey) drawHoverLabel(ctx, hovered, locale);
   if (hint) drawFieldHint(ctx, { ...hint, y: hint.y + (state?.run.depth.current === 'D-001' ? D001_VISUAL_GROUND_OFFSET : 0) });
   ctx.restore();
 }
@@ -69,9 +72,10 @@ function drawCornerFrame(ctx: CanvasRenderingContext2D, rect: Rect, hovered: boo
   ctx.stroke();
 }
 
-function drawHoverLabel(ctx: CanvasRenderingContext2D, target: InteractionTarget): void {
-  const warning = target.shortStatus && !/^(DEPLETED|TRAVELING|ASCENDING|DESCENDING|UNLOADING|LOADING|MOVING|SWINGING|COLLECTING)/.test(target.shortStatus) ? target.shortStatus : null;
-  const text = warning ? `${target.displayName} · ${warning}` : target.displayName;
+function drawHoverLabel(ctx: CanvasRenderingContext2D, target: InteractionTarget, locale: Locale): void {
+  const warning = target.shortStatus && !/^(DEPLETED|TRAVELING|ASCENDING|DESCENDING|UNLOADING|LOADING|MOVING|SWINGING|COLLECTING)/.test(target.shortStatus) ? displayText(locale, target.shortStatus) : null;
+  const name = displayText(locale, target.displayName);
+  const text = warning ? `${name} · ${warning}` : name;
   const font = fitPixelFont(text, WORLD.width - 12);
   const width = measurePixelText(text, font) + 6;
   const height = 10;

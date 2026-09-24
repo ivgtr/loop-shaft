@@ -4,6 +4,8 @@ import { selectedWorkshopItem, workshopItems, type WorkshopIcon, type WorkshopIt
 import type { GameCommand } from '../runtime/commands';
 import type { Rect } from './interactionTargets';
 import { drawPixelText } from './pixelText';
+import type { Locale } from '../i18n';
+import { displayText, localizeDisplayModel } from '../i18n/display';
 
 export interface UiViewport { width: number; height: number; world: Rect; }
 export type WorkshopUiAction = { type: 'station-open'; request: import('../game/management').StationRequest } | { type: 'open' | 'close' | 'buy' } | { type: 'select'; id: string } | { type: 'command'; command: GameCommand };
@@ -22,7 +24,7 @@ export const C = { background: '#171519', surface: '#262127', line: '#74604b', l
   text: '#dbd3c6', muted: '#b0a397', gold: '#d5b373', installed: '#a7c3b3', disabled: '#77716c', warning: '#e3aa89' };
 
 /** One geometry model for the Canvas paint and its semantic input targets. All units are CSS pixels. */
-export function layoutWorkshopUi(state: GameState, workshop: WorkshopState | null, viewport: UiViewport): WorkshopUiLayout {
+export function layoutWorkshopUi(state: GameState, workshop: WorkshopState | null, viewport: UiViewport, locale: Locale = 'en'): WorkshopUiLayout {
   const { width: w, height: h } = viewport;
   const compact = w < 680;
   const buttons: UiButton[] = [];
@@ -61,11 +63,11 @@ export function layoutWorkshopUi(state: GameState, workshop: WorkshopState | nul
   add({ id: 'buy', label: item.actionLabel, text: item.id === 'recovered-gear' ? 'INSPECT GEAR' : item.owned ? item.actionLabel : item.cost === null ? 'EQUIP' : `BUY · ${item.cost} SCRAP`,
     action: item.id === 'recovered-gear' ? { type: 'station-open', request: { station: 'equipment' } } : { type: 'buy' }, disabled: item.id !== 'recovered-gear' && item.command === null, x: panel.x + (compact ? 8 : 212), y: panel.y + panel.height - 54,
     width: panel.width - (compact ? 16 : 228), height: 44 });
-  return { buttons, panel, compact, item, itemCount: `${index + 1} / ${group.length}` };
+  return localizeDisplayModel(locale, { buttons, panel, compact, item, itemCount: `${index + 1} / ${group.length}` });
 }
 
 export function drawWorkshopUi(ctx: CanvasRenderingContext2D, state: GameState, workshop: WorkshopState | null,
-  viewport: UiViewport, layout: WorkshopUiLayout, focused: string | null, hovered: string | null): void {
+  viewport: UiViewport, layout: WorkshopUiLayout, focused: string | null, hovered: string | null, locale: Locale = 'en'): void {
   ctx.clearRect(0, 0, viewport.width, viewport.height);
   const { panel: p, item, compact } = layout;
   if (p && item && workshop) {
@@ -82,8 +84,8 @@ export function drawWorkshopUi(ctx: CanvasRenderingContext2D, state: GameState, 
     ctx.fillStyle = C.background; ctx.fillRect(p.x, p.y, p.width, p.height);
     ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.strokeRect(p.x + 1, p.y + 1, p.width - 2, p.height - 2);
     ctx.fillStyle = C.surface; ctx.fillRect(p.x + 3, p.y + 3, p.width - 6, 46);
-    pixel(ctx, 'WORKSHOP', p.x + 12, p.y + 15, C.gold, 2);
-    text(ctx, `SCRAP ${state.run.scrap}`, p.x + p.width - 64, p.y + 26, 12, C.light, 'right');
+    pixel(ctx, displayText(locale, 'WORKSHOP'), p.x + 12, p.y + 15, C.gold, 2);
+    text(ctx, `${displayText(locale, 'SCRAP')} ${state.run.scrap}`, p.x + p.width - 64, p.y + 26, 12, C.light, 'right');
     if (!compact) {
       ctx.strokeStyle = '#40373a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p.x + 202.5, p.y + 56); ctx.lineTo(p.x + 202.5, p.y + p.height - 12); ctx.stroke();
       icon(ctx, item.icon, p.x + 214, p.y + 57, 3, item.owned);
@@ -98,7 +100,7 @@ export function drawWorkshopUi(ctx: CanvasRenderingContext2D, state: GameState, 
     const statusY = p.y + p.height - (compact ? 95 : 111);
     if (!item.owned && item.reason) lines(ctx, item.reason, x, statusY, width, 12, 2, C.warning);
     // Owned marker and action already express fitted/active state. Only announce a purchase once.
-    if (workshop.notice) lines(ctx, workshop.notice, x, p.y + p.height - 78, width, 11, 1, C.installed);
+    if (workshop.notice) lines(ctx, displayText(locale, workshop.notice), x, p.y + p.height - 78, width, 11, 1, C.installed);
     if (!compact && layout.buttons.some((b) => b.id === 'previous')) text(ctx, layout.itemCount, p.x + 104, p.y + 297, 11, C.muted, 'center');
   }
   for (const button of layout.buttons) drawButton(ctx, button, focused === button.id, compact, hovered === button.id);
@@ -141,10 +143,18 @@ function pixel(ctx: CanvasRenderingContext2D, label: string, x: number, y: numbe
 }
 export function lines(ctx: CanvasRenderingContext2D, label: string, x: number, y: number, width: number, size: number, max: number, color: string = C.text): void {
   ctx.font = `${size}px "Cascadia Mono", Consolas, monospace`;
-  const words = label.split(' '); const output: string[] = []; let line = '';
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (ctx.measureText(next).width > width && line) { output.push(line); line = word; } else line = next;
+  const output: string[] = []; let line = '';
+  for (const character of Array.from(label)) {
+    const next = line + character;
+    if (ctx.measureText(next).width > width && line) {
+      const space = line.lastIndexOf(' ');
+      if (space > 0) {
+        output.push(line.slice(0, space));
+        line = line.slice(space + 1) + character;
+      } else {
+        output.push(line); line = character;
+      }
+    } else line = next;
   }
   if (line) output.push(line);
   output.slice(0, max).forEach((value, i) => text(ctx, i === max - 1 && output.length > max ? elide(ctx, `${value} …`, width, size) : value, x, y + i * (size + 3), size, color));

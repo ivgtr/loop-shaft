@@ -29,6 +29,8 @@ import {
   type SemanticRenderState,
 } from './semanticRenderState';
 import { drawPixelText } from './pixelText';
+import { displayText } from '../i18n/display';
+import type { Locale } from '../i18n';
 
 export function drawEntities(
   ctx: CanvasRenderingContext2D,
@@ -36,6 +38,7 @@ export function drawEntities(
   now: number,
   semantic?: SemanticRenderState,
   assets?: D001AssetStore,
+  locale: Locale = 'en',
 ): void {
   drawNodes(ctx, state, semantic, assets);
   if (semantic) drawDiscoveryCues(ctx, state, semantic, assets);
@@ -67,7 +70,7 @@ export function drawEntities(
   }
   drawLoot(ctx, state, now, assets, semantic);
   if (!d001) {
-    drawElevator(ctx, state, now, assets);
+    drawElevator(ctx, state, now, assets, locale);
     drawLiftControl(ctx, state, false);
   }
 }
@@ -78,9 +81,10 @@ export function drawD001ElevatorFrontLayer(
   semantic: SemanticRenderState,
   now: number,
   assets?: D001AssetStore,
+  locale: Locale = 'en',
 ): boolean {
   const imageDrawn = Boolean(assets && drawD001ElevatorFront(ctx, state, semantic, assets));
-  if (!imageDrawn) drawD001ElevatorFrontFallback(ctx, state, semantic, now);
+  if (!imageDrawn) drawD001ElevatorFrontFallback(ctx, state, semantic, now, locale);
   drawLiftControl(ctx, state, imageDrawn);
   return imageDrawn;
 }
@@ -216,7 +220,7 @@ function drawPickaxe(ctx: CanvasRenderingContext2D, state: GameState, x: number,
   ctx.beginPath(); ctx.moveTo(x + dir * 2, y - 3); ctx.lineTo(headX, headY); ctx.stroke(); ctx.fillStyle = metal; ctx.fillRect(headX - (dir < 0 ? 4 : 0), headY - 1, 5, 2);
 }
 
-function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: number, assets?: D001AssetStore): void {
+function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: number, assets?: D001AssetStore, locale: Locale = 'en'): void {
   const e = state.run.elevator;
   const y = state.run.depth.current === 'D-001' ? d001ElevatorVisualY(e.position) : elevatorY(state);
   const half = state.run.anomaly.selected === 'EMPTY_SHAFT' ? 15 : 20;
@@ -234,7 +238,7 @@ function drawElevator(ctx: CanvasRenderingContext2D, state: GameState, now: numb
   ctx.fillStyle = e.state !== 'IDLE_BOTTOM' || e.cargo.length > 0 ? depthAccent(state.run.depth.current) : '#47413a'; ctx.fillRect(WORLD.elevatorX + Math.max(8, half - 7), y - 12, 3, 3);
   if (e.state === 'IDLE_BOTTOM' && e.cargo.length > 0 && !state.run.automation.autoDispatch.enabled && Math.floor(now / 500) % 2 === 0) {
     ctx.fillStyle = PALETTE.lamp;
-    drawPixelText(ctx, 'SEND', WORLD.elevatorX, y - 22, { font: 'standard', align: 'center', baseline: 'bottom' });
+    drawPixelText(ctx, displayText(locale, 'SEND'), WORLD.elevatorX, y - 22, { font: 'standard', align: 'center', baseline: 'bottom' });
   }
 }
 
@@ -266,7 +270,7 @@ function drawElevatorCargoFallback(ctx: CanvasRenderingContext2D, state: GameSta
   }
 }
 
-function drawD001ElevatorFrontFallback(ctx: CanvasRenderingContext2D, state: GameState, semantic: SemanticRenderState, now: number): void {
+function drawD001ElevatorFrontFallback(ctx: CanvasRenderingContext2D, state: GameState, semantic: SemanticRenderState, now: number, locale: Locale): void {
   const y = Math.round(semantic.elevator.y);
   const half = semantic.elevator.width === 'narrow' ? 15 : 20;
   const closed = semantic.elevator.door === 'closed';
@@ -280,7 +284,7 @@ function drawD001ElevatorFrontFallback(ctx: CanvasRenderingContext2D, state: Gam
   if (!closed && state.run.elevator.state === 'IDLE_BOTTOM' && state.run.elevator.cargo.length > 0
     && !state.run.automation.autoDispatch.enabled && Math.floor(now / 500) % 2 === 0) {
     ctx.fillStyle = PALETTE.lamp;
-    drawPixelText(ctx, 'SEND', WORLD.elevatorX, y - 22, { font: 'standard', align: 'center', baseline: 'bottom' });
+    drawPixelText(ctx, displayText(locale, 'SEND'), WORLD.elevatorX, y - 22, { font: 'standard', align: 'center', baseline: 'bottom' });
   }
 }
 

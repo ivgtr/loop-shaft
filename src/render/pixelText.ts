@@ -133,6 +133,11 @@ function glyphFor(character: string, font: PixelFont): Glyph {
   return glyphs[character] ?? glyphs['?']!;
 }
 
+function isCjk(character: string): boolean {
+  const point = character.codePointAt(0) ?? 0;
+  return (point >= 0x2e80 && point <= 0xa4cf) || (point >= 0xac00 && point <= 0xd7af) || (point >= 0xf900 && point <= 0xfaff);
+}
+
 export function pixelTextHeight(font: PixelFont = 'standard'): number {
   return font === 'compact' ? 5 : 7;
 }
@@ -142,12 +147,13 @@ export function measurePixelText(
   font: PixelFont = 'standard',
   letterSpacing = 1,
 ): number {
-  if (text.length === 0) return 0;
+  const characters = Array.from(text);
+  if (characters.length === 0) return 0;
   let width = 0;
-  for (const character of text) {
-    width += glyphFor(character.toUpperCase(), font)[0]!.length;
+  for (const character of characters) {
+    width += isCjk(character) ? font === 'compact' ? 6 : 8 : glyphFor(character.toUpperCase(), font)[0]!.length;
   }
-  return width + Math.max(0, text.length - 1) * letterSpacing;
+  return width + Math.max(0, characters.length - 1) * letterSpacing;
 }
 
 export function fitPixelFont(
@@ -159,6 +165,13 @@ export function fitPixelFont(
     return 'standard';
   }
   return 'compact';
+}
+
+export function truncatePixelText(text: string, maxWidth: number, font: PixelFont = 'standard'): string {
+  if (measurePixelText(text, font) <= maxWidth) return text;
+  const suffix = '...'; const characters = Array.from(text);
+  while (characters.length && measurePixelText(`${characters.join('')}${suffix}`, font) > maxWidth) characters.pop();
+  return `${characters.join('')}${suffix}`;
 }
 
 export function drawPixelText(
@@ -181,6 +194,15 @@ export function drawPixelText(
   if (align === 'right') cursor -= width;
 
   for (const character of text) {
+    if (isCjk(character)) {
+      context.save();
+      context.font = `${font === 'compact' ? 5 : 7}px sans-serif`;
+      context.textAlign = 'left'; context.textBaseline = 'top';
+      context.fillText(character, cursor, top - (baseline === 'bottom' ? 0 : 0));
+      context.restore();
+      cursor += (font === 'compact' ? 6 : 8) + letterSpacing;
+      continue;
+    }
     const glyph = glyphFor(character.toUpperCase(), font);
     for (let row = 0; row < glyph.length; row += 1) {
       for (let column = 0; column < glyph[row]!.length; column += 1) {

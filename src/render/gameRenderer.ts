@@ -8,6 +8,7 @@ import { CARGO_HUB_X, RAIL_STOP_X, WORLD } from '../game/config';
 import { isFirstLiveScrapGain } from '../game/initialLogisticsGuide';
 import { cargoWeight } from '../game/simulation';
 import type { GameEvent, GameState, LootStack } from '../game/types';
+import type { Locale } from '../i18n';
 import { Phase5Renderer } from './phase5Renderer';
 import { drawInteractionOverlay } from './interactionOverlay';
 import { drawDeliveryNotice } from './initialGuideOverlay';
@@ -52,12 +53,12 @@ export class GameRenderer {
     }
   }
 
-  render(state: GameState, now: number, hoveredKey: string | null = null, hint: FieldHint | null = null): void {
+  render(state: GameState, now: number, hoveredKey: string | null = null, hint: FieldHint | null = null, locale: Locale = 'en'): void {
     const shake = this.base.worldShake(state, now);
     this.ctx.save();
     this.ctx.translate(shake, 0);
     const semantic = deriveSemanticRenderState(state, now);
-    this.base.render(state, now, semantic);
+    this.base.render(state, now, semantic, locale);
     if (state.run.elevator.travel) {
       this.ctx.restore();
       this.base.drawForegroundFx(now);
@@ -82,15 +83,15 @@ export class GameRenderer {
       drawEngineer(this.ctx, state, now);
       this.ctx.restore();
     }
-    if (depth === 'D-001') drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets);
+    if (depth === 'D-001') drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets, locale);
     const targets = deriveInteractionTargets(state);
     const guide = fieldGuideTarget(state);
     const guideTargetKey = targets.find(target => sameInteractionTarget(target.ref, guide))?.key ?? null;
-    drawInteractionOverlay(this.ctx, targets, state.selection, hoveredKey, guideTargetKey, state, hint);
+    drawInteractionOverlay(this.ctx, targets, state.selection, hoveredKey, guideTargetKey, state, hint, locale);
     this.ctx.restore();
     // The shared Canvas HUD owns instructions; world overlay only marks the target.
     if (this.deliveryNotice && now < this.deliveryNotice.expiresAt) {
-      drawDeliveryNotice(this.ctx, this.deliveryNotice.amount);
+      drawDeliveryNotice(this.ctx, this.deliveryNotice.amount, locale);
     } else if (this.deliveryNotice) this.deliveryNotice = null;
     this.base.drawForegroundFx(now, shake);
   }

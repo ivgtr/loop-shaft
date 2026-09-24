@@ -7,6 +7,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     include: ['tests/**/*.test.ts'],
+    setupFiles: ['./tests/i18nSetup.ts'],
     // Authoring constraints and multi-seed probes are opt-in, not merge gates.
     exclude: ['tests/**/*.extended.test.ts'],
   },

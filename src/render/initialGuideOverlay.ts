@@ -3,6 +3,7 @@ import type { InitialLogisticsGuide } from '../game/initialLogisticsGuide';
 import type { GameState } from '../game/types';
 import { sameInteractionTarget, type InteractionTarget, type Point } from './interactionTargets';
 import { drawPixelText, fitPixelFont, measurePixelText } from './pixelText';
+import { formatDisplay } from '../i18n/display';
 
 const BACKGROUND = '#0b0b0df0';
 const BORDER = '#916a4e';
@@ -55,8 +56,8 @@ export function drawInitialLogisticsGuide(
   drawGuideLabel(ctx, label, anchor);
 }
 
-export function drawDeliveryNotice(ctx: CanvasRenderingContext2D, amount: number): void {
-  drawGuideLabel(ctx, `SCRAP +${amount} · DELIVERED`, { x: WORLD.elevatorX, y: WORLD.topY + 25 });
+export function drawDeliveryNotice(ctx: CanvasRenderingContext2D, amount: number, locale: 'en' | 'ja' = 'en'): void {
+  drawGuideLabel(ctx, formatDisplay(locale, 'shipment.delivered', { amount }), { x: WORLD.elevatorX, y: WORLD.topY + 25 });
 }
 
 function drawGuideLabel(ctx: CanvasRenderingContext2D, text: string, anchor: Point): void {

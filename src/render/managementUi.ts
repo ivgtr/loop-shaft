@@ -6,6 +6,8 @@ import { number, type RouteStop, type StationView } from '../game/management/typ
 import type { GameState } from '../game/types';
 import type { Rect } from './interactionTargets';
 import { C, drawButton, elide, icon, text, type UiButton, type UiViewport } from './workshopUi';
+import type { Locale } from '../i18n';
+import { displayText, localizeDisplayModel } from '../i18n/display';
 
 export type ManagementUiAction = { type: 'station-open'; request: StationRequest }
   | { type: 'station-close' | 'station-back' | 'station-activate' | 'station-cancel-confirm' | 'station-details' }
@@ -36,11 +38,12 @@ export function wrapDetails(paragraphs: string[], width: number): string[] {
   });
 }
 
-export function layoutManagementUi(state: GameState, ui: ManagementState, viewport: UiViewport): ManagementLayout {
+export function layoutManagementUi(state: GameState, ui: ManagementState, viewport: UiViewport, locale: Locale = 'en'): ManagementLayout {
   const { width: w, height: h } = viewport; const compact = w < 680;
   const p = { x: compact ? 8 : (w - Math.min(840, w - 32)) / 2, y: compact ? 8 : Math.max(8, (h - 520) / 2),
     width: compact ? Math.max(0, w - 16) : Math.min(840, w - 32), height: compact ? Math.max(0, h - 16) : Math.min(520, h - 16) };
-  const view = stationView(state, ui); const item = view.items.find((candidate) => candidate.id === ui.selectedId) ?? view.items[0]!;
+  const view = localizeDisplayModel(locale, stationView(state, ui));
+  const item = view.items.find((candidate) => candidate.id === ui.selectedId) ?? view.items[0]!;
   const index = view.items.indexOf(item);
   const confirming = Boolean(ui.confirmation && ui.confirmation === item.confirmKey && item.action && !item.reason);
   const decision = item.decision && (confirming || ui.station === 'reboot') ? item.decision : undefined;
@@ -55,7 +58,7 @@ export function layoutManagementUi(state: GameState, ui: ManagementState, viewpo
     texts.push({ label, x, y, width, size, color, essential });
   };
   const paragraph = (label: string, area: Rect, y: number, color: string = C.text, essential = false): number => {
-    for (const line of wrapDetails([label], area.width)) { put(line, area.x, y, area.width, color, 12, essential); y += 17; }
+    for (const line of wrapDetails([displayText(locale, label)], area.width)) { put(line, area.x, y, area.width, color, 12, essential); y += 17; }
     return y;
   };
   add('station-close', 'Close facility', { type: 'station-close' }, box(p.x + p.width - 52, p.y + 6, 44), undefined, false, 'X');
@@ -203,13 +206,14 @@ export function layoutManagementUi(state: GameState, ui: ManagementState, viewpo
   // In details mode, illustrations give their space back; irreversible consequences do not.
   if (reading && !decision) { y = overviewStart; gear.length = 0; route.length = 0; }
   const textBox = { x: main.x, y, width: main.width, height: Math.max(17, contentEnd - y) };
-  const detailLines = wrapDetails([item.name, item.summary, ...(item.reason ? [item.reason] : []), ...item.lines], textBox.width);
+  const detailLines = wrapDetails([item.name, item.summary, ...(item.reason ? [item.reason] : []), ...item.lines]
+    .map((line) => displayText(locale, line)), textBox.width);
   const perPage = Math.max(1, Math.floor(textBox.height / 17));
   const pages: string[][] = [];
   for (let i = 0; i < detailLines.length; i += perPage) pages.push(detailLines.slice(i, i + perPage));
   if (!pages.length) pages.push([]);
   const page = Math.min(ui.detailPage, pages.length - 1);
-  const overviewLines = wrapDetails(overview, main.width);
+  const overviewLines = wrapDetails(overview.map((line) => displayText(locale, line)), main.width);
   const availableLines = Math.max(0, Math.floor((contentEnd - y) / 17));
   const detailsAvailable = Boolean(item.lines.length && (item.equipment || decision || item.route || overviewLines.length > availableLines));
   if (reading) pages[page]!.forEach((line, n) => put(line, main.x, y + n * 17, main.width));
@@ -234,8 +238,8 @@ export function layoutManagementUi(state: GameState, ui: ManagementState, viewpo
     { type: decision?.closeOnCancel ? 'station-close' : 'station-cancel-confirm' }, box(main.x, actionY, actionWidth), undefined, false, decision?.cancelLabel ?? 'GO BACK');
   if (ui.station !== 'survey') add('station-activate', confirming ? decision?.confirmLabel ?? 'CONFIRM CHOICE' : item.actionLabel,
     { type: 'station-activate' }, box(main.x + (confirming ? actionWidth + 6 : 0), actionY, actionWidth), undefined, !item.action || Boolean(item.reason));
-  return { buttons, panel: p, compact, item, title: confirming ? ui.station === 'reboot' ? 'NEXT RUN' : 'CONFIRM' : view.title,
-    textBox, pages, page, confirming, count: `${index + 1}/${view.items.length}`, texts, bars, route, gear, gallery, essentialBox, reading, detailsAvailable };
+  return localizeDisplayModel(locale, { buttons, panel: p, compact, item, title: confirming ? ui.station === 'reboot' ? 'NEXT RUN' : 'CONFIRM' : view.title,
+    textBox, pages, page, confirming, count: `${index + 1}/${view.items.length}`, texts, bars, route, gear, gallery, essentialBox, reading, detailsAvailable });
 }
 
 function selectPage(view: StationView, index: number, offset: number, perPage: number): ManagementUiAction {

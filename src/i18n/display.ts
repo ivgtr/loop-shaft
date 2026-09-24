@@ -1,0 +1,233 @@
+import { getLocaleCatalog, t, type Locale, type MessageKey } from './index';
+
+export type DynamicCopyKey = MessageKey;
+export function formatDisplay(locale: Locale, key: DynamicCopyKey, values: Record<string, string | number> = {}): string {
+  return t(locale, key, values);
+}
+
+let keyByEnglish: Map<string, MessageKey> | null = null;
+let indexedEnglishCatalog: ReturnType<typeof getLocaleCatalog> = null;
+function keyForEnglish(english: string): MessageKey | undefined {
+  const catalog = getLocaleCatalog('en');
+  if (!catalog) return undefined;
+  if (!keyByEnglish || indexedEnglishCatalog !== catalog) {
+    keyByEnglish = new Map();
+    indexedEnglishCatalog = catalog;
+    for (const [key, value] of Object.entries(catalog)) {
+      if (!value.includes('{') && !keyByEnglish.has(value)) keyByEnglish.set(value, key as MessageKey);
+    }
+  }
+  return keyByEnglish.get(english);
+}
+
+/** Translate display-model copy while leaving game IDs, commands, and save data untouched. */
+export function displayText(locale: Locale, english: string): string {
+  if (locale === 'en') return english;
+  const key = keyForEnglish(english);
+  if (key) return formatDisplay(locale, key);
+  let match = /^DESTINATION (D-\d+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'depth.destination', { depth: match[1]! });
+  match = /^TRAVEL TO (D-\d+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'depth.travelTo', { depth: match[1]! });
+  match = /^Detail (\d+)\/(\d+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'access.detailPage', { page: match[1]!, total: match[2]! });
+  match = /^Need ([\d,.]+) more Scrap\.?$/.exec(english);
+  if (match) return formatDisplay(locale, 'resource.needScrapSentence', { amount: match[1]! });
+  match = /^NEED ([\d,.]+) MORE SCRAP$/.exec(english);
+  if (match) return formatDisplay(locale, 'resource.needScrap', { amount: match[1]! });
+  match = /^OPEN D-(\d+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'depth.open', { depth: match[1]! });
+  match = /^D-(\d+) CONNECTED$/.exec(english);
+  if (match) return formatDisplay(locale, 'depth.connected', { depth: match[1]! });
+  match = /^(D-\d+) → (D-\d+) · ([\d,.]+)s$/.exec(english);
+  if (match) return formatDisplay(locale, 'elevator.travelStatus', { from: match[1]!, to: match[2]!, seconds: match[3]! });
+  match = /^DEPLETED · ([\d,.]+)s$/.exec(english);
+  if (match) return formatDisplay(locale, 'node.depleted', { seconds: match[1]! });
+  match = /^Moving to (.+)\. Movement keys or Esc override this order\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'guide.movingToVeinContext', { name: displayText(locale, match[1]!) });
+  match = /^(.+) is respawning\. You can choose another vein\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'guide.nodeRespawning', { name: displayText(locale, match[1]!) });
+  match = /^(.+) · click or tap the vein to approach it, or walk with A\/D and arrow keys\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'guide.chooseVeinContext', { name: displayText(locale, match[1]!) });
+  match = /^BUY · ([\d,.]+) SCRAP$/.exec(english);
+  if (match) return formatDisplay(locale, 'workshop.buyCost', { amount: match[1]! });
+  match = /^BUY (.+) · ([\d,.]+) Scrap$/.exec(english);
+  if (match) return formatDisplay(locale, 'workshop.buyItem', { name: displayText(locale, match[1]!), amount: match[2]! });
+  match = /^Hit power\s+(.+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'workshop.hitPowerValue', { value: match[1]! });
+  match = /^Walk speed\s+(.+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'workshop.walkSpeedValue', { value: match[1]! });
+  match = /^Carry capacity\s+(.+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'workshop.carryCapacityValue', { value: match[1]! });
+  match = /^Auto Swing\s+(ON|OFF)$/.exec(english);
+  if (match) return formatDisplay(locale, 'workshop.autoSwingState', { state: match[1]! });
+  match = /^Floor ore → lift\s+·\s+(.+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'workshop.floorOreLiftValue', { value: match[1]! });
+  match = /^MINE (\d+) MORE TIMES$/.exec(english);
+  if (match) return formatDisplay(locale, 'workshop.minesMore', { amount: match[1]! });
+  match = /^HIRE (MINER|PORTER)(?: · ([\d,.]+))?$/.exec(english);
+  if (match && match[2]) return formatDisplay(locale, 'crew.hireCommand', { role: displayText(locale, match[1]!), amount: match[2]! });
+  match = /^Hire (MINER|PORTER)$/.exec(english);
+  if (match) return formatDisplay(locale, 'crew.hireLabel', { role: displayText(locale, match[1]!) });
+  match = /^(SET|USE) (ANY|BALANCED|CORE|RESEARCH|ANCIENT|RARE|NEAREST|VALUE|RELIC)$/.exec(english);
+  if (match) return formatDisplay(locale, 'priority.action', { action: displayText(locale, match[1] === 'SET' ? 'SET' : 'USE'), priority: displayText(locale, match[2]!) });
+  match = /^AUTO DISPATCH (ON|OFF)$/.exec(english);
+  if (match) return formatDisplay(locale, 'elevator.autoDispatchState', { state: match[1]! });
+  match = /^Switch Auto Swing (ON|OFF)$/.exec(english);
+  if (match) return formatDisplay(locale, 'workshop.toggleAutoSwing', { state: displayText(locale, match[1]!) });
+  match = /^RUNNING · ([\d,.]+)s remaining$/.exec(english);
+  if (match) return formatDisplay(locale, 'research.running', { seconds: match[1]! });
+  match = /^([\d,.]+) Scrap · owned ([\d,.]+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'resource.scrapOwned', { cost: match[1]!, owned: match[2]! });
+  match = /^([\d,.]+) Core · owned ([\d,.]+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'resource.coreOwned', { cost: match[1]!, owned: match[2]! });
+  match = /^(.+) workshop items$/.exec(english);
+  if (match) return formatDisplay(locale, 'workshop.tabItems', { tab: displayText(locale, match[1]!) });
+  match = /^Travel to this floor( via Surface)?\. Unload cargo and empty the lift first\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'elevator.travelDescriptionFull', { viaSurface: match[1] ? displayText(locale, ' via Surface') : '' });
+  match = /^(Metal flecks|Fossil outline|Layered crystal) · (\d+) breaks to extract · stays until mined$/.exec(english);
+  if (match) return formatDisplay(locale, 'survey.prospect', { signal: displayText(locale, match[1]!), remaining: match[2]! });
+  match = /^(.+) in (\d+) breaks$/.exec(english);
+  if (match) return formatDisplay(locale, 'survey.seam', { name: displayText(locale, match[1]!), breaks: match[2]! });
+  match = /^(\d+)\/(\d+) Core left this Run$/.exec(english);
+  if (match) return formatDisplay(locale, 'survey.coreReserve', { remaining: match[1]!, total: match[2]! });
+  match = /^STEADY ORE · FIND (\d+)%$/.exec(english);
+  if (match) return formatDisplay(locale, 'survey.steadyChance', { chance: match[1]! });
+  match = /^Prerequisite: (.+)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'research.prerequisite', { name: displayText(locale, match[1]!) });
+  match = /^([\d,.]+) Data · ([\d,.]+)s · owned ([\d,.]+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'research.costOwned', { cost: match[1]!, seconds: match[2]!, owned: match[3]! });
+  match = /^([\d,.]+) Data · ([\d,.]+)s$/.exec(english);
+  if (match) return formatDisplay(locale, 'research.costDuration', { cost: match[1]!, seconds: match[2]! });
+  match = /^START · ([\d,.]+) DATA$/.exec(english);
+  if (match) return formatDisplay(locale, 'research.start', { cost: match[1]! });
+  match = /^([\d,.]+)s remaining$/.exec(english);
+  if (match) return formatDisplay(locale, 'research.remaining', { seconds: match[1]! });
+  match = /^Travel: ([\d,.]+)s remaining\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'crew.travel', { seconds: match[1]! });
+  match = /^Carried: ([\d,.]+) kg\. Unloads before taking the lift to another floor\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'crew.carried', { weight: match[1]! });
+  match = /^Starts on (D-\d+)\. Assign a floor and priority after hiring\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'crew.startsOn', { depth: match[1]! });
+  match = /^(\d+)\/(\d+) staffed · ([\d,.]+) Scrap · owned ([\d,.]+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'crew.staffed', { members: match[1]!, slots: match[2]!, cost: match[3]!, owned: match[4]! });
+  match = /^(\d+)\/4 slots · ([\d,.]+) Scrap · owned ([\d,.]+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'crew.slotsCost', { slots: match[1]!, cost: match[2]!, owned: match[3]! });
+  match = /^(\d+)\/4 slots · Complete$/.exec(english);
+  if (match) return formatDisplay(locale, 'crew.slotComplete', { slots: match[1]! });
+  match = /^Carried: ([\d,.]+) kg\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'crew.carriedWeight', { weight: match[1]! });
+  match = /^(\d+)\/(\d+) staffed\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'crew.staffedSentence', { members: match[1]!, slots: match[2]! });
+  match = /^Priority: (.+)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'crew.prioritySentence', { priority: displayText(locale, match[1]!) });
+  match = /^No recovered (tool|boots|pack|lamp)$/.exec(english);
+  if (match) return formatDisplay(locale, 'equipment.noSlot', { slot: displayText(locale, match[1]!.toUpperCase()) });
+  match = /^Current: (.+)\. Candidate: (.+)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'equipment.current', { current: displayText(locale, match[1]!), candidate: displayText(locale, match[2]!) });
+  match = /^(.+) will lose this item and its effects\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'equipment.ownerLoses', { owner: displayText(locale, match[1]!) });
+  match = /^Equipped by (.+)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'equipment.equippedBy', { target: displayText(locale, match[1]!) });
+  match = /^EQUIP TO (.+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'equipment.equipTo', { target: displayText(locale, match[1]!) });
+  match = /^Hit on (.+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'equipment.hitOn', { target: displayText(locale, match[1]!) });
+  match = /^([^:]+): ([\d,.]+) → ([\d,.]+)(?: ([\w/]+))?\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'equipment.metric', { label: displayText(locale, match[1]!), before: match[2]!, after: match[3]!, unit: match[4] ? ` ${match[4]}` : '' });
+  match = /^([^:]+): ([\d,.]+) → ([\d,.]+)(?: ([\w/]+))? \(([+-]?[\d,.]+)\)$/.exec(english);
+  if (match) return formatDisplay(locale, 'equipment.compareMetric', { label: displayText(locale, match[1]!), before: match[2]!, after: match[3]!, unit: match[4] ? ` ${match[4]}` : '', change: match[5]! });
+  match = /^CORE SHELL: (\d+)\/4 still in the rock this Run\. Other depths have their own finite reserves\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'reset.coreShell', { remaining: match[1]! });
+  match = /^KEEP: (\d+) Core \+ (\d+) appraised charge = (\d+) Core\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'reset.coreKeep', { core: match[1]!, charge: match[2]!, total: match[3]! });
+  match = /^KEEP: (\d+) Core Protocols, (\d+) collection discoveries and Best Depth (D-\d+)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'reset.metaKeep', { protocols: match[1]!, finds: match[2]!, depth: match[3]! });
+  match = /^KEEP: (\d+) unlocked \/ (\d+) active passives, equipment and deep discovery records\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'reset.passiveKeep', { unlocked: match[1]!, active: match[2]! });
+  match = /^LEGACY LOCKER: (.+) \((\w+), Lv\.(\d+)\) is the one retained equipment instance\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'reset.legacyLocker', { name: displayText(locale, match[1]!), rarity: displayText(locale, match[2]!), level: match[3]! });
+  match = /^RESET: Scrap ([\d,.]+) → ([\d,.]+); Data ([\d,.]+) → ([\d,.]+)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'reset.resources', { scrap: match[1]!, nextScrap: match[2]!, data: match[3]!, nextData: match[4]! });
+  match = /^RESET: (\d+) connected floors → D-001\. Buildings, assignments and this Run's Anomaly reset\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'reset.floors', { count: match[1]! });
+  match = /^NEXT RUN: research (\d+), crew (\d+), tool level (\d+)\. Permanent protocols determine the starting setup\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'reset.nextRun', { research: match[1]!, crew: match[2]!, level: match[3]! });
+  match = /^GAIN (\d+) CORE · irreversible reset$/.exec(english);
+  if (match) return formatDisplay(locale, 'reset.gainSummary', { amount: match[1]! });
+  match = /^\+(\d+) Core \((\d+) total\)$/.exec(english);
+  if (match) return formatDisplay(locale, 'reset.gainValue', { amount: match[1]!, total: match[2]! });
+  match = /^(\d+) other gear and ALL undelivered cargo\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'reset.loseValue', { count: match[1]! });
+  match = /^(.+) is heading to (D-\d+)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.crewAssigned', { worker: displayText(locale, match[1]!), depth: match[2]! });
+  match = /^(.+) now prioritizes (any|research|rare|nearest|core|relic|value)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.crewPriority', { worker: displayText(locale, match[1]!), priority: displayText(locale, match[2]!.toUpperCase()) });
+  match = /^(.+) equipped by (.+)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.equipmentEquipped', { item: displayText(locale, match[1]!), worker: displayText(locale, match[2]!) });
+  match = /^(.+) restored for the collection\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.restored', { item: displayText(locale, match[1]!) });
+  match = /^(.+) started\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.researchStarted', { name: displayText(locale, match[1]!) });
+  match = /^(.+) installed permanently\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.protocolInstalled', { name: displayText(locale, match[1]!) });
+  match = /^(.+) (activated|deactivated)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.passiveToggled', { name: displayText(locale, match[1]!),
+    state: displayText(locale, match[2] === 'activated' ? 'activated' : 'deactivated') });
+  match = /^(.+) is active for this Run\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.anomalySelected', { name: displayText(locale, match[1]!) });
+  match = /^(.+) joined the shift\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.crewJoined', { worker: displayText(locale, match[1]!) });
+  match = /^Shift expanded to (\d+) slots\. Hire another worker\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.shiftExpanded', { slots: match[1]! });
+  if (english === 'First shift opened. Assign your workers.') return formatDisplay(locale, 'feedback.firstShift', {});
+  match = /^Central Lift now prioritizes (.+) cargo\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.cargoPriority', { priority: displayText(locale, match[1]!.toUpperCase()) });
+  match = /^(.+) loading priority: (.+)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.railPriority', { depth: displayText(locale, match[1]!), priority: displayText(locale, match[2]!.toUpperCase()) });
+  match = /^Freight loading priority: (.+)\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'feedback.freightPriority', { priority: displayText(locale, match[1]!.toUpperCase()) });
+  match = /^FIRST HIT · ([\d,.]+) DAMAGE$/.exec(english);
+  if (match) return formatDisplay(locale, 'work.firstHit', { amount: match[1]! });
+  match = /^FIRST LOAD · ([\d,.]+) KG CAPACITY$/.exec(english);
+  if (match) return formatDisplay(locale, 'work.firstLoadCapacity', { amount: match[1]! });
+  match = /^FIRST AUTOMATIC HIT · ([\d,.]+) DAMAGE$/.exec(english);
+  if (match) return formatDisplay(locale, 'work.firstAutomaticHit', { amount: match[1]! });
+  match = /^(D-\d+) · FIRST LOAD DELIVERED$/.exec(english);
+  if (match) return formatDisplay(locale, 'work.firstRailLoad', { depth: match[1]! });
+  match = /^(D-\d+) · FIRST PHYSICAL OUTPUT$/.exec(english);
+  if (match) return formatDisplay(locale, 'work.firstBoreOutput', { depth: match[1]! });
+  match = /^(LOADED WALK|FIRST WALK) · ([\d,.]+) PX\/S$/.exec(english);
+  if (match) return formatDisplay(locale, match[1] === 'LOADED WALK' ? 'work.loadedWalk' : 'work.firstWalk', { amount: match[2]! });
+  match = /^Shipment sent\. Payment happens at Surface\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'notice.shipmentSent');
+  match = /^(.+): connection open\. Choose TRAVEL to visit\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'notice.connectionOpen', { name: displayText(locale, match[1]!) });
+  match = /^(.+): construction started\.$/.exec(english);
+  if (match) return formatDisplay(locale, 'notice.constructionStarted', { name: displayText(locale, match[1]!) });
+  match = /^(.+) (installed|equipped)\. (.+)$/.exec(english);
+  if (match) return formatDisplay(locale, 'notice.workshopOperation', {
+    name: displayText(locale, match[1]!), action: formatDisplay(locale, match[2] === 'installed' ? 'notice.installedVerb' : 'notice.equippedVerb'),
+    comparison: displayText(locale, match[3]!),
+  });
+  if (english === 'Control updated.') return formatDisplay(locale, 'notice.controlUpdated');
+  if (english === 'State changed. Review again.') return formatDisplay(locale, 'notice.stateChanged');
+  if (english === 'Restoration is not available.') return formatDisplay(locale, 'feedback.restoreUnavailable');
+  if (english === 'Engineer dispatched to restore the D-250 Rail.') return formatDisplay(locale, 'feedback.buildRail', {});
+  if (english === 'Engineer dispatched to build the Freight Cage.') return formatDisplay(locale, 'feedback.buildFreight', {});
+  if (english === 'Freight Cage ready for cargo.') return formatDisplay(locale, 'feedback.freightReady', {});
+  if (english === 'Engineer dispatched to install the Bore.') return formatDisplay(locale, 'feedback.installBore', {});
+  if (english === 'Order accepted.') return formatDisplay(locale, 'feedback.orderAccepted', {});
+  return english;
+}
+
+const ID_KEYS = new Set(['id', 'type', 'station', 'tab', 'subjectId', 'optionId', 'confirmKey', 'command', 'action', 'request']);
+export function localizeDisplayModel<T>(locale: Locale, value: T): T {
+  if (locale === 'en') return value;
+  if (typeof value === 'string') return displayText(locale, value) as T;
+  if (Array.isArray(value)) return value.map((item) => localizeDisplayModel(locale, item)) as T;
+  if (value instanceof Map) return new Map([...value].map(([key, item]) => [key, localizeDisplayModel(locale, item)])) as T;
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
+    ID_KEYS.has(key) ? item : localizeDisplayModel(locale, item)])) as T;
+}

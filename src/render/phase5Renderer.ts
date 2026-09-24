@@ -24,6 +24,8 @@ import {
   type SemanticRenderState,
 } from './semanticRenderState';
 import { drawPixelText } from './pixelText';
+import { displayText } from '../i18n/display';
+import type { Locale } from '../i18n';
 
 export class Phase5Renderer {
   private readonly base: CanvasRenderer;
@@ -51,16 +53,16 @@ export class Phase5Renderer {
     this.base.drawForegroundFx(now, shake);
   }
 
-  render(state: GameState, now: number, frame?: SemanticRenderState): void {
+  render(state: GameState, now: number, frame?: SemanticRenderState, locale: Locale = 'en'): void {
     const semantic = frame ?? deriveSemanticRenderState(state, now);
-    this.base.render(state, now, semantic);
+    this.base.render(state, now, semantic, locale);
     if (state.run.elevator.travel) return;
     this.ctx.save();
     if (state.run.phase5.crew.unlocked) {
       drawCargoPlatform(this.ctx, state, this.assets);
       drawCrew(this.ctx, state, now, semantic, this.assets);
     }
-    drawCrewBoard(this.ctx, state, now);
+    drawCrewBoard(this.ctx, state, now, locale);
     drawCargoRouteIndicator(this.ctx, state);
     if (!canDrawD001Player(this.assets)) drawPlayerEquipment(this.ctx, state);
     this.ctx.restore();
@@ -68,7 +70,7 @@ export class Phase5Renderer {
 
 }
 
-function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: number): void {
+function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: number, locale: Locale): void {
   if (!canShowCrewBoard(state)) return;
   const crew = state.run.phase5.crew;
   const { x, y } = INTERACTION_LAYOUT.crewBoard;
@@ -89,7 +91,7 @@ function drawCrewBoard(ctx: CanvasRenderingContext2D, state: GameState, now: num
     ctx.fillStyle = '#5c5447'; ctx.fillRect(x + 46, y + 19, 4, 1);
   }
   ctx.fillStyle = PALETTE.white;
-  drawPixelText(ctx, crew.unlocked ? 'SHIFT BOARD' : 'CREW BOARD', x + 5, y + 27, { font: 'standard', baseline: 'bottom' });
+  drawPixelText(ctx, displayText(locale, crew.unlocked ? 'SHIFT BOARD' : 'CREW BOARD'), x + 5, y + 27, { font: 'standard', baseline: 'bottom' });
 }
 
 function drawCargoPlatform(ctx: CanvasRenderingContext2D, state: GameState, assets: D001AssetStore): void {

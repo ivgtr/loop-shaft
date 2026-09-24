@@ -18,7 +18,10 @@ export function shipmentNotice(event: GameEvent, batch: readonly GameEvent[]): R
     let notice = rewardNotice(candidate);
     if (!notice && candidate.type === 'LOOT_APPRAISE' && candidate.data?.category === 'VALUABLE') {
       notice = rewardNotice({ ...candidate, type: 'DISCOVERY_FOUND', data: { ...candidate.data, publicKind: candidate.data.kind! } });
-      if (notice) notice.detail = `APPRAISED · +${candidate.data.value} SCRAP`;
+      if (notice) {
+        notice.detail = `APPRAISED · +${candidate.data.value} SCRAP`;
+        notice.detailMessage = { key: 'shipment.appraisedValuable', values: { value: Number(candidate.data.value) || 0 } };
+      }
     }
     if (notice && (!highlight || notice.priority > highlight.priority)) highlight = notice;
   }
@@ -26,6 +29,7 @@ export function shipmentNotice(event: GameEvent, batch: readonly GameEvent[]): R
   const shipment: ShipmentReceipt = { via: String(data.via ?? 'CENTRAL'), items: number('items'), ordinary: number('ordinaryScrap'),
     special: number('specialScrap'), scrap: number('scrap'), data: number('data'), core: number('core'), highlight };
   return { key: `SHIPMENT:${id}`, label: 'SURFACE APPRAISAL', detail: `${shipment.items} ITEMS DELIVERED`,
+    labelMessage: { key: 'shipment.title' }, detailMessage: { key: 'shipment.itemsDelivered', values: { items: shipment.items } },
     priority: Math.max(3, highlight?.priority ?? 0), duration: highlight ? 3100 : 1800,
     effect: highlight?.effect ?? 'find', shipment };
 }

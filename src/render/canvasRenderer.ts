@@ -13,9 +13,21 @@ import { drawEnvironment } from './environment';
 import { PALETTE } from './palette';
 import type { D001AssetStore } from './d001ImageRenderer';
 import { D001_VISUAL_GROUND_OFFSET, deriveSemanticRenderState, type SemanticRenderState } from './semanticRenderState';
-import { drawPixelText } from './pixelText';
+import { drawPixelText, truncatePixelText } from './pixelText';
+import { formatDisplay, displayText, type DynamicCopyKey } from '../i18n/display';
+import type { NoticeMessage, RewardNotice } from '../game/rewardFeedback';
+import type { Locale } from '../i18n';
+import { RESEARCH } from '../game/config';
 
-type GainFx = { label: string; startedAt: number };
+type GainFx = { key: DynamicCopyKey; values: Record<string, string | number>; startedAt: number };
+
+function noticeCopy(locale: Locale, notice: RewardNotice, field: 'label' | 'detail'): string {
+  const message: NoticeMessage | undefined = field === 'label' ? notice.labelMessage : notice.detailMessage;
+  if (!message) return displayText(locale, notice[field]);
+  const values = Object.fromEntries(Object.entries(message.values ?? {}).map(([key, value]) => [key,
+    typeof value === 'string' ? displayText(locale, value) : value]));
+  return formatDisplay(locale, message.key, values);
+}
 
 export class CanvasRenderer {
   readonly canvas: HTMLCanvasElement;
@@ -60,10 +72,13 @@ export class CanvasRenderer {
     if (notice && !state.run.elevator.travel && (!notice.origin || (notice.origin.depth === state.run.depth.current
       && state.run.floors[state.run.depth.current].nodes.some(node => node.id === notice.origin!.nodeId)))) this.notices.push(notice, now);
     for (const work of workNotices) this.notices.push(work, now);
-    if (event.type === 'RESEARCH_COMPLETED') this.gain = { label: `RESEARCH COMPLETE · ${String(event.data?.research ?? '')}`, startedAt: now };
-    if (event.type === 'CORE_CHARGE_GAINED') this.gain = { label: `CORE CHARGE +${Number(event.data?.amount ?? 0)}`, startedAt: now };
-    if (event.type === 'DATA_GAIN') this.gain = { label: `DATA +${Number(event.data?.amount ?? 0)}`, startedAt: now };
-    if (event.type === 'CORE_GAINED') this.gain = { label: `CORE +${Number(event.data?.amount ?? 0)}`, startedAt: now };
+    if (event.type === 'RESEARCH_COMPLETED') {
+      const research = RESEARCH[String(event.data?.research) as keyof typeof RESEARCH];
+      this.gain = { key: 'feedback.researchComplete', values: { name: research?.name ?? String(event.data?.research ?? '') }, startedAt: now };
+    }
+    if (event.type === 'CORE_CHARGE_GAINED') this.gain = { key: 'feedback.coreCharge', values: { amount: Number(event.data?.amount ?? 0) }, startedAt: now };
+    if (event.type === 'DATA_GAIN') this.gain = { key: 'feedback.dataGain', values: { amount: Number(event.data?.amount ?? 0) }, startedAt: now };
+    if (event.type === 'CORE_GAINED') this.gain = { key: 'feedback.coreGain', values: { amount: Number(event.data?.amount ?? 0) }, startedAt: now };
   }
 
   worldShake(state: GameState, now: number): number {
@@ -72,13 +87,14 @@ export class CanvasRenderer {
     return (this.output?.settings() ?? DEFAULT_PRESENTATION).motion ? shake : 0;
   }
 
-  render(state: GameState, now: number, frame?: SemanticRenderState): void {
+  render(state: GameState, now: number, frame?: SemanticRenderState, locale?: Locale): void {
     this.sync(state, now);
     this.ctx.save();
     const semantic = frame ?? deriveSemanticRenderState(state, now);
-    drawEnvironment(this.ctx, state, this.assets, now);
-    drawEntities(this.ctx, state, now, semantic, this.assets);
-    if (state.run.depth.current === 'D-001' && state.run.elevator.travel) drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets);
+    const displayLocale = locale ?? (this.output?.settings() ?? DEFAULT_PRESENTATION).locale;
+    drawEnvironment(this.ctx, state, this.assets, now, displayLocale);
+    drawEntities(this.ctx, state, now, semantic, this.assets, displayLocale);
+    if (state.run.depth.current === 'D-001' && state.run.elevator.travel) drawD001ElevatorFrontLayer(this.ctx, state, semantic, now, this.assets, displayLocale);
     this.ctx.restore();
     if (state.run.elevator.travel) this.drawTravel(state);
   }
@@ -95,7 +111,8 @@ export class CanvasRenderer {
       const offset = Math.round(progress * 28); this.ctx.fillRect(0, y + offset, WORLD.width, 8);
     }
     this.ctx.fillStyle = PALETTE.white;
-    drawPixelText(this.ctx, travel.viaSurface ? 'SURFACE RELAY' : 'ELEVATOR TRAVEL', WORLD.width / 2, 124, { font: 'standard', align: 'center', baseline: 'bottom' });
+    const locale = (this.output?.settings() ?? DEFAULT_PRESENTATION).locale;
+    drawPixelText(this.ctx, displayText(locale, travel.viaSurface ? 'SURFACE RELAY' : 'ELEVATOR TRAVEL'), WORLD.width / 2, 124, { font: 'standard', align: 'center', baseline: 'bottom' });
     this.ctx.fillStyle = PALETTE.d060Lamp;
     drawPixelText(this.ctx, `${travel.from} → ${travel.to}`, WORLD.width / 2, 137, { font: 'standard', align: 'center', baseline: 'bottom' });
   }
@@ -133,15 +150,18 @@ export class CanvasRenderer {
         if (!point && notice.priority >= 4) drawRewardEffect(this.ctx, notice, null, now, settings);
         const center = image ? 254 : 240; const limit = image ? 43 : 48;
         this.ctx.fillStyle = accent;
-        drawPixelText(this.ctx, notice.detail.toUpperCase().slice(0, limit), center, 64, { font: 'standard', align: 'center', baseline: 'bottom' });
+        const locale = settings.locale;
+        drawPixelText(this.ctx, truncatePixelText(noticeCopy(locale, notice, 'detail'), limit * 6), center, 64, { font: 'standard', align: 'center', baseline: 'bottom' });
         this.ctx.fillStyle = PALETTE.white;
-        drawPixelText(this.ctx, notice.label.toUpperCase().slice(0, limit), center, 75, { font: 'standard', align: 'center', baseline: 'bottom' });
+        drawPixelText(this.ctx, truncatePixelText(noticeCopy(locale, notice, 'label'), limit * 6), center, 75, { font: 'standard', align: 'center', baseline: 'bottom' });
       }
     }
     if (this.gain && now - this.gain.startedAt < 1200) {
       this.ctx.fillStyle = '#101214e8'; this.ctx.fillRect(147, 9, 186, 16);
       this.ctx.fillStyle = PALETTE.d060Lamp;
-      drawPixelText(this.ctx, this.gain.label, 240, 19, { font: 'standard', align: 'center', baseline: 'bottom' });
+      const values = this.gain.key === 'feedback.researchComplete'
+        ? { ...this.gain.values, name: displayText(settings.locale, String(this.gain.values.name ?? '')) } : this.gain.values;
+      drawPixelText(this.ctx, formatDisplay(settings.locale, this.gain.key, values), 240, 19, { font: 'standard', align: 'center', baseline: 'bottom' });
     } else if (this.gain) this.gain = null;
   }
 }

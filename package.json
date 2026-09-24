@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run locales:check && tsc --noEmit && vite build",
+    "locales:check": "node scripts/check-locales.mjs",
     "test": "vitest run",
     "test:extended": "vitest run --config vitest.extended.config.ts",
     "test:e2e:smoke": "playwright test --config playwright.smoke.config.ts",
